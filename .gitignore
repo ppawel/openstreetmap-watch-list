@@ -1,5 +1,8 @@
 *~
 *.o
+*.pyc
 cpp/.deps
 cpp/main
 cpp/dupe_daemon
+dupe_nodes/dupe_nodes.png
+dupe_nodes/progress.html
