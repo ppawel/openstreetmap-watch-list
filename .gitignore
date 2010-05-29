@@ -1,2 +1,5 @@
 *~
 *.o
+cpp/.deps
+cpp/main
+cpp/dupe_daemon
