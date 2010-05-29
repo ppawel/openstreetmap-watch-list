@@ -1,0 +1,30 @@
+		    OWL: OpenStreetMap Watch List
+		    =============================
+
+OWL isn't really a single bit of software, it's a collection of
+scripts and programs built up in a very ad-hoc way. And, of course,
+almost completely lacking in documentation. Hopefully that will
+change!
+
+Wiki: http://wiki.openstreetmap.org/wiki/OWL_(OpenStreetMap_Watch_List)
+
+Contents:
+---------
+
+cpp/
+	The OWL C++ components. This includes the central bit of
+	software which parses the diffs (.osc) from OpenStreetMap and
+	populates a database with the tiled changes. It also includes
+	a "plugin" for keeping the duplicate nodes map.
+
+owl_viewer/
+	A rails project which hosts the owl "viewer" which allows
+	people to browse changes in their area and generates the RSS
+	feeds.
+
+scripts/
+	Miscellaneous scripts to keep bits of the database up-to-date,
+	like the OWL changeset details scraper.
+
+dupe_nodes/
+	The scripts for the duplicate nodes map.
