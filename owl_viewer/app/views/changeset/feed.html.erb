@@ -1,0 +1,8 @@
+<h1>Feed range test</h1>
+<!-- <%= @cs2details.inspect %> -->
+<ul>
+<% @changesets.each do |id,time,n| %>
+<li>Changeset <a href="http://www.openstreetmap.org/browse/changeset/<%= id %>"><%= id %></a> <%= time_ago_in_words(time) %> ago (<a href="../tiles/<%= id %>">view in OWL</a>)</li>
+<% end %>
+</ul>
+

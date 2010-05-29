@@ -1,0 +1,161 @@
+<script type="text/javascript">
+        var lon = 5;
+        var lat = 40;
+        var zoom = 5;
+        var map, layerBasic, layerVector, browseBoxControl;
+
+	function setupView(){
+	    map.zoomToExtent(layerVector.getDataExtent(), false);
+        }
+
+	function myFunc(ev) {
+	  window.location = "tile/" + ev.attributes["tile"];
+	}
+
+	function zoomEvent() {
+	  var vis = map.getZoom() > 12;
+	  layerVector.setVisibility(vis);
+	  document.getElementById("visstatus").style.visibility = vis ? "hidden" : "visible";
+	}
+
+	function latLonToTile(lon, lat) {
+	  var x = (lon * 152.587890625 + 32768.0) / 2;
+	  var y = (lat * 152.587890625 + 32768.0) / 2;
+
+	  x = (x | (x << 8)) & 0x00ff00ff;
+	  x = (x | (x << 4)) & 0x0f0f0f0f;
+          x = (x | (x << 2)) & 0x33333333;
+          x = (x | (x << 1)) & 0x55555555;
+    
+          y = (y | (y << 8)) & 0x00ff00ff;
+          y = (y | (y << 4)) & 0x0f0f0f0f;
+          y = (y | (y << 2)) & 0x33333333;
+          y = (y | (y << 1)) & 0x55555555;
+    
+          return (x << 1) | y;
+        }
+
+	// more stolen from osm.org - functions for drag-selecting an area
+	function startDrag() {
+	  $("feed_select_box").innerHTML="Drag a box to define the area for the feed.";
+	  browseBoxControl.activate();
+	  return false;
+	}
+	function endDrag(bbox) {
+	  var bounds = bbox.getBounds();
+	  var projected = bounds.clone().transform(map.getProjectionObject(), map.displayProjection);
+
+	  browseBoxControl.deactivate();
+	  tl = latLonToTile(projected.left, projected.top) * 4;
+	  br = latLonToTile(projected.right, projected.bottom) * 4 + 3;
+	  rss_link = "http://matt.dev.openstreetmap.org/owl_viewer/feed/"+tl+"-"+br+".rss";
+	  $("feed_url_box").innerHTML = rss_link;
+	  $("feed_url_box").href = rss_link;
+
+	  $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
+          $("feed_url_box").style.display = "inline";
+	}
+	
+        // liberally stolen from osm.org
+        function updateLocation() {     
+          var lonlat = map.getCenter().transform(map.getProjectionObject(), map.displayProjection);  
+          var zoom = map.getZoom();     
+          var expiry = new Date();      
+                                        
+          expiry.setYear(expiry.getFullYear() + 10); 
+          var cookie_string = "_owl_location=" + lonlat.lon + "|" + lonlat.lat + "|" + zoom + "; expires=" + expiry.toGMTString();
+	  document.cookie = cookie_string;
+        }                                                                                                                       
+
+        // liberally stolen from OpenCycleMap. thanks, Andy!
+        function readCookie(name) {                         
+          var nameEQ = name + "=";                          
+          var ca = document.cookie.split(';');              
+          for(var i=0;i < ca.length;i++) {                  
+                  var c = ca[i];                            
+                  while (c.charAt(0)==' ') c = c.substring(1,c.length);
+                  if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+          }                                                                              
+          return null;                                                                   
+        }                                                                                
+
+        // liberally stolen from OpenCycleMap. thanks, Andy!
+	function setCentreFromCookie() {
+          var centre = new OpenLayers.LonLat(-1.85, 53.8);
+          var zoom = 6;
+          var cookietext = readCookie('_owl_location');
+          if (cookietext) {
+            var cb = cookietext.split('|');
+            centre = new OpenLayers.LonLat(cb[0], cb[1]);
+            zoom = cb[2];
+          }
+          map.setCenter(centre.transform(map.displayProjection, map.getProjectionObject()), zoom);
+	}
+
+        function init(){
+            map = new OpenLayers.Map ("map", {
+                controls:[
+                    new OpenLayers.Control.Navigation(),
+                    new OpenLayers.Control.PanZoomBar(),
+                    new OpenLayers.Control.Attribution(),
+		    new OpenLayers.Control.Permalink(),
+	            new OpenLayers.Control.LayerSwitcher()],
+                maxExtent: new OpenLayers.Bounds(-20037508.34,-20037508.34,20037508.34,20037508.34),
+                maxResolution: 156543.0399,
+                numZoomLevels: 19,
+                units: 'm',
+                projection: new OpenLayers.Projection("EPSG:900913"),
+                displayProjection: new OpenLayers.Projection("EPSG:4326")
+            } );
+
+            layerBasic = new OpenLayers.Layer.OSM.Mapnik("Mapnik");
+            map.addLayer(layerBasic);
+
+            layerVector = new OpenLayers.Layer.Vector("Polygon (Forever)", {
+                 strategies: [new OpenLayers.Strategy.BBOX({resFactor: 1})],
+                 protocol: new OpenLayers.Protocol.HTTP({
+                     url: "weeklymap.js",
+                     params: { period: "week" },
+                     format: new OpenLayers.Format.GeoJSON()
+                 }),
+                 projection: new OpenLayers.Projection("EPSG:4326")
+            });
+            map.addLayer(layerVector);
+	    map.events.register("zoomend", this, zoomEvent);
+	    map.events.register("moveend", map, updateLocation);
+
+	    var highlightControl = new OpenLayers.Control.SelectFeature(layerVector, {"hover": true, "highlightOnly": true});
+	    map.addControl(highlightControl);
+            highlightControl.activate();
+
+	    var selectControl = new OpenLayers.Control.SelectFeature(layerVector, {"onSelect": myFunc});
+	    map.addControl(selectControl);
+            selectControl.activate();
+
+	    if (!map.getCenter()) setCentreFromCookie();
+
+            var vectors = new OpenLayers.Layer.Vector();
+            browseBoxControl = new OpenLayers.Control.DrawFeature(vectors, OpenLayers.Handler.RegularPolygon, {
+		handlerOptions: {
+		sides: 4,
+		snapAngle: 90,
+		irregular: true,
+		persist: true,
+		callbacks: { done: endDrag }
+	      }
+            });
+            map.addControl(browseBoxControl);
+	    $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
+	    $("feed_select_box").onclick = startDrag;
+	}
+    </script>
+
+    <div id="map" class="smallmap"></div>
+
+<div id="visstatus" style="background:white; border:1px solid black; position:absolute; margin:0px; padding:10px; left:0px; bottom:60px; z-index:1000;">
+<p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>
+</div>
+<div id="select" style="background:white; position:absolute; margin:0px; padding:10px; left:0px; bottom:0px; z-index:999;">
+<a id="feed_select_box" href="#">Click here to generate an RSS feed.</a><br/>
+<a id="feed_url_box" href="#"></a>
+</div>
