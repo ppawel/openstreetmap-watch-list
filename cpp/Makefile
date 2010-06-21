@@ -1,6 +1,6 @@
 CXX=g++
 INCLUDES=-Iinclude
-CXXFLAGS=-O2 -Wall $(INCLUDES) $(shell pkg-config --cflags libxml++-2.6) $(shell pkg-config --cflags libpqxx)
+CXXFLAGS=-g -ggdb -Wall $(INCLUDES) $(shell pkg-config --cflags libxml++-2.6) $(shell pkg-config --cflags libpqxx)
 LIBS=$(shell pkg-config --libs libxml++-2.6) $(shell pkg-config --libs libpqxx) -lboost_program_options
 TEST_LIBS=-lboost_unit_test_framework
 
@@ -26,9 +26,11 @@ SRCS=\
 	src/osm/io/document.cpp \
 	src/osm/io/xml_document_reader.cpp \
 	src/osm/member.cpp \
+	src/osm/util/compressed_bitset.cpp \
 	src/osm/util/lcs.cpp
 
 TEST_SRCS=\
+	src/test/util/compressed_bitset.cpp \
 	src/test/util/lcs.cpp \
 	src/test/util/quad_tile.cpp \
 	src/test/owl_diff/test_tiler.cpp

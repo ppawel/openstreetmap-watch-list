@@ -4,6 +4,7 @@
 cpp/.deps
 cpp/main
 cpp/dupe_daemon
+cpp/tests
 dupe_nodes/dupe_nodes.png
 dupe_nodes/progress.html
 dupe_nodes/catch-up.png
