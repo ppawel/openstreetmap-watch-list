@@ -26,6 +26,7 @@ public:
   ~test_tiler() throw() {}
   void add_point(const node &n) { tiler::add_point(n); }
   void add_line_between(const node &a, const node &b) { tiler::add_line_between(a, b); }
+  tiler *empty_tiler() const { return new test_tiler(); }
 };
 
 template <typename T>

@@ -60,6 +60,16 @@ tiler::add_line_between(const node &a, const node &b) {
   }
 }
 
+void
+tiler::add_tileset(const tileset_t &t) {
+  tileset.insert(t.begin(), t.end());
+}
+
+tiler *
+tiler::empty_tiler() const {
+  return new tiler();
+}
+
 const tiler::tileset_t &
 tiler::tiles() const {
   return tileset;

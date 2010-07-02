@@ -10,6 +10,8 @@ using pqxx::work;
 using pqxx::connection;
 using pqxx::result;
 using boost::lexical_cast;
+using boost::optional;
+using osm::util::CompressedBitset;
 using namespace std;
 
 namespace {
@@ -27,7 +29,13 @@ bool find_element(pqxx::work &w, const char * const table, const char * const ta
   if (found_one) {
     const result::tuple &row = res[0];
     for (result::tuple::const_iterator itr = row.begin(); itr != row.end(); ++itr) {
-      attrs[itr->name()] = itr->c_str();
+      string name = itr->name();
+      if (name == "tiles") {
+	pqxx::binarystring bytes(*itr);
+	attrs[name] = bytes.str();
+      } else {
+	attrs[name] = itr->c_str();
+      }
     }
 
     stringstream tags_query;
@@ -190,16 +198,23 @@ OWLDatabase::update_node(id_t id, const tags_t &attrs, const tags_t &tags) {
 }
 
 void 
-OWLDatabase::update_way(id_t id, const tags_t &attrs, const vector<id_t> &way_nodes, const tags_t &tags) {
+OWLDatabase::update_way(id_t id, const tags_t &attrs, const vector<id_t> &way_nodes, const tags_t &tags,
+			optional<CompressedBitset> &bs) {
   // simple implementation as a delete-add. this isn't efficient, but it might not need to be.
   delete_way(id);
 
   {
     stringstream query;
-    query << "insert into ways (id, version, changeset) values ("
+    query << "insert into ways (id, version, changeset";
+    if (bs) { query << ", tiles"; }
+    query << ") values ("
 	  << id << ", "
 	  << required_attribute(attrs, "version") << ", "
-	  << required_attribute(attrs, "changeset") << ")";
+	  << required_attribute(attrs, "changeset");
+    if (bs) {
+      query << ", " << transaction.esc_raw(bs->str());
+    }
+    query << ")";
     transaction.exec(query);
   }
 

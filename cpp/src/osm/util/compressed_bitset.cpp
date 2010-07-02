@@ -3,12 +3,14 @@
 #include <iostream>
 #include <cstdio>
 #include <vector>
+#include <string>
 
 using std::set;
 using std::cout;
 using std::list;
 using std::vector;
 using std::auto_ptr;
+using std::string;
 
 namespace {
 
@@ -438,6 +440,13 @@ list<char> recurse(tile_t match_prefix, int i, const set<tile_t> &s) {
 
 namespace osm { namespace util {
 
+CompressedBitset::CompressedBitset(const string &s) {
+  bytes.reserve(s.size());
+  for (string::const_iterator itr = s.begin(); itr != s.end(); ++itr) {
+    bytes.push_back((unsigned char)(*itr));
+  }
+}
+
 CompressedBitset::CompressedBitset(const set<tile_t> &s) {
   auto_ptr<tree_entry> root = build_crit_bit_tree(s);
   bytes = serialise(root);
@@ -455,6 +464,15 @@ set<tile_t>
 CompressedBitset::decompress() const {
   auto_ptr<tree_entry> root = deserialise(bytes);
   return unbuild_crit_bit_tree(root, sizeof(tile_t) * 8);
+}
+
+string
+CompressedBitset::str() const {
+  string s(bytes.size(), '\0');
+  for (size_t i = 0; i < bytes.size(); ++i) {
+    s[i] = (char)bytes[i];
+  }
+  return s;
 }
 
 } }

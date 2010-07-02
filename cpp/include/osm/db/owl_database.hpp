@@ -3,7 +3,9 @@
 
 #include <osm/io/extended_database.hpp>
 #include <osm/db/owl_diff/change.hpp>
+#include <osm/util/compressed_bitset.hpp>
 #include <pqxx/pqxx>
+#include <boost/optional.hpp>
 
 namespace osm { namespace db {
 
@@ -34,7 +36,7 @@ public:
 
   // setters
   void update_node(id_t id, const tags_t &attrs, const tags_t &tags);
-  void update_way(id_t id, const tags_t &attrs, const std::vector<id_t> &way_nodes, const tags_t &tags);
+  void update_way(id_t id, const tags_t &attrs, const std::vector<id_t> &way_nodes, const tags_t &tags, boost::optional<util::CompressedBitset> &bs);
   void update_relation(id_t id, const tags_t &attrs, const std::list<member> &members, const tags_t &tags);
 
   // deleters

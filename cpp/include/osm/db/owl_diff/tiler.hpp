@@ -13,8 +13,10 @@ namespace osm { namespace db { namespace owl_diff {
  * on an element can be tested.
  */
 class tiler {
-private:
+public:
   typedef std::set<tile_t> tileset_t;
+
+private:
   tileset_t tileset;
 
 public:
@@ -23,7 +25,12 @@ public:
   
   virtual void add_point(const node &n);
   virtual void add_line_between(const node &a, const node &b);
-  
+  virtual void add_tileset(const tileset_t &t);
+
+  // gets an empty tiler of the same type as this, so that tiles can be calculated
+  // "offline" and merged back in. used in the tile caching code.
+  virtual tiler *empty_tiler() const;
+
   const tileset_t &tiles() const;
 };
 

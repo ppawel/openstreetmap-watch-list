@@ -9,6 +9,8 @@ using std::vector;
 using std::set;
 using std::cout;
 using std::endl;
+using boost::optional;
+using osm::util::CompressedBitset;
 
 namespace osm { namespace db { namespace owl_diff {
 
@@ -16,6 +18,10 @@ const char *way::type = "way";
 
 way::way(const tags_t &a, const tags_t &t, const std::vector<id_t> &wn) 
   : element(a, t), way_nodes(wn) {
+  tags_t::const_iterator itr = a.find("tiles");
+  if (itr != a.end()) {
+    tiles_cache = CompressedBitset(itr->second);
+  }
 }
 
 bool way::geom_is_different(const way &w) const {
@@ -23,20 +29,38 @@ bool way::geom_is_different(const way &w) const {
 }
 
 void way::tiles(tiler &t, osm::io::Database &d) const {
-  // a way covers all the lines joining its segments.
-  vector<node> nodes;
-  nodes.reserve(way_nodes.size());
-  for (vector<id_t>::const_iterator itr = way_nodes.begin(); 
-       itr != way_nodes.end(); ++itr) {
-    if (node::db_exists(*itr, d)) {
-      nodes.push_back(node::db_load(*itr, d));
+  if (tiles_cache) {
+    tiler::tileset_t cached_tiles = tiles_cache->decompress();
+    t.add_tileset(cached_tiles);
+
+  } else {
+    // get a new, empty tiler so that the tiles can be calculated
+    // separately and cached.
+    tiler *tt = t.empty_tiler();
+
+    // a way covers all the lines joining its segments.
+    vector<node> nodes;
+    nodes.reserve(way_nodes.size());
+    for (vector<id_t>::const_iterator itr = way_nodes.begin(); 
+	 itr != way_nodes.end(); ++itr) {
+      if (node::db_exists(*itr, d)) {
+	nodes.push_back(node::db_load(*itr, d));
+      }
     }
-  }
-  if (nodes.size() > 1) {
-    t.add_point(nodes[0]);
-    for (size_t i = 1; i < nodes.size(); ++i) {
-      t.add_line_between(nodes[i-1], nodes[i]);
+    if (nodes.size() > 1) {
+      tt->add_point(nodes[0]);
+      for (size_t i = 1; i < nodes.size(); ++i) {
+	tt->add_line_between(nodes[i-1], nodes[i]);
+      }
     }
+
+    // insert tiles back into the original tiler
+    const tiler::tileset_t &my_tiles = tt->tiles();
+    t.add_tileset(my_tiles);
+    // and add them to the cache
+    tiles_cache = CompressedBitset(my_tiles);
+    
+    delete tt;
   }
 }
 
@@ -137,7 +161,7 @@ way::db_load(id_t i, osm::io::Database &d) {
 void 
 way::db_save(const way &w, osm::db::OWLDatabase &d) {
   if (w.visible) {
-    d.update_way(w.id, w.attrs, w.way_nodes, w.tags);
+    d.update_way(w.id, w.attrs, w.way_nodes, w.tags, w.tiles_cache);
   } else {
     d.delete_way(w.id);
   }
