@@ -80,8 +80,6 @@ BOOST_AUTO_TEST_CASE(random_test) {
     set<tile_t> b = c.decompress();
     BOOST_CHECK_EQUAL(a, b);
   }
-
-  cout << "random: " << set_bytes << ", " << compressed_bytes << "\n";
 }
 
 BOOST_AUTO_TEST_CASE(snake_test) {
@@ -98,8 +96,6 @@ BOOST_AUTO_TEST_CASE(snake_test) {
     set<tile_t> b = c.decompress();
     BOOST_CHECK_EQUAL(a, b);
   }
-
-  cout << "snake: " << set_bytes << ", " << compressed_bytes << "\n";
 }
 
 BOOST_AUTO_TEST_SUITE_END()
