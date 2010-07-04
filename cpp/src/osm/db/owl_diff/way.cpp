@@ -19,7 +19,7 @@ const char *way::type = "way";
 way::way(const tags_t &a, const tags_t &t, const std::vector<id_t> &wn) 
   : element(a, t), way_nodes(wn) {
   tags_t::const_iterator itr = a.find("tiles");
-  if (itr != a.end()) {
+  if ((itr != a.end()) && (!itr->second.empty())) {
     tiles_cache = CompressedBitset(itr->second);
   }
 }

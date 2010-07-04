@@ -104,6 +104,10 @@ OWLLoader::finish() {
   // transaction.exec("create index relation_members_relation_idx on relation_members (id)");
   // transaction.exec("create index relation_members_member_idx on relation_members (m_id)");
 
+  // add the bytea tile cache columns to ways and relations
+  transaction.exec("alter table ways add column tiles bytea null default null");
+  transaction.exec("alter table relations add column tiles bytea null default null");
+
   // now try and commit the transaction
   transaction.commit();
 }

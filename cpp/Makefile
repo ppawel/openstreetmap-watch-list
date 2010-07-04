@@ -33,7 +33,8 @@ TEST_SRCS=\
 	src/test/util/compressed_bitset.cpp \
 	src/test/util/lcs.cpp \
 	src/test/util/quad_tile.cpp \
-	src/test/owl_diff/test_tiler.cpp
+	src/test/owl_diff/test_tiler.cpp \
+	src/test/db/way_tile_cache.cpp
 
 OBJS=$(SRCS:src/%.cpp=obj/%.o)
 TEST_OBJS=$(TEST_SRCS:src/%.cpp=obj/%.o)

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osmChange version="0.6" generator="by hand">
+  <modify>
+    <way id="7942961" user="Matt" uid="70" visible="true" version="3" changeset="187868" timestamp="2008-08-11T12:09:28Z">
+      <nd ref="59164267"/>
+      <nd ref="59164273"/>
+      <nd ref="59164277"/>
+      <nd ref="59164282"/>
+      <nd ref="59164285"/>
+      <nd ref="59164287"/>
+      <nd ref="59164289"/>
+      <tag k="created_by" v="Potlatch 2 FTW"/>
+      <tag k="highway" v="unclassified"/>
+      <tag k="name" v="Hesper Mews"/>
+    </way>
+  </modify>
+  <create>
+    <relation id="1" user="Matt" uid="70" visible="true" version="3" changeset="187868" timestamp="2008-08-11T12:09:28Z">
+      <member role="" type="way" ref="7942961"/>
+      <tag k="foo" v="bar"/>
+    </relation>
+  </create>
+</osmChange>

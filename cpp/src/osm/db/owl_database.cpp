@@ -212,7 +212,7 @@ OWLDatabase::update_way(id_t id, const tags_t &attrs, const vector<id_t> &way_no
 	  << required_attribute(attrs, "version") << ", "
 	  << required_attribute(attrs, "changeset");
     if (bs) {
-      query << ", " << transaction.esc_raw(bs->str());
+      query << ", E'" << transaction.esc_raw(bs->str()) << "'::bytea";
     }
     query << ")";
     transaction.exec(query);
