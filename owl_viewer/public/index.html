@@ -2,20 +2,94 @@
 <head>
 <title>OWL: OpenStreetMap Watch List</title>
 <style type="text/css">
-body { font-family: sans-serif; }
+body { 
+  font-family: sans-serif; 
+  background: url('images/owl_background_block.png') repeat scroll 0 0;
+}
+#header {
+  width: 750px; 
+  height: 35px; 
+  margin-left: 31px; 
+  margin-right: 30px; 
+  position: absolute; 
+  top: 0px; 
+  background-image: url('images/owl_frontpage_header.png');
+}
+#header ul {
+  padding: 0;
+  margin: 0;
+  margin-left: 40px;
+  margin-right: 40px;
+  width: 670px;
+  height: 30px;
+  list-style: none;
+  text-align: left;
+  text-align: center;
+}
+#header ul li {
+  height: 33px;
+  padding: 0 8px 0 8px;
+  width: auto;
+  margin-right: 10px;
+  line-height: 35px;
+  float: left;
+  text-align: center;
+}
+#header ul li:hover {
+  background-color: #022f9c;
+}
+#header ul li a:link {
+  color: #eee;
+  text-decoration: none;
+}
+#header ul li a:visited {
+  color: #eee;
+  text-decoration: none;
+}
 </style>
 </head>
 <body>
-<div style="width: 600px; margin-left: auto; margin-right: auto;">
-<img src="images/owl_eyes.png" title="Eye Eye! by johnmuk via Flickr. CC-BY-NC-SA 2.0."/>
-<center><h1>OWL: OpenStreetMap Watch List</h1></center>
-<p>This is a service for looking at what's changed in <a href="http://www.openstreetmap.org/">OSM</a> where you're interested in. Rather than calculate
-the bounding box of all changes in a changeset, this service attaches changes to small lat/lon tiles, which are more fine-grained and more easily
-queryable (in theory, anyway...)</p>
+<div style="width: 811px; margin-left: auto; margin-right: auto;">
+<div id="header">
+<ul>
+<li><a href="dailymap">Daily Map</a></li>
+<li><a href="weeklymap">Weekly Map</a></li>
+<li><a href="map">Forever Map</a></li>
+</ul>
+</div>
+<div style="position: absolute; top: 35px;">
+<img src="images/owl_frontpage_main.png"/>
+</div>
+<div style="width: 631px; margin-left: 80px; margin-right: 100px; position: absolute; top: 285px;">
+<p style="font-family: serif; text-align: justify;"><em>This is a service for looking at what's changed in 
+<a href="http://www.openstreetmap.org/">OSM</a> where you're interested in. Rather than calculate the bounding box of all
+changes in a changeset, this service attaches changes to small lat/lon tiles, which are more fine-grained and more easily 
+queryable (in theory, anyway...)</em></p>
+</div>
+<div style="width: 750px; margin-left: 31px; margin-right: 30px; position: absolute; top: 450px; background-color: #fff;">
+<img src="images/owl_frontpage_body_top.png"/>
+<div style="width: 691px; margin-left: 30px; margin-right: 30px;">
+<h3>What can OWL do?</h3>
 <p>There are maps of changes over the last <a href="dailymap">day</a>, <a href="weeklymap">week</a> or <a href="map">forever</a> (well, since OWL
 started running).</p>
 <p>On the bottom left of the maps should be a control to allow you to select an RSS feed which will contain only those changes touching tiles actually
 in that box. So no more sorting through (big) changesets to find which actually modify features near you!</p>
+<h3>How do I use OWL?</h3>
+<p>Click on one of the links above for a daily, weekly or forever view of the data. Initially, you may be too zoomed-out to see any data and there will
+be a warning in the lower left corner of the screen telling you to zoom in to see data. After zooming in you should see lots of orange boxes, each of 
+which is clickable. </p>
+<p>Clicking on one will take you to a list of changes which have occurred to elements within that box and there are links from there to
+view the element or changeset in OSM, or to view the changeset in OWL. The changeset view in OWL shows orange boxes covering the changes in that
+changeset. </p>
+<p>Finally, any map view should have a link in the lower left which allows you to drag a bounding box over the map - this will make a link to an
+RSS feed appear in the lower left. The RSS feed contains information on the changesets which intersect the area you dragged, meaning you can easily
+keep up-to-date with the editing activity in areas you're interested in.</p>
+<h3>How up-to-date is OWL?</h3>
+<p>The graph below shows how up-to-date the data is, relative to the minutely diffs at 
+<a href="http://planet.openstreetmap.org/minute-replicate">planet.openstreetmap.org</a>.</p>
+<center><img src="../dupe_nodes/catch-up.png" title="Graph showing how up-to-date OWL data is."/></center>
+</div>
+</div>
 </div>
 </body>
 </html>

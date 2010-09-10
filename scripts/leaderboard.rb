@@ -1,4 +1,5 @@
 require 'rubygems'
+require 'fileutils'
 require 'pg'
 
 OUTPUT_FILE='/home/matt/public_html/dupe_nodes/leaderboard.html'
