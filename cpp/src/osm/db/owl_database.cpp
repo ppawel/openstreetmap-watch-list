@@ -5,6 +5,7 @@
 #include <boost/lexical_cast.hpp>
 #include <sstream>
 #include <iostream>
+#include <cmath>
 
 using pqxx::work;
 using pqxx::connection;
@@ -181,8 +182,8 @@ OWLDatabase::ways_using_node(id_t id) {
 void
 OWLDatabase::update_node(id_t id, const tags_t &attrs, const tags_t &tags) {
   // simple implementation as a delete-add. this isn't efficient, but it might not need to be.
-  const int lat = lexical_cast<double>(required_attribute(attrs, "lat")) * SCALE;
-  const int lon = lexical_cast<double>(required_attribute(attrs, "lon")) * SCALE;
+  const int lat = nearbyint(lexical_cast<double>(required_attribute(attrs, "lat")) * SCALE);
+  const int lon = nearbyint(lexical_cast<double>(required_attribute(attrs, "lon")) * SCALE);
   delete_node(id);
 
   stringstream query;
