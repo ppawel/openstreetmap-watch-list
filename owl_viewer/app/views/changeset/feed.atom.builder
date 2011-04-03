@@ -21,7 +21,7 @@ xml.feed :xmlns => "http://www.w3.org/2005/Atom" do
 	xml.title "Changeset #{id} by #{user_name}"
       end
       xml.content(:type => "html") do
-        xml.text! "<p>By #{user_name} covering #{n} tiles"
+        xml.text! "<p>By <a href=\"http://www.openstreetmap.org/user/#{user_name}\">#{user_name}</a> covering #{n} tiles"
       	xml.text! ", with comment \"#{details[1]}\"" unless details.nil? or details[1].nil?
       	xml.text! ", using \"#{details[2]}\"" unless details.nil? or details[2].nil?
       	xml.text! ", and tagged as a bot" unless details.nil? or details[3].nil? or details[3] != "t"

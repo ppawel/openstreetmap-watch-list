@@ -16,12 +16,12 @@ xml.rss :version => "2.0" do
 	  user_name = details[0] 
 	  xml.title "Changeset #{id} by #{user_name}"
 	end
-	description = "By #{user_name} covering #{n} tiles"
+	description = "<p>By <a href=\"http://www.openstreetmap.org/user/#{user_name}\">#{user_name}</a> covering #{n} tiles"
 	description += ", with comment \"#{details[1]}\"" unless details.nil? or details[1].nil?
 	description += ", using \"#{details[2]}\"" unless details.nil? or details[2].nil?
 	description += ", and tagged as a bot" unless details.nil? or details[3].nil? or details[3] != "t"
-	description += "."
-	xml.description description
+	description += ". View changeset on <a href=\"http://www.openstreetmap.org/browse/changeset/#{id}\">main OSM site</a>.</p>"
+	xml.description { xml.cdata! description }
 	xml.pubDate time.to_s(:rfc822)
         xml.link "http://matt.dev.openstreetmap.org/owl_viewer/tiles/#{id}"
         xml.guid "http://matt.dev.openstreetmap.org/owl_viewer/tiles/#{id}"

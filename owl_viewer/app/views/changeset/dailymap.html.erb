@@ -48,11 +48,11 @@
 	  browseBoxControl.deactivate();
 	  tl = latLonToTile(projected.left, projected.top) * 4;
 	  br = latLonToTile(projected.right, projected.bottom) * 4 + 3;
-	  rss_link = "http://matt.dev.openstreetmap.org/owl_viewer/feed/"+tl+"-"+br+".rss";
-	  $("feed_url_box").innerHTML = rss_link;
-	  $("feed_url_box").href = rss_link;
+	  atom_link = "http://matt.dev.openstreetmap.org/owl_viewer/feed/"+tl+"-"+br+".atom";
+	  $("feed_url_box").innerHTML = atom_link;
+	  $("feed_url_box").href = atom_link;
 
-	  $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
+	  $("feed_select_box").innerHTML = "Click here to generate an ATOM feed.";
           $("feed_url_box").style.display = "inline";
 	}
 	
@@ -145,7 +145,7 @@
 	      }
             });
             map.addControl(browseBoxControl);
-	    $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
+	    $("feed_select_box").innerHTML = "Click here to generate an ATOM feed.";
 	    $("feed_select_box").onclick = startDrag;
 	}
     </script>
@@ -156,6 +156,6 @@
 <p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>
 </div>
 <div id="select" style="background:white; position:absolute; margin:0px; padding:10px; left:0px; bottom:0px; z-index:999;">
-<a id="feed_select_box" href="#">Click here to generate an RSS feed.</a><br/>
+<a id="feed_select_box" href="#">Click here to generate an ATOM feed.</a><br/>
 <a id="feed_url_box" href="#"></a>
 </div>
