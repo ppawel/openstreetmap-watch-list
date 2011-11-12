@@ -2,6 +2,7 @@
 #define OSM_DB_OWL_DIFF_ELEMENT_HPP
 
 #include "osm/types.hpp"
+#include <time.h>
 
 namespace osm { namespace db { namespace owl_diff {
 
@@ -13,6 +14,7 @@ struct element {
   tags_t tags;
   id_t id, changeset, version, uid;
   bool visible;
+  time_t timestamp;
 
   element(const tags_t &a, const tags_t &t); 
 };

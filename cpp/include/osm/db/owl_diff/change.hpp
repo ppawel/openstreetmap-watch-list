@@ -27,9 +27,10 @@ struct change {
   const Action action;
   const Type type;
   const id_t id, version, changeset, uid;
+  const time_t timestamp;
   const std::set<tile_t> tiles;
 
-  change(Action a, Type t, const id_t i, const id_t v, const id_t cs, const id_t ui, const std::set<tile_t> &ts);
+  change(Action a, Type t, const id_t i, const id_t v, const id_t cs, const id_t ui, const time_t tm, const std::set<tile_t> &ts);
   change(const change &);
 };
 

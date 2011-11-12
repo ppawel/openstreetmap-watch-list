@@ -116,17 +116,17 @@ void list_all_changes(const change_list &c) {
 }
 
 void mk_change(change_list &l, change::Action a, const owl_diff::node &n, const set<tile_t> &t) {
-  change c(a, change::Node, n.id, n.version, n.changeset, n.uid, t);
+  change c(a, change::Node, n.id, n.version, n.changeset, n.uid, n.timestamp, t);
   l.push_back(c);
 }
 
 void mk_change(change_list &l, change::Action a, const owl_diff::way &w, const set<tile_t> &t) {
-  change c(a, change::Way, w.id, w.version, w.changeset, w.uid, t);
+  change c(a, change::Way, w.id, w.version, w.changeset, w.uid, w.timestamp, t);
   l.push_back(c);
 }
 
 void mk_change(change_list &l, change::Action a, const owl_diff::relation &r, const set<tile_t> &t) {
-  change c(a, change::Relation, r.id, r.version, r.changeset, r.uid, t);
+  change c(a, change::Relation, r.id, r.version, r.changeset, r.uid, r.timestamp, t);
   l.push_back(c);
 }
 

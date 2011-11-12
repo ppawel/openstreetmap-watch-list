@@ -14,7 +14,11 @@ const string &required_attribute(const tags_t &t, const string &s) {
   tags_t::const_iterator itr = t.find(s);
   if (itr == t.end()) {
     ostringstream ostr;
-    ostr << "Missing required attribute `" << s << "'.";
+    ostr << "Missing required attribute `" << s << "'. Tags are {";
+    for (itr = t.begin(); itr != t.end(); ++itr) {
+      ostr << "`" << itr->first << "'=`" << itr->second << "', ";
+    }
+    ostr << "}.";
     throw runtime_error(ostr.str());
   }
   return itr->second;

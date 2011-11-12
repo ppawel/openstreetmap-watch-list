@@ -305,7 +305,9 @@ OWLDatabase::insert_change(const owl_diff::change &c) {
     } else {
       query << "'geometry'";
     }
-    query << ", " << *itr << ", localtimestamp)";
+    query << ", " << *itr << ", "
+	  << "timestamp without time zone 'epoch' + "
+	  << c.timestamp << " * interval '1 second')";
     transaction.exec(query);
   }
 }
