@@ -95,6 +95,67 @@ to_string_d(const double &d) {
   return ostr.str();
 }
 
+string changes_table_name(int qtile_prefix, int depth) {
+  ostringstream ostr;
+
+  if (depth == 0) {
+    return "changes";
+    
+  } else {
+    ostr << "changes_" << setw(depth) << setfill('0') << qtile_prefix;
+    return ostr.str();
+  }
+}
+
+size_t table_count(pqxx::work &work, const string &name) {
+  ostringstream ostr;
+  ostr << "select count(*) from \"" << name << "\"";
+  result res = work.exec(query);
+  
+  if (res.size() < 1) {
+    return 0;
+    
+  } else {
+    return res[0].at(0).as<size_t>();
+  }
+}
+
+#define CHANGES_MAX_DEPTH (3)
+#define CHANGES_MAX_ROWS (100000)
+#define CHANGES_MIN_ROWS (60000)
+
+void shuffle_changes_table(pqxx::work &work, uint32_t qtile_prefix, int depth) {
+  if (depth < CHANGES_MAX_DEPTH) {
+    assert(qtile_prefix < (1 << depth));
+    string this_table = changes_table_name(qtile_prefix, depth);
+    size_t this_rows = table_count(work, this_table);
+    
+    if (this_rows > CHANGES_MAX_ROWS) {
+      ostringstream ostr;
+      ostr << "select \"time\" from " << this_table << " order by \"time\" desc limit 1 offset " << CHANGES_MIN_ROWS;
+      result res = work.exec(ostr);
+      if (res.size() > 0) {
+        string timestamp = res[0].at(0).as<string>();
+        for (uint32_t i = 0; i < (1u << CHANGES_BITS); ++i) {
+          uint32_t prefix = (qtile_prefix << CHANGES_BITS) | i;
+          string table = changes_table_name(prefix, depth + 1);
+          uint32_t tile_min = prefix << (28 - 4 * depth);
+          uint32_t tile_max = tile_min + ((1u << (28 - 4 * depth)) - 1);
+          ostringstream ostr2;
+          ostr2 << "insert into " << table << " select * from " << this_table 
+                << " where \"time\" < '" << timestamp << "'"
+                << " and tile between " << tile_min << " and " << tile_max;
+          work.exec(ostr2);
+          shuffle_changes_table(work, prefix, depth + 1);
+        }
+        ostringstream ostr3;
+        ostr3 << "delete from " << this_table << " where \"time\" < '" << timestamp << "'";
+        work.exec(ostr3);
+      }
+    } 
+  }
+}
+
 } // anonymous namespace
 
 namespace osm { namespace db {
@@ -108,6 +169,7 @@ OWLDatabase::~OWLDatabase() throw() {
 
 void 
 OWLDatabase::finish() {
+  shuffle_changes_table(transaction, 0, 0);
   transaction.commit();
 }
 
