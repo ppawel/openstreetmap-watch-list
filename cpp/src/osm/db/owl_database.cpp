@@ -32,10 +32,10 @@ bool find_element(pqxx::work &w, const char * const table, const char * const ta
     for (result::tuple::const_iterator itr = row.begin(); itr != row.end(); ++itr) {
       string name = itr->name();
       if (name == "tiles") {
-	pqxx::binarystring bytes(*itr);
-	attrs[name] = bytes.str();
+        pqxx::binarystring bytes(*itr);
+        attrs[name] = bytes.str();
       } else {
-	attrs[name] = itr->c_str();
+        attrs[name] = itr->c_str();
       }
     }
 
@@ -188,11 +188,11 @@ OWLDatabase::update_node(id_t id, const tags_t &attrs, const tags_t &tags) {
 
   stringstream query;
   query << "insert into nodes (id, version, changeset, lat, lon, tile) values ("
-	<< id << ", "
-	<< required_attribute(attrs, "version") << ", "
-	<< required_attribute(attrs, "changeset") << ", "
-	<< lat << ", " << lon << ", "
-	<< util::xy2tile(util::lon2x(lon), util::lat2y(lat)) << ")";
+        << id << ", "
+        << required_attribute(attrs, "version") << ", "
+        << required_attribute(attrs, "changeset") << ", "
+        << lat << ", " << lon << ", "
+        << util::xy2tile(util::lon2x(lon), util::lat2y(lat)) << ")";
   transaction.exec(query);
 
   add_tags(transaction, "node_tags", id, tags);
@@ -200,7 +200,7 @@ OWLDatabase::update_node(id_t id, const tags_t &attrs, const tags_t &tags) {
 
 void 
 OWLDatabase::update_way(id_t id, const tags_t &attrs, const vector<id_t> &way_nodes, const tags_t &tags,
-			optional<CompressedBitset> &bs) {
+                        optional<CompressedBitset> &bs) {
   // simple implementation as a delete-add. this isn't efficient, but it might not need to be.
   delete_way(id);
 
@@ -209,9 +209,9 @@ OWLDatabase::update_way(id_t id, const tags_t &attrs, const vector<id_t> &way_no
     query << "insert into ways (id, version, changeset";
     if (bs) { query << ", tiles"; }
     query << ") values ("
-	  << id << ", "
-	  << required_attribute(attrs, "version") << ", "
-	  << required_attribute(attrs, "changeset");
+          << id << ", "
+          << required_attribute(attrs, "version") << ", "
+          << required_attribute(attrs, "changeset");
     if (bs) {
       query << ", E'" << transaction.esc_raw(bs->str()) << "'::bytea";
     }
@@ -240,9 +240,9 @@ OWLDatabase::update_relation(id_t id, const tags_t &attrs, const list<member> &m
 
   stringstream query;
   query << "insert into relations (id, version, changeset) values ("
-	<< id << ", "
-	<< required_attribute(attrs, "version") << ", "
-	<< required_attribute(attrs, "changeset") << ")";
+        << id << ", "
+        << required_attribute(attrs, "version") << ", "
+        << required_attribute(attrs, "changeset") << ")";
   transaction.exec(query);
 
   // update relation members
@@ -306,8 +306,8 @@ OWLDatabase::insert_change(const owl_diff::change &c) {
       query << "'geometry'";
     }
     query << ", " << *itr << ", "
-	  << "timestamp without time zone 'epoch' + "
-	  << c.timestamp << " * interval '1 second')";
+          << "timestamp without time zone 'epoch' + "
+          << c.timestamp << " * interval '1 second')";
     transaction.exec(query);
   }
 }
@@ -320,9 +320,9 @@ OWLDatabase::update_users(const map<id_t, string> &users) {
     pqxx::result find_res = transaction.exec(find_query);
     if (find_res.size() > 0) {
       if (itr->second != find_res[0][0].c_str()) {
-	stringstream update_query;
-	update_query << "update users set name='" << transaction.esc(itr->second) << "' where id=" << itr->first;
-	transaction.exec(update_query);
+        stringstream update_query;
+        update_query << "update users set name='" << transaction.esc(itr->second) << "' where id=" << itr->first;
+        transaction.exec(update_query);
       }
     } else {
       stringstream insert_query;
@@ -348,7 +348,7 @@ OWLDatabase::update_changesets(const map<id_t, id_t> &changesets) {
     } else {
       stringstream insert_query;
       insert_query << "insert into changeset_details (id, uid, closed, last_seen) values (" 
-		   << itr->first << ", " << itr->second << ", false, now())";
+                   << itr->first << ", " << itr->second << ", false, now())";
       transaction.exec(insert_query);
     }
   }

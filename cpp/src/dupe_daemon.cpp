@@ -24,8 +24,8 @@ find_all_tiles(pqxx::connection &conn) {
     const pqxx::icursor_iterator end;
     for (pqxx::icursor_iterator itr(stream); itr != end; ++itr) {
       for (pqxx::result::const_iterator jtr = itr->begin(); jtr != itr->end(); ++jtr) {
-	tile_t tile = (tile_t)((*jtr)["tile"].as<tile_t>());
-	tiles.insert(tile);
+        tile_t tile = (tile_t)((*jtr)["tile"].as<tile_t>());
+        tiles.insert(tile);
       }
     }
   }
@@ -51,19 +51,19 @@ main(int argc, char *argv[]) {
 
   po::options_description desc("OWL uploader");
   desc.add_options()
-    ("help,h", "This help message.")
-    ("tile,t", po::value<tile_t>(&tile), 
-     "Tile to recalculate.")
-    ("force,f", po::value<bool>(&force)->default_value(false), 
-     "Force a recalculation, even if the tile has been calculated already.")
-    ("db,d", po::value<string>(&db)->default_value("dbname=owl"), 
-     "Database connection string")
-    ;
+     ("help,h", "This help message.")
+     ("tile,t", po::value<tile_t>(&tile), 
+      "Tile to recalculate.")
+     ("force,f", po::value<bool>(&force)->default_value(false), 
+      "Force a recalculation, even if the tile has been calculated already.")
+     ("db,d", po::value<string>(&db)->default_value("dbname=owl"), 
+      "Database connection string")
+     ;
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
-	    .options(desc)
-	    .run(), vm);
+            .options(desc)
+            .run(), vm);
   po::notify(vm);
 
   if (vm.count("help")) {
@@ -90,26 +90,26 @@ main(int argc, char *argv[]) {
     cout << "about to update " << num_tiles << " tiles" << endl;
     for (set<tile_t>::iterator itr = tiles.begin(); itr != tiles.end(); ++itr) {
       try {
-	// not interested in tiles above 85N or below 85S, as they won't display on 
-	// a spherical mercator projection map.
-	unsigned int x = 0, y = 0;
-	osm::util::tile2xy(*itr, x, y);
-	if ((y < 45738) && (y > 19798)) {
-	  if (force || !does_tile_exist(conn, *itr)) {
-	    set<tile_t> single_tile;
-	    single_tile.insert(*itr);
-	    osm::db::DupeNodes dn(single_tile);
-	    dn.prepare(conn);
-	    conn.perform(dn);
-	    if (counter > last_counter + 1000) {
-	      cout << "updating tile " << *itr << " (" << 100 * double(counter) / double(num_tiles) << "%)" << endl;
-	      last_counter = counter;
-	    }
-	  }
-	}
+        // not interested in tiles above 85N or below 85S, as they won't display on 
+        // a spherical mercator projection map.
+        unsigned int x = 0, y = 0;
+        osm::util::tile2xy(*itr, x, y);
+        if ((y < 45738) && (y > 19798)) {
+          if (force || !does_tile_exist(conn, *itr)) {
+            set<tile_t> single_tile;
+            single_tile.insert(*itr);
+            osm::db::DupeNodes dn(single_tile);
+            dn.prepare(conn);
+            conn.perform(dn);
+            if (counter > last_counter + 1000) {
+              cout << "updating tile " << *itr << " (" << 100 * double(counter) / double(num_tiles) << "%)" << endl;
+              last_counter = counter;
+            }
+          }
+        }
       } catch (std::exception &e) {
-	cerr << "error during tile " << *itr << endl;
-	throw;
+        cerr << "error during tile " << *itr << endl;
+        throw;
       }
       ++counter;
     }

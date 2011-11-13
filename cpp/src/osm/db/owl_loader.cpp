@@ -64,7 +64,7 @@ OWLLoader::OWLLoader(connection &c, size_t buffer_size)
   transaction.exec("drop table if exists nodes, ways, relations, node_tags, way_tags, relation_tags, way_nodes, relation_members, changes");
   transaction.exec("drop type if exists nwr_enum, change_enum");
   transaction.exec("create table nodes (id integer not null, version integer not null, changeset integer not null, "
-		   "lat integer not null, lon integer not null, tile bigint not null)");
+                   "lat integer not null, lon integer not null, tile bigint not null)");
   transaction.exec("create table ways (id integer not null, version integer not null, changeset integer not null)");
   transaction.exec("create table relations (id integer not null, version integer not null, changeset integer not null)");
   transaction.exec("create table node_tags (id integer not null, k text not null, v text not null)");
@@ -118,9 +118,9 @@ OWLLoader::node(const tags_t &attrs, const tags_t &tags) {
   const int lat = lexical_cast<double>(required_attribute(attrs, "lat")) * SCALE;
   const int lon = lexical_cast<double>(required_attribute(attrs, "lon")) * SCALE;
   push_node(lexical_cast<int>(id),
-	    lexical_cast<int>(required_attribute(attrs, "version")), 
-	    lexical_cast<int>(required_attribute(attrs, "changeset")),
-	    lat, lon);
+            lexical_cast<int>(required_attribute(attrs, "version")), 
+            lexical_cast<int>(required_attribute(attrs, "changeset")),
+            lat, lon);
   for (tags_t::const_iterator itr = tags.begin(); itr != tags.end(); ++itr) {
     push_node_tag(id, itr->first, itr->second);
   }
@@ -216,7 +216,7 @@ OWLLoader::push_way_node(id_t id, id_t node_id, id_t seq) {
 
 void
 OWLLoader::push_relation_member(const std::string &id, const std::string &m_role, const std::string &m_type, 
-				const std::string &m_id, const std::string &seq) {
+                                const std::string &m_id, const std::string &seq) {
   array<string, 5> &member = push_buffer(relation_members_buffer, transaction, "relation_members");
   member[0] = id;
   member[1] = m_role;

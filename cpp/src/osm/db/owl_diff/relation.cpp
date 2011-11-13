@@ -12,14 +12,14 @@ using std::ostringstream;
 
 namespace {
 struct set_member {
-  enum Type { Node, Way, Relation };
-  id_t id;
-  Type type;
+   enum Type { Node, Way, Relation };
+   id_t id;
+   Type type;
 
-  set_member(id_t i, Type t) : id(i), type(t) {}
-  bool operator<(const set_member &s) const {
-    return type < s.type || (type == s.type && id < s.id);
-  }
+   set_member(id_t i, Type t) : id(i), type(t) {}
+   bool operator<(const set_member &s) const {
+     return type < s.type || (type == s.type && id < s.id);
+   }
 };
 
 set<set_member> make_set(const list<osm::member> &l) {
@@ -77,18 +77,18 @@ void relation::diff_tiles(const relation &w, tiler &t, osm::io::Database &d) con
   for (set<set_member>::iterator itr = difference.begin(); itr != difference.end(); ++itr) {
     if (itr->type == set_member::Node) {
       if (node::db_exists(itr->id, d)) {
-	node n = node::db_load(itr->id, d);
-	t.add_point(n);
+        node n = node::db_load(itr->id, d);
+        t.add_point(n);
       }
     } else if (itr->type == set_member::Way) {
       if (way::db_exists(itr->id, d)) {
-	way w = way::db_load(itr->id, d);
-	w.tiles(t, d);
+        way w = way::db_load(itr->id, d);
+        w.tiles(t, d);
       }
     } else {
       if ((relation_ids.count(itr->id) == 0) && relation::db_exists(itr->id, d)) {
-	relation r = relation::db_load(itr->id, d);
-	r.recursive_tiles(relation_ids, t, d);
+        relation r = relation::db_load(itr->id, d);
+        r.recursive_tiles(relation_ids, t, d);
       }
     }
   }
@@ -101,19 +101,19 @@ void relation::recursive_tiles(set<id_t> &ids, tiler &t, osm::io::Database &d) c
        itr != members.end(); ++itr) {
     if (itr->type == "node") {
       if (node::db_exists(itr->id, d)) {
-	node n = node::db_load(itr->id, d);
-	t.add_point(n);
+        node n = node::db_load(itr->id, d);
+        t.add_point(n);
       }
     } else if (itr->type == "way") {
       if (way::db_exists(itr->id, d)) {
-	way w = way::db_load(itr->id, d);
-	w.tiles(t, d);
+        way w = way::db_load(itr->id, d);
+        w.tiles(t, d);
       }
     } else if (itr->type == "relation") {
       // only follow relation member if it isn't already in the list of "seen" IDs
       if ((ids.count(itr->id) == 0) && relation::db_exists(itr->id, d)) {
-	relation r = relation::db_load(itr->id, d);
-	r.recursive_tiles(ids, t, d);
+        relation r = relation::db_load(itr->id, d);
+        r.recursive_tiles(ids, t, d);
       }
     } else {
       ostringstream ostr;

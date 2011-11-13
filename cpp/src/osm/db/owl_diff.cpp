@@ -201,38 +201,38 @@ common(T &new_e, osm::db::OWLDatabase &d, io::Diff::Action action) {
     version_t new_ver = new_e.version;
 
     /* not yet - we'll get around to this later...
-    while (new_ver > old_ver + 1) {
-      // get intervening versions from the API, updating old_ver.
-      T mid_e;
+       while (new_ver > old_ver + 1) {
+       // get intervening versions from the API, updating old_ver.
+       T mid_e;
       
-      APIDatabase api_db;
-      if (!mid_e.db_load(api_db, id, old_ver + 1)) {
-	throw not_found("api database", id, old_ver + 1);
-      }
+       APIDatabase api_db;
+       if (!mid_e.db_load(api_db, id, old_ver + 1)) {
+       throw not_found("api database", id, old_ver + 1);
+       }
 
-      changes.splice(changes.end(), update(old_e, mid_e));
-      old_e = mid_e;
-    } 
+       changes.splice(changes.end(), update(old_e, mid_e));
+       old_e = mid_e;
+       } 
     */
     if (new_ver <= old_ver) {
       if (new_ver == old_ver) {
-	cout << "WARNING: Not applying change to " << T::type << " " << id 
-	     << ", at same version " << new_ver << "." << endl;
+        cout << "WARNING: Not applying change to " << T::type << " " << id 
+             << ", at same version " << new_ver << "." << endl;
       } else {
-	cout << "WARNING: Not applying downgrade to " << T::type << " " << id 
-	     << ", versions " << old_ver << " -> " << new_ver << "." << endl;
+        cout << "WARNING: Not applying downgrade to " << T::type << " " << id 
+             << ", versions " << old_ver << " -> " << new_ver << "." << endl;
       }
     } else {
       if (new_ver > old_ver + 1) {
-	cout << "WARNING: Skipping versions in " << T::type << " " << id 
-	     << ", versions " << old_ver << " -> " << new_ver << "." << endl;
+        cout << "WARNING: Skipping versions in " << T::type << " " << id 
+             << ", versions " << old_ver << " -> " << new_ver << "." << endl;
       }
 
       // add changes to database.
       if (action == io::Diff::Delete) {
-	splice_changes(changes, do_delete(old_e, new_e, d));
+        splice_changes(changes, do_delete(old_e, new_e, d));
       } else {
-	splice_changes(changes, update(old_e, new_e, d));
+        splice_changes(changes, update(old_e, new_e, d));
       }
       T::db_save(new_e, d);
     }
@@ -240,7 +240,7 @@ common(T &new_e, osm::db::OWLDatabase &d, io::Diff::Action action) {
   } else {
     if (action == io::Diff::Delete) {
       cout << "WARNING: Not re-deleting " << T::type << " " << id 
-	   << ", is already deleted." << endl;
+           << ", is already deleted." << endl;
     } else {
       // must be a new or undeleted element
       splice_changes(changes, create(new_e, d));
@@ -327,7 +327,7 @@ OWLDiff::update_metadata(const tags_t &attrs) {
     map<id_t, string>::iterator itr = users_seen.find(id);
     if (itr != users_seen.end()) {
       if (itr->second != name) {
-	itr->second = name;
+        itr->second = name;
       }
     } else {
       users_seen.insert(std::make_pair(id, name));
@@ -340,7 +340,7 @@ OWLDiff::update_metadata(const tags_t &attrs) {
       // this should be forbidden by the OSM data model... but it's always worth
       // checking these things.
       if (jtr->second != id) {
-	throw runtime_error("Changeset ID refers to two different user IDs!");
+        throw runtime_error("Changeset ID refers to two different user IDs!");
       }
     }
   }

@@ -34,15 +34,15 @@ tiler::add_line_between(const node &a, const node &b) {
       const int dir = (ax > bx) ? -1 : 1;
       unsigned int x = ax; 
       do {
-	x += dir;
-	tileset.insert(xy2tile(x, ay));
+        x += dir;
+        tileset.insert(xy2tile(x, ay));
       } while (x != bx);
     } else if (ax == bx) {
       const int dir = (ay > by) ? -1 : 1;
       unsigned int y = ay;
       do {
-	y += dir;
-	tileset.insert(xy2tile(ax, y));
+        y += dir;
+        tileset.insert(xy2tile(ax, y));
       } while (y != by);
     } else {
       // TODO: there's got to be something better than this...
@@ -52,9 +52,9 @@ tiler::add_line_between(const node &a, const node &b) {
       int span = 100 * ceil(max_abs * SCALE / double(1u << 16));
       double scale = 1.0 / double(span);
       for (int i = 0; i <= span; ++i) {
-	double lat = (a.lat - b.lat) * i * scale + b.lat;
-	double lon = (a.lon - b.lon) * i * scale + b.lon;
-	tileset.insert(xy2tile(lon2x(lon), lat2y(lat)));
+        double lat = (a.lat - b.lat) * i * scale + b.lat;
+        double lon = (a.lon - b.lon) * i * scale + b.lon;
+        tileset.insert(xy2tile(lon2x(lon), lat2y(lat)));
       }
     }
   }

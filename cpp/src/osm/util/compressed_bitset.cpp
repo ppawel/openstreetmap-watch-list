@@ -16,83 +16,83 @@ namespace {
 
 // crit-bit tree structure.
 struct tree_entry {
-  vector<bool> prefix;
-  // either left and right both exist, or neither do.
-  auto_ptr<tree_entry> left, right;
+   vector<bool> prefix;
+   // either left and right both exist, or neither do.
+   auto_ptr<tree_entry> left, right;
 
-  tree_entry(const vector<bool> &b) : prefix(b) {
-    assert(prefix.size() <= 32);
-  }
-  ~tree_entry() throw() {}
+   tree_entry(const vector<bool> &b) : prefix(b) {
+     assert(prefix.size() <= 32);
+   }
+   ~tree_entry() throw() {}
 
-  // split this tree entry, or its children to accomodate the new bitstring
-  // with iterator range (xtr, xtr_end).
-  void split(vector<bool>::const_iterator xtr, vector<bool>::const_iterator xtr_end) {
-    vector<bool>::iterator ptr = prefix.begin();
+   // split this tree entry, or its children to accomodate the new bitstring
+   // with iterator range (xtr, xtr_end).
+   void split(vector<bool>::const_iterator xtr, vector<bool>::const_iterator xtr_end) {
+     vector<bool>::iterator ptr = prefix.begin();
     
-    // note that the prefix *can* be zero size, because it isn't necessary to store the 
-    // critical bits themselves. in this case we need to skip the comparison stage, and
-    // this node should always have children.
-    if (!prefix.empty()) {
-      while (*xtr == *ptr) {
-	++xtr;
-	++ptr;
-	// reaching the the of xtr is a serious error - it means that this string is fully
-	// identical to one already in the tree, which shouldn't ever happen in this 
-	// use-case.
-	if (xtr == xtr_end) {
-	  throw std::runtime_error("duplicate insertion into crit-bit tree.");
-	}
-	// reaching the end of ptr just means we need to look at one of our child-trees
-	if (ptr == prefix.end()) {
-	  break;
-	}
-      }
-    }
+     // note that the prefix *can* be zero size, because it isn't necessary to store the 
+     // critical bits themselves. in this case we need to skip the comparison stage, and
+     // this node should always have children.
+     if (!prefix.empty()) {
+       while (*xtr == *ptr) {
+         ++xtr;
+         ++ptr;
+         // reaching the the of xtr is a serious error - it means that this string is fully
+         // identical to one already in the tree, which shouldn't ever happen in this 
+         // use-case.
+         if (xtr == xtr_end) {
+           throw std::runtime_error("duplicate insertion into crit-bit tree.");
+         }
+         // reaching the end of ptr just means we need to look at one of our child-trees
+         if (ptr == prefix.end()) {
+           break;
+         }
+       }
+     }
 
-    if (ptr == prefix.end()) {
-      bool is_right = *xtr++;
-      // should always be the right fork, because we insert in ascending order?
-      assert(is_right);
+     if (ptr == prefix.end()) {
+       bool is_right = *xtr++;
+       // should always be the right fork, because we insert in ascending order?
+       assert(is_right);
       
-      auto_ptr<tree_entry> &child = is_right ? right : left;
-      //assert(child != 0);
-      child->split(xtr, xtr_end);
-      // and we're all done here.
+       auto_ptr<tree_entry> &child = is_right ? right : left;
+       //assert(child != 0);
+       child->split(xtr, xtr_end);
+       // and we're all done here.
 
-    } else {
-      // now xtr and ptr point to the first different bit between the strings
-      // this tree will become everything up to (ptr - 1) inclusive and have two 
-      // children, one has the previous children of this node and from (ptr+1) 
-      // bits. the other has no children and is (xtr .. xtr_end).
+     } else {
+       // now xtr and ptr point to the first different bit between the strings
+       // this tree will become everything up to (ptr - 1) inclusive and have two 
+       // children, one has the previous children of this node and from (ptr+1) 
+       // bits. the other has no children and is (xtr .. xtr_end).
       
-      // check that xtr's bit is right - should be the case if we're inserting 
-      // in increasing order.
-      assert(*xtr == true);
-      assert(*ptr == false);
+       // check that xtr's bit is right - should be the case if we're inserting 
+       // in increasing order.
+       assert(*xtr == true);
+       assert(*ptr == false);
 
-      vector<bool> new_prefix(prefix.begin(), ptr);
-      vector<bool> left_prefix(++ptr, prefix.end());
-      vector<bool> right_prefix(++xtr, xtr_end);
-      assert(new_prefix.size() <= 32);
-      assert(left_prefix.size() <= 32);
-      assert(right_prefix.size() <= 32);
+       vector<bool> new_prefix(prefix.begin(), ptr);
+       vector<bool> left_prefix(++ptr, prefix.end());
+       vector<bool> right_prefix(++xtr, xtr_end);
+       assert(new_prefix.size() <= 32);
+       assert(left_prefix.size() <= 32);
+       assert(right_prefix.size() <= 32);
 
-      auto_ptr<tree_entry> left_child(new tree_entry(left_prefix));
-      auto_ptr<tree_entry> right_child(new tree_entry(right_prefix));
+       auto_ptr<tree_entry> left_child(new tree_entry(left_prefix));
+       auto_ptr<tree_entry> right_child(new tree_entry(right_prefix));
 
-      // swap, which cannot fail.
-      prefix.swap(new_prefix);
-      assert(prefix.size() <= 32);
+       // swap, which cannot fail.
+       prefix.swap(new_prefix);
+       assert(prefix.size() <= 32);
 
-      // auto pointer assignments, which cannot fail (right?).
-      left_child->left = left;
-      left_child->right = right;
+       // auto pointer assignments, which cannot fail (right?).
+       left_child->left = left;
+       left_child->right = right;
 
-      left = left_child;
-      right = right_child;
-    }
-  }
+       left = left_child;
+       right = right_child;
+     }
+   }
 };
 
 vector<bool> to_bool_vector(tile_t x) {
@@ -225,32 +225,32 @@ prefix_parse_t bits_to_prefix_size(vector<bool>::const_iterator bits, vector<boo
     if (bit == true) {
       GET_BIT;
       if (bit == true) {
-	GET_BIT;
-	if (bit == true) {
-	  GET_BIT;
-	  if (bit == true) {
-	    GET_BIT;
-	    size = bit ? 32 : 31;
+        GET_BIT;
+        if (bit == true) {
+          GET_BIT;
+          if (bit == true) {
+            GET_BIT;
+            size = bit ? 32 : 31;
 
-	  } else {
-	    GET_BIT; size_t x = bit ? 1 : 0;
-	    GET_BIT; x = (x << 1) | bit;
-	    GET_BIT; x = (x << 1) | bit;
-	    GET_BIT; x = (x << 1) | bit;
-	    size = 15 + x;
-	  }
+          } else {
+            GET_BIT; size_t x = bit ? 1 : 0;
+            GET_BIT; x = (x << 1) | bit;
+            GET_BIT; x = (x << 1) | bit;
+            GET_BIT; x = (x << 1) | bit;
+            size = 15 + x;
+          }
 
-	} else {
-	  GET_BIT; size_t x = bit ? 1 : 0;
-	  GET_BIT; x = (x << 1) | bit;
-	  GET_BIT; x = (x << 1) | bit;
-	  size = 7 + x;
-	}
+        } else {
+          GET_BIT; size_t x = bit ? 1 : 0;
+          GET_BIT; x = (x << 1) | bit;
+          GET_BIT; x = (x << 1) | bit;
+          size = 7 + x;
+        }
 
       } else {
-	GET_BIT; size_t x = bit ? 1 : 0;
-	GET_BIT; x = (x << 1) | bit;
-	size = 3 + x;
+        GET_BIT; size_t x = bit ? 1 : 0;
+        GET_BIT; x = (x << 1) | bit;
+        size = 3 + x;
       }
 
     } else {
@@ -315,11 +315,11 @@ vector<bool> serialise_to_bit_vector(const auto_ptr<tree_entry> &node) {
 
 // returns a pair of the next bit to read and the tree that got parsed from it
 struct parse_result {
-  parse_result(vector<bool>::const_iterator pp, auto_ptr<tree_entry> t) : parse_point(pp), tree(t) {}
-  parse_result(parse_result &other) : parse_point(other.parse_point), tree(other.tree) {}
-  parse_result(const parse_result &other) : parse_point(other.parse_point), tree(const_cast<parse_result &>(other).tree) {}
-  vector<bool>::const_iterator parse_point;
-  auto_ptr<tree_entry> tree;
+   parse_result(vector<bool>::const_iterator pp, auto_ptr<tree_entry> t) : parse_point(pp), tree(t) {}
+   parse_result(parse_result &other) : parse_point(other.parse_point), tree(other.tree) {}
+   parse_result(const parse_result &other) : parse_point(other.parse_point), tree(const_cast<parse_result &>(other).tree) {}
+   vector<bool>::const_iterator parse_point;
+   auto_ptr<tree_entry> tree;
 };
 
 parse_result
@@ -414,7 +414,7 @@ set<tile_t> directions_with_prefix(tile_t match_prefix, int i, const set<tile_t>
     tile_t prefix = tile >> (2 * i);
     //cout << "if " << tile << " matches " << (prefix >> 2) << " << " << i << " then " << ((tile >> (2 * i)) & 3) << "\n";
     if ((prefix >> 2) == match_prefix)
-      directions.insert(prefix & 3);
+       directions.insert(prefix & 3);
   }
   return directions;
 }

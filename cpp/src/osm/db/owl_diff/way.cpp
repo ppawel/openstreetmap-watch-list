@@ -42,15 +42,15 @@ void way::tiles(tiler &t, osm::io::Database &d) const {
     vector<node> nodes;
     nodes.reserve(way_nodes.size());
     for (vector<id_t>::const_iterator itr = way_nodes.begin(); 
-	 itr != way_nodes.end(); ++itr) {
+         itr != way_nodes.end(); ++itr) {
       if (node::db_exists(*itr, d)) {
-	nodes.push_back(node::db_load(*itr, d));
+        nodes.push_back(node::db_load(*itr, d));
       }
     }
     if (nodes.size() > 1) {
       tt->add_point(nodes[0]);
       for (size_t i = 1; i < nodes.size(); ++i) {
-	tt->add_line_between(nodes[i-1], nodes[i]);
+        tt->add_line_between(nodes[i-1], nodes[i]);
       }
     }
 
@@ -95,17 +95,17 @@ way::mark_diff(const vector<id_t> &lcs, tiler &t, osm::io::Database &d) const {
   if (lcs.size() > 0) {
     for (size_t i = 0; i < way_nodes.size(); ++i) {
       if (*lcs_itr == way_nodes[i]) {
-	if (!match) {
-	  // mark from last_match to i
-	  mark_segment(last_match, i, t, d);
-	  match = true;
-	}
-	
-	last_match = i;
-	++lcs_itr;
-	
+        if (!match) {
+          // mark from last_match to i
+          mark_segment(last_match, i, t, d);
+          match = true;
+        }
+
+        last_match = i;
+        ++lcs_itr;
+
       } else {
-	match = false;
+        match = false;
       }
     }
   }
@@ -132,9 +132,9 @@ way::mark_segment(size_t i, size_t j, tiler &t, osm::io::Database &d) const {
     node a = node::db_load(way_nodes[n], d);
     for (; n < j; ++n) {
       if (node::db_exists(way_nodes[n+1], d)) {
-	node b = node::db_load(way_nodes[n+1], d);
-	t.add_line_between(a, b);
-	a = b;
+        node b = node::db_load(way_nodes[n+1], d);
+        t.add_line_between(a, b);
+        a = b;
       }
     }
   }

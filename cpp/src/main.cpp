@@ -18,22 +18,22 @@ main(int argc, char *argv[]) {
 
   po::options_description desc("OWL uploader");
   desc.add_options()
-    ("help,h", "This help message.")
-    ("planet,p", "Import a planet (rather than a diff).")
-    ("dry-run,n", "Dry-run (print changes, don't commit them).")
-    ("db,d", po::value<string>(&db)->default_value("dbname=owl"), 
-     "Database connection string")
-    ("file,f", po::value<string>(&file), "File to import.")
-    ("dupe-nodes,u", "Update the dupe nodes table.")
-    ;
+     ("help,h", "This help message.")
+     ("planet,p", "Import a planet (rather than a diff).")
+     ("dry-run,n", "Dry-run (print changes, don't commit them).")
+     ("db,d", po::value<string>(&db)->default_value("dbname=owl"), 
+      "Database connection string")
+     ("file,f", po::value<string>(&file), "File to import.")
+     ("dupe-nodes,u", "Update the dupe nodes table.")
+     ;
 
   po::positional_options_description pos;
   pos.add("file", 1);
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
-	    .options(desc)
-	    .positional(pos)
-	    .run(), vm);
+            .options(desc)
+            .positional(pos)
+            .run(), vm);
   po::notify(vm);
 
   if (vm.count("planet")) {
@@ -67,12 +67,12 @@ main(int argc, char *argv[]) {
       osm::io::read_xml_diff(diff, file);
       diff.finish();
       if (debug_mode != osm::db::OWLDiff::DebugMode) {
-	database.finish();
+        database.finish();
       }
       if (dupe_nodes) {
-	osm::db::DupeNodes dn(diff.changes_list());
-	dn.prepare(conn);
-	conn.perform(dn);
+        osm::db::DupeNodes dn(diff.changes_list());
+        dn.prepare(conn);
+        conn.perform(dn);
       }
     }
 

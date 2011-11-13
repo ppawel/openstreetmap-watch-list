@@ -11,18 +11,18 @@ namespace osm { namespace util {
  * result into an_lcs.
  */
 void lcs(const std::vector<id_t> &xs, 
-	 const std::vector<id_t> &ys, 
-	 std::vector<id_t> &an_lcs);
+         const std::vector<id_t> &ys, 
+         std::vector<id_t> &an_lcs);
 
 /**
  * a segment of the diff
  */
 struct diff_seg {
-  // in a diff between A and B, where B is the common subsequence...
-  size_t at; // the index to insert before in B.
-  size_t start, end; // the indices start to end in A, end exclusive.
+   // in a diff between A and B, where B is the common subsequence...
+   size_t at; // the index to insert before in B.
+   size_t start, end; // the indices start to end in A, end exclusive.
 
-  diff_seg(size_t a, size_t b, size_t c);
+   diff_seg(size_t a, size_t b, size_t c);
 };
 
 /**
