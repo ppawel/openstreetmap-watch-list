@@ -16,7 +16,7 @@ xml.rss :version => "2.0" do
 	  user_name = details[0] 
 	  xml.title "Changeset #{id} by #{user_name}"
 	end
-	description = "<p>By <a href=\"http://www.openstreetmap.org/user/#{user_name}\">#{user_name}</a> covering #{n} tiles"
+	description = "<p>Changeset #{id} by <a href=\"http://www.openstreetmap.org/user/#{user_name}\">#{user_name}</a> covering #{n} tiles"
 	description += ", with comment \"#{details[1]}\"" unless details.nil? or details[1].nil?
 	description += ", using \"#{details[2]}\"" unless details.nil? or details[2].nil?
 	description += ", and tagged as a bot" unless details.nil? or details[3].nil? or details[3] != "t"
