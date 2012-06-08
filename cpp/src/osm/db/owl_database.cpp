@@ -5,6 +5,7 @@
 #include <boost/lexical_cast.hpp>
 #include <sstream>
 #include <iostream>
+#include <iomanip>
 #include <cmath>
 
 using pqxx::work;
@@ -102,15 +103,15 @@ string changes_table_name(int qtile_prefix, int depth) {
     return "changes";
     
   } else {
-    ostr << "changes_" << setw(depth) << setfill('0') << qtile_prefix;
+    ostr << "changes_" << setw(depth) << setfill('0') << hex << qtile_prefix;
     return ostr.str();
   }
 }
 
 size_t table_count(pqxx::work &work, const string &name) {
-  ostringstream ostr;
+  stringstream ostr;
   ostr << "select count(*) from \"" << name << "\"";
-  result res = work.exec(query);
+  pqxx::result res = work.exec(ostr);
   
   if (res.size() < 1) {
     return 0;
@@ -120,18 +121,19 @@ size_t table_count(pqxx::work &work, const string &name) {
   }
 }
 
+#define CHANGES_BITS (4)
 #define CHANGES_MAX_DEPTH (3)
-#define CHANGES_MAX_ROWS (100000)
-#define CHANGES_MIN_ROWS (60000)
+#define CHANGES_MAX_ROWS (262144)
+#define CHANGES_MIN_ROWS (131072)
 
 void shuffle_changes_table(pqxx::work &work, uint32_t qtile_prefix, int depth) {
   if (depth < CHANGES_MAX_DEPTH) {
-    assert(qtile_prefix < (1 << depth));
+    assert(qtile_prefix < (1u << (CHANGES_BITS * depth)));
     string this_table = changes_table_name(qtile_prefix, depth);
     size_t this_rows = table_count(work, this_table);
     
     if (this_rows > CHANGES_MAX_ROWS) {
-      ostringstream ostr;
+      stringstream ostr;
       ostr << "select \"time\" from " << this_table << " order by \"time\" desc limit 1 offset " << CHANGES_MIN_ROWS;
       result res = work.exec(ostr);
       if (res.size() > 0) {
@@ -141,14 +143,14 @@ void shuffle_changes_table(pqxx::work &work, uint32_t qtile_prefix, int depth) {
           string table = changes_table_name(prefix, depth + 1);
           uint32_t tile_min = prefix << (28 - 4 * depth);
           uint32_t tile_max = tile_min + ((1u << (28 - 4 * depth)) - 1);
-          ostringstream ostr2;
+          stringstream ostr2;
           ostr2 << "insert into " << table << " select * from " << this_table 
                 << " where \"time\" < '" << timestamp << "'"
                 << " and tile between " << tile_min << " and " << tile_max;
           work.exec(ostr2);
           shuffle_changes_table(work, prefix, depth + 1);
         }
-        ostringstream ostr3;
+        stringstream ostr3;
         ostr3 << "delete from " << this_table << " where \"time\" < '" << timestamp << "'";
         work.exec(ostr3);
       }

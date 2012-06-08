@@ -1,6 +1,6 @@
 CXX=g++
 INCLUDES=-Iinclude
-CXXFLAGS=-g -ggdb -Wall $(INCLUDES) $(shell pkg-config --cflags libxml++-2.6) $(shell pkg-config --cflags libpqxx)
+CXXFLAGS=-O2 -Wall -Werror $(INCLUDES) $(shell pkg-config --cflags libxml++-2.6) $(shell pkg-config --cflags libpqxx)
 LIBS=$(shell pkg-config --libs libxml++-2.6) $(shell pkg-config --libs libpqxx) -lboost_program_options
 TEST_LIBS=-lboost_unit_test_framework
 

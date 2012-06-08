@@ -1,5 +1,6 @@
 #include <boost/lexical_cast.hpp>
 #include <iostream>
+#include <iomanip>
 
 #include "osm/db/owl_loader.hpp"
 #include "osm/constants.hpp"
@@ -44,6 +45,42 @@ required_attribute(const tags_t &t, const string &s) {
   }
   return itr->second;
 }
+
+string changes_table_name(int qtile_prefix, int depth) {
+  ostringstream ostr;
+
+  if (depth == 0) {
+    return "changes";
+    
+  } else {
+    ostr << "changes_" << setw(depth) << setfill('0') << hex << qtile_prefix;
+    return ostr.str();
+  }
+}
+
+#define CHANGES_BITS (4)
+#define CHANGES_MAX_DEPTH (3)
+
+void create_changes_tables(pqxx::work &work, uint32_t qtile_prefix, int depth) {
+  if (depth <= CHANGES_MAX_DEPTH) {
+    //std::cerr << "create_changes_tables(" << qtile_prefix << ", " << depth << ")\n";
+    assert(qtile_prefix < (1u << (CHANGES_BITS * depth)));
+    string this_table = changes_table_name(qtile_prefix, depth);
+    
+    stringstream ostr;
+    ostr << "create table " << this_table 
+         << " (elem_type nwr_enum not null, id integer not null, version integer not null, "
+         << "changeset integer not null, change_type change_enum not null, tile bigint not null, "
+         << "time timestamp not null)";
+    //std::cerr << "SQL: " << ostr.str() << "\n";
+    result res = work.exec(ostr);
+
+    for (uint32_t i = 0; i < (1u << CHANGES_BITS); ++i) {
+      uint32_t prefix = (qtile_prefix << CHANGES_BITS) | i;
+      create_changes_tables(work, prefix, depth + 1);
+    } 
+  }
+}
 } // anonymous namespace
 
 namespace osm { namespace db {
@@ -74,7 +111,7 @@ OWLLoader::OWLLoader(connection &c, size_t buffer_size)
   transaction.exec("create type nwr_enum as enum ('node','way','relation')");
   transaction.exec("create table relation_members (id integer not null, m_role text, m_type nwr_enum not null, m_id integer not null, seq integer not null)");
   transaction.exec("create type change_enum as enum ('create','delete','tags','geometry')");
-  transaction.exec("create table changes (elem_type nwr_enum not null, id integer not null, version integer not null, changeset integer not null, change_type change_enum not null, tile bigint not null, time timestamp not null)");
+  create_changes_tables(transaction, 0, 0);
 }
 
 OWLLoader::~OWLLoader() throw () {

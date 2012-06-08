@@ -239,8 +239,10 @@ common(T &new_e, osm::db::OWLDatabase &d, io::Diff::Action action) {
 
   } else {
     if (action == io::Diff::Delete) {
-      cout << "WARNING: Not re-deleting " << T::type << " " << id 
-           << ", is already deleted." << endl;
+      if (new_e.version > 1) {
+        cout << "WARNING: Not re-deleting " << T::type << " " << id 
+             << ", is already deleted." << endl;
+      }
     } else {
       // must be a new or undeleted element
       splice_changes(changes, create(new_e, d));
