@@ -63,18 +63,24 @@ private
     end
   end
 
-  def find_tiles(where_time, where_tile, qtile, depth)
+  def find_tiles(where_time, where_tile, qtile_prefix, depth)
     tiles = Array.new
 
     table_name = changes_table_name(qtile, depth)
-
     this_level = (ActiveRecord::Base.connection.select_values("select distinct tile from #{table_name} where #{where_sql}#{where_time}").collect {|x| x.to_i})
 
-    # FIXME this is probably not a good check to use
-    if this_level.length > 0
-      for (uint32_t i = 0; i < (1u << CHANGES_BITS); ++i) {
-          uint32_t prefix = (qtile_prefix << CHANGES_BITS) | i;
-          string table = changes_table_name(prefix, depth + 1);
+    # Don't traverse children if we're already at the deep end
+    if depth < MAX_DEPTH
+      # FIXME this is probably not a good check to use
+      if this_level.length > 0
+        # These are hexadecitiles, not quadtiles.
+        for i in 0..(1 << CHANGES_BITS)
+          # FIXME Only traverse this child table if it's within our bounding box.
+          prefix = (qtile_prefix << CHANGES_BITS) | i
+          tiles.append(find_tiles(prefix, depth + 1))
+        end
+      end
+    end
 
     return tiles
   end
@@ -87,19 +93,9 @@ private
       #RAILS_DEFAULT_LOGGER.debug("area: #{area}")
       if (area < max_area)
         where_sql = QuadTile.sql_for_area(*bbox)
-        @tiles = Array.new
         # Chase down all the child tables to look for tiles with changes inside the bbox
-        
-        # Start with changes
-        prefix = ""
-        depth = 0
-        qindex = 0
-        @tiles.append(ActiveRecord::Base.connection.select_values("select distinct tile from changes#{prefix} where #{where_sql}#{where_time}").collect {|x| x.to_i})
-        # TODO Check the oldest item in this table and stop if there are items older than we want. Child tables always have stuff older than this table.
-        # Query the child tables
-        [0, 1, 2, 3].each do |qtchild|
+        @tiles = find_tiles(wher)
 
-        end
       end
     end
     render :layout => 'with_map'
