@@ -79,7 +79,7 @@ private
     return filtered_tiles
   end
 
-  def find_changes_in_tiles(where_time, tiles, qtile_prefix, depth)
+  def find_changed_tiles_among_tiles(where_time, tiles, qtile_prefix, depth)
     tiles = Array.new
 
     # (These are hexadecitiles, not quadtiles)
@@ -96,7 +96,7 @@ private
           prefix = (qtile_prefix << CHANGES_BITS) | i
           tiles_for_child = filter_tiles_in_qtile(tiles, prefix, depth + 1)
           if tiles_for_child.size > 0
-            tiles.concat(find_changes_in_tiles(where_time, tiles_for_child, prefix, depth + 1))
+            tiles.concat(find_changed_tiles_among_tiles(where_time, tiles_for_child, prefix, depth + 1))
           end
         end
       end
@@ -114,7 +114,7 @@ private
       if (area < max_area)
         tiles_in_area = QuadTile.tiles_for_area(*bbox)
         # Chase down all the child tables to look for tiles with changes inside the bbox
-        @tiles = find_changes_in_tiles(where_time, tiles_in_area, 0, 0)
+        @tiles = find_changed_tiles_among_tiles(where_time, tiles_in_area, 0, 0)
       end
     end
     render :layout => 'with_map'
