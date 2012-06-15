@@ -63,21 +63,41 @@ private
     end
   end
 
-  def find_tiles(where_time, where_tile, qtile_prefix, depth)
+  def filter_tiles_in_qtile(tiles, qtile_prefix, depth)
+    filtered_tiles = Array.new
+    
+    # Only include tiles whose first depth bytes match qtile_prefix
+    qtile_hex = qtile_prefix.to_s(16)
+    qtile_hex = qtile_hex.rjust(depth - qtile_hex.len, "0")
+    tiles.each do |tile|
+      tile_hex = tile.to_s(16)[0, depth]
+      if tile_hex == qtile_hex
+        filtered_tiles << tile
+      end
+    end
+
+    return filtered_tiles
+  end
+
+  def find_changes_in_tiles(where_time, tiles, qtile_prefix, depth)
     tiles = Array.new
 
+    # (These are hexadecitiles, not quadtiles)
+
     table_name = changes_table_name(qtile, depth)
-    this_level = (ActiveRecord::Base.connection.select_values("select distinct tile from #{table_name} where #{where_sql}#{where_time}").collect {|x| x.to_i})
+    tile_sql = "(#{tiles.join(',')})"
+    tile.concat(ActiveRecord::Base.connection.select_values("SELECT DISTINCT tile FROM #{table_name} WHERE #{tile_sql}#{where_time}").collect {|x| x.to_i})
 
     # Don't traverse children if we're already at the deep end
     if depth < MAX_DEPTH
       # FIXME this is probably not a good check to use
       if this_level.length > 0
-        # These are hexadecitiles, not quadtiles.
         for i in 0..(1 << CHANGES_BITS)
-          # FIXME Only traverse this child table if it's within our bounding box.
           prefix = (qtile_prefix << CHANGES_BITS) | i
-          tiles.append(find_tiles(prefix, depth + 1))
+          tiles_for_child = filter_tiles_in_qtile(tiles, prefix, depth + 1)
+          if tiles_for_child.size > 0
+            tiles.concat(find_changes_in_tiles(where_time, tiles_for_child, prefix, depth + 1))
+          end
         end
       end
     end
@@ -92,10 +112,9 @@ private
       area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
       #RAILS_DEFAULT_LOGGER.debug("area: #{area}")
       if (area < max_area)
-        where_sql = QuadTile.sql_for_area(*bbox)
+        tiles_in_area = QuadTile.tiles_for_area(*bbox)
         # Chase down all the child tables to look for tiles with changes inside the bbox
-        @tiles = find_tiles(wher)
-
+        @tiles = find_changes_in_tiles(where_time, tiles_in_area, 0, 0)
       end
     end
     render :layout => 'with_map'
