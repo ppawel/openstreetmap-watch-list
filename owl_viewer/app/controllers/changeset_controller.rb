@@ -40,8 +40,8 @@ class ChangesetController < ApplicationController
       RAILS_DEFAULT_LOGGER.info("rejected feed size: #{size}")
       @changesets = []
     else
-      where_sql = QuadTile.sql_for_ranges(@ranges, "c.")
-      @changesets = ActiveRecord::Base.connection.select_rows("select c.changeset, max(c.time) as time, count(distinct c.tile) as num_tiles from changes c where #{where_sql} group by c.changeset order by time desc limit 100").collect {|x,y,n,u| [x.to_i, Time.parse(y), n.to_i, u.to_i] }
+      where_sql = QuadTile.tiles_for_ranges(@ranges)
+      @changesets = find_changesets_among_tiles(tiles, 0, 0)
     end
     csids = @changesets.collect { |cs| cs[0].to_i }
     if csids.size > 0
@@ -79,6 +79,34 @@ private
     return filtered_tiles
   end
 
+  def find_changesets_among_tiles(tiles, qtile_prefix, depth)
+    changesets = Array.new
+
+    # (These are hexadecitiles, not quadtiles)
+
+    table_name = changes_table_name(qtile, depth)
+    tile_sql = "(#{tiles.join(',')})"
+    changesets.concat(ActiveRecord::Base.connection.select_rows("SELECT c.changeset, max(c.time) AS time, COUNT(distinct c.tile) AS num_tiles
+                                                                 FROM #{table_name} c
+                                                                 WHERE c.tile IN #{tile_sql}
+                                                                 GROUP BY c.changeset
+                                                                 ORDER BY time desc
+                                                                 LIMIT 100").collect {|x,y,n,u| [x.to_i, Time.parse(y), n.to_i, u.to_i] })
+
+    # Don't traverse children if we're already at the deep end or already have 100 changesets at this level
+    if depth < MAX_DEPTH and changesets.len >= 100
+      for i in 0..(1 << CHANGES_BITS)
+        prefix = (qtile_prefix << CHANGES_BITS) | i
+        tiles_for_child = filter_tiles_in_qtile(tiles, prefix, depth + 1)
+        if tiles_for_child.size > 0
+          changesets.concat(find_changesets_among_tiles(tiles_for_child, prefix, depth + 1))
+        end
+      end
+    end
+
+    return changesets
+  end
+
   def find_changed_tiles_among_tiles(where_time, tiles, qtile_prefix, depth)
     tiles = Array.new
 
@@ -86,18 +114,17 @@ private
 
     table_name = changes_table_name(qtile, depth)
     tile_sql = "(#{tiles.join(',')})"
-    tile.concat(ActiveRecord::Base.connection.select_values("SELECT DISTINCT tile FROM #{table_name} WHERE #{tile_sql}#{where_time}").collect {|x| x.to_i})
+    tile.concat(ActiveRecord::Base.connection.select_values("SELECT DISTINCT tile
+                                                             FROM #{table_name}
+                                                             WHERE #{tile_sql}#{where_time}").collect {|x| x.to_i})
 
     # Don't traverse children if we're already at the deep end
     if depth < MAX_DEPTH
-      # FIXME this is probably not a good check to use
-      if this_level.length > 0
-        for i in 0..(1 << CHANGES_BITS)
-          prefix = (qtile_prefix << CHANGES_BITS) | i
-          tiles_for_child = filter_tiles_in_qtile(tiles, prefix, depth + 1)
-          if tiles_for_child.size > 0
-            tiles.concat(find_changed_tiles_among_tiles(where_time, tiles_for_child, prefix, depth + 1))
-          end
+      for i in 0..(1 << CHANGES_BITS)
+        prefix = (qtile_prefix << CHANGES_BITS) | i
+        tiles_for_child = filter_tiles_in_qtile(tiles, prefix, depth + 1)
+        if tiles_for_child.size > 0
+          tiles.concat(find_changed_tiles_among_tiles(where_time, tiles_for_child, prefix, depth + 1))
         end
       end
     end
