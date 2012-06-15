@@ -61,7 +61,7 @@ module QuadTile
     return tiles
   end
 
-  def self.iterate_tile_ranges(ranges)
+  def self.tiles_for_ranges(ranges)
     tiles = []
     ranges.each do |r|
       if r.length == 2
@@ -77,9 +77,15 @@ module QuadTile
       end
     end
 
+    return tiles.sort.uniq
+  end
+
+  def self.iterate_tile_ranges(ranges)
+    tiles = self.tiles_for_ranges(ranges)
+
     first = last = nil
 
-    tiles.sort.uniq.each do |tile|
+    tiles.each do |tile|
       if last.nil?
         first = last = tile
       elsif tile == last + 1
