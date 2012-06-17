@@ -40,7 +40,7 @@ class ChangesetController < ApplicationController
       RAILS_DEFAULT_LOGGER.info("rejected feed size: #{size}")
       @changesets = []
     else
-      where_sql = QuadTile.tiles_for_ranges(@ranges)
+      tiles = QuadTile.tiles_for_ranges(@ranges)
       @changesets = find_changesets_among_tiles(tiles, 0, 0)
     end
     csids = @changesets.collect { |cs| cs[0].to_i }
@@ -83,11 +83,11 @@ private
   end
 
   def find_changesets_among_tiles(tiles, qtile_prefix, depth)
-    changesets = Array.new
+    changesets = []
 
     # (These are hexadecitiles, not quadtiles)
 
-    table_name = changes_table_name(qtile, depth)
+    table_name = changes_table_name(qtile_prefix, depth)
     tile_sql = "(#{tiles.join(',')})"
     changesets.concat(ActiveRecord::Base.connection.select_rows("SELECT c.changeset, max(c.time) AS time, COUNT(distinct c.tile) AS num_tiles
                                                                  FROM #{table_name} c

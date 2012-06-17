@@ -1,13 +1,17 @@
 xml.instruct! :xml, :version => "1.0"
 xml.feed :xmlns => "http://www.w3.org/2005/Atom" do
   range_str = @ranges.collect {|r| r.join("-") }.join(",")
-  max_time = @changesets.collect { |id,time,n| time}.max
+  if @changesets.size > 0 then
+    max_time = @changesets.collect { |id,time,n| time}.max
+  else
+    max_time = Time.now()
+  end
 
   xml.title "List of changes (#{range_str})"
-  xml.link :href => "http://matt.dev.openstreetmap.org/owl_viewer", :type => "text/html", :rel => "alternate"
-  xml.link :href => "http://matt.dev.openstreetmap.org/owl_viewer/feed/#{range_str}.atom", :rel => "self"
+  xml.link :href => ROOT_URL, :type => "text/html", :rel => "alternate"
+  xml.link :href => "#{ROOT_URL}/feed/#{range_str}.atom", :rel => "self"
   xml.subtitle "Changes for range #{range_str}", :type => "html"
-  xml.id "http://matt.dev.openstreetmap.org/owl_viewer/feed/#{range_str}.atom"
+  xml.id "#{ROOT_URL}/feed/#{range_str}.atom"
   xml.updated max_time.xmlschema
 
   @changesets.each do |id,time,n|
@@ -31,7 +35,7 @@ xml.feed :xmlns => "http://www.w3.org/2005/Atom" do
         xml.name user_name
       end
       xml.updated time.xmlschema
-      xml.link :href => "http://matt.dev.openstreetmap.org/owl_viewer/tiles/#{id}", :type => "text/html", :rel => "alternate"
+      xml.link :href => "#{ROOT_URL}/owl_viewer/tiles/#{id}", :type => "text/html", :rel => "alternate"
       xml.id "http://matt.dev.openstreetmap.org/owl_viewer/tiles/#{id}"
     end
   end
