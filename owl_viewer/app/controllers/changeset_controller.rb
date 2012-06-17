@@ -127,12 +127,12 @@ private
         prefix = (qtile_prefix << CHANGES_BITS) | i
         tiles_for_child = filter_tiles_in_qtile(tiles, prefix, depth + 1)
         if tiles_for_child.size > 0
-          tiles.concat(find_changed_tiles_among_tiles(where_time, tiles_for_child, prefix, depth + 1))
+          changed_tiles.concat(find_changed_tiles_among_tiles(where_time, tiles_for_child, prefix, depth + 1))
         end
       end
     end
 
-    return tiles
+    return changed_tiles
   end
 
   def common_map(where_time, max_area)
@@ -147,6 +147,7 @@ private
         @tiles = find_changed_tiles_among_tiles(where_time, tiles_in_area, 0, 0)
       end
     end
+    @tiles = @tiles.sort.uniq
     render :layout => 'with_map'
   end
 end
