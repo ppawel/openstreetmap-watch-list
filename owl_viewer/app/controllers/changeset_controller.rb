@@ -7,9 +7,12 @@ class ChangesetController < ApplicationController
   end
 
   def tile
-    @id = params['id']
+    @id = params['id'].to_i
     @title = "List of changes in tile #{@id}"
-    @changes = Change.find(:all, :conditions => ["tile = ?", @id], :order => "time desc, changeset desc, id desc, version desc", :limit => 100)
+    tiles = Array.new()
+    tiles << @id
+    @changes = find_changes_among_tiles(tiles, 0, 0).uniq
+    #@changes = Change.find(:all, :conditions => ["tile = ?", @id], :order => "time desc, changeset desc, id desc, version desc", :limit => 100)
     @changeset_ids = @changes.collect { |c| c.changeset }.uniq
     if @changeset_ids.size > 0
       @cs2details = ActiveRecord::Base.connection.select_rows("select cs.id,u.name,cs.comment,cs.created_by,cs.bot_tag from changeset_details cs join users u on cs.uid=u.id where cs.id in (#{@changeset_ids.join(',')})").inject(Hash.new) { |h,x| h[x[0].to_i] = x[1..-1]; h }
@@ -97,7 +100,7 @@ private
                                                                  LIMIT 100").collect {|x,y,n,u| [x.to_i, Time.parse(y), n.to_i, u.to_i] })
 
     # Don't traverse children if we're already at the deep end or already have 100 changesets at this level
-    if depth < MAX_DEPTH and changesets.length >= 100
+    if depth < MAX_DEPTH and changesets.length < 100
       for i in 0..(1 << CHANGES_BITS)
         prefix = (qtile_prefix << CHANGES_BITS) | i
         tiles_for_child = filter_tiles_in_qtile(tiles, prefix, depth + 1)
@@ -110,13 +113,40 @@ private
     return changesets
   end
 
+  def find_changes_among_tiles(tiles, qtile_prefix, depth)
+    changes = []
+
+    table_name = changes_table_name(qtile_prefix, depth)
+    tile_sql = "(#{tiles.join(',')})"
+    changes.concat(Change.find_by_sql("SELECT c.*
+                                       FROM #{table_name} c
+                                       WHERE c.tile IN #{tile_sql}
+                                       LIMIT 100"))
+
+    if depth < MAX_DEPTH and changes.length < 100
+      for i in 0..(1 << CHANGES_BITS)
+        prefix = (qtile_prefix << CHANGES_BITS) | i
+        tiles_for_child = filter_tiles_in_qtile(tiles, prefix, depth + 1)
+        if tiles_for_child.size > 0
+          changes.concat(find_changes_among_tiles(tiles_for_child, prefix, depth + 1))
+        end
+      end
+    end
+
+    return changes
+  end
+
   def find_changed_tiles_among_tiles(where_time, tiles, qtile_prefix, depth)
     changed_tiles = Array.new
 
     # (These are hexadecitiles, not quadtiles)
 
     table_name = changes_table_name(qtile_prefix, depth)
-    tile_sql = "tile IN (#{tiles.join(',')})" if tiles.size > 0 else ""
+    if tiles.size > 0
+      tile_sql = "tile IN (#{tiles.join(',')})"
+    else
+      tiles_sql = ""
+    end
     changed_tiles.concat(ActiveRecord::Base.connection.select_values("SELECT DISTINCT tile
                                                                       FROM #{table_name}
                                                                       WHERE #{tile_sql}#{where_time}").collect {|x| x.to_i})

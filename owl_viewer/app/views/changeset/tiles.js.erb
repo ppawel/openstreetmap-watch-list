@@ -14,7 +14,7 @@
   [ <%= QuadTile::x2lon(x) %>,   <%= QuadTile::y2lat(y) %>   ]
         ] ]
       }
-    },
+    }<%= "," unless t == @tiles.last %>
 <% end %>
   ],
   "crs": {
