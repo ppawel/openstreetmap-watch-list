@@ -27,12 +27,12 @@ class ChangesetController < ApplicationController
 
   def dailymap
     @title = "Map of changes over the past day"
-    common_map(" AND (strftime('%s','now') - c.time) < 86400", 0.5)
+    common_map(" AND age(time) < '1 day'", 0.5)
   end
 
   def weeklymap
     @title = "Map of changes over the past week"
-    common_map(" AND (strftime('%s','now') - c.time) < 806400", 0.15)
+    common_map(" AND age(time) < '1 week'", 0.15)
   end
 
   def map
@@ -126,10 +126,10 @@ private
     # (These are hexadecitiles, not quadtiles)
 
     table_name = changes_table_name(qtile_prefix, depth)
-    tile_sql = "(#{tiles.join(',')})"
+    tile_sql = QuadTile.sql_for_tiles(tiles)
     changesets.concat(ActiveRecord::Base.connection.select_rows("SELECT c.changeset, max(c.time) AS time, COUNT(distinct c.tile) AS num_tiles
                                                                  FROM #{table_name} c
-                                                                 WHERE c.tile IN #{tile_sql}
+                                                                 WHERE #{tile_sql}
                                                                  GROUP BY c.changeset
                                                                  ORDER BY time desc
                                                                  LIMIT 100").collect {|x,y,n,u| [x.to_i, Time.parse(y), n.to_i, u.to_i] })
@@ -152,10 +152,10 @@ private
     changes = []
 
     table_name = changes_table_name(qtile_prefix, depth)
-    tile_sql = "(#{tiles.join(',')})"
+    tile_sql = QuadTile.sql_for_tiles(tiles)
     changes.concat(Change.find_by_sql("SELECT c.*
                                        FROM #{table_name} c
-                                       WHERE c.tile IN #{tile_sql}
+                                       WHERE #{tile_sql}
                                        LIMIT 100"))
 
     if depth < MAX_DEPTH and changes.length < 100
@@ -178,7 +178,7 @@ private
 
     table_name = changes_table_name(qtile_prefix, depth)
     if tiles.size > 0
-      tile_sql = "c.tile IN (#{tiles.join(',')})"
+      tile_sql = QuadTile.sql_for_tiles(tiles)
     else
       tiles_sql = ""
     end

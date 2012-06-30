@@ -58,7 +58,7 @@ module QuadTile
       end
     end
     
-    return tiles
+    return tiles.sort.uniq
   end
 
   def self.tiles_for_ranges(ranges)
@@ -80,9 +80,7 @@ module QuadTile
     return tiles.sort.uniq
   end
 
-  def self.iterate_tile_ranges(ranges)
-    tiles = self.tiles_for_ranges(ranges)
-
+  def self.iterate_tile_ranges(tiles)
     first = last = nil
 
     tiles.each do |tile|
@@ -145,19 +143,23 @@ module QuadTile
   end
 
   def self.sql_for_ranges(ranges, prefix = "")
+    sql_for_tiles(tiles_for_ranges(ranges))
+  end
+
+  def self.sql_for_tiles(tiles, prefix = "")
     sql = Array.new
     single = Array.new
 
-    iterate_tile_ranges(ranges) do |first, last|
+    iterate_tile_ranges(tiles) do |first, last|
       if first == last
         single << first
       else
-        sql << "#{prefix}tile between #{first} and #{last}"
+        sql << "#{prefix}tile BETWEEN #{first} AND #{last}"
       end
     end
 
     sql << "#{prefix}tile in (" + single.join(",") + ")" if single.size > 0
 
-    sql.join " or "
+    return "(" + sql.join(" OR ") + ")"
   end
 end
