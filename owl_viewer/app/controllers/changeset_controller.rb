@@ -202,8 +202,8 @@ private
 
   def find_changesets_by_bbox(bbox)
     Changeset.find(:all,
-      :select => 'changesets.*, ST_AsGeoJSON(ST_Envelope(geom)) AS geojson',
-      :conditions => "ST_Contains(ST_SetSRID(Box2D(ST_GeomFromText('LINESTRING(#{bbox[1]} #{bbox[0]}, #{bbox[3]} #{bbox[2]})')), 4326), geom)",
+      :select => "changesets.*, ST_AsGeoJSON(ST_Intersection(ST_SetSRID(Box2D(ST_GeomFromText('LINESTRING(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})')), 4326), geom), 5) AS geojson",
+      :conditions => "ST_Intersects(ST_SetSRID(Box2D(ST_GeomFromText('LINESTRING(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})')), 4326), geom)",
       #:limit => 100,
       :order => 'created_at DESC')
   end
