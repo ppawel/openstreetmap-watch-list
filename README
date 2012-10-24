@@ -11,6 +11,11 @@ Wiki: http://wiki.openstreetmap.org/wiki/OWL_(OpenStreetMap_Watch_List)
 Contents:
 ---------
 
+osmosis-plugin/
+  Contains a plugin for Osmosis that takes care of populating change tables.
+  See the `INSTALL.md` file for installation instructions. Plugin source code
+  is available [here](https://github.com/ppawel/osmosis/tree/changedb-plugin).
+
 owl_viewer/
   A rails project which hosts the owl "viewer" which allows
   people to browse changes in their area and generates the RSS
