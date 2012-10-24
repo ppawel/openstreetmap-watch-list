@@ -178,12 +178,14 @@
 
 
 <script id="changeset_list_template" type="text/x-jsrender">
-Visible changesets<br />
-<i>(limit = 100)</i>
-<ul>
+Visible changesets <i>(limit = 100)</i>
+<br /><br />
+<ul style="list-style-type: none; padding: 0; margin: 0; font-size: smaller">
 {{for features}}
   <li>
-    {{:attributes.created_at}} <a target="_blank" href="http://www.openstreetmap.org/browse/changeset/{{:attributes.changeset_id}}">{{:attributes.changeset_id}}</a>
+    {{:attributes.created_at}} <a target="_blank"
+    href="http://www.openstreetmap.org/browse/changeset/{{:attributes.changeset_id}}">{{:attributes.changeset_id}}</a>
+    by {{:attributes.user_name}}
   </li>
 {{/for}}
 </ul>

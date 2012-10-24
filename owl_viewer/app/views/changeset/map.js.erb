@@ -5,7 +5,9 @@
   "geometry": <%= changeset.geojson.html_safe %>,
   "properties": {
     "changeset_id": <%= changeset.id %>,
-    "created_at": "<%= changeset.created_at %>"
+    "created_at": "<%= changeset.created_at %>",
+    "user_id": "<%= changeset.user.id %>",
+    "user_name": "<%= changeset.user.name %>"
   }
   }
   <% if index < @changesets.size - 1 %>,<% end %>
