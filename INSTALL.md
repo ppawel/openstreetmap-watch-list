@@ -15,10 +15,8 @@ Installing OWL Osmosis plugin
 =============================
 
 OWL plugin for Osmosis is needed for the `--write-changed-change` task which populates OWL tables with data. To install
-the plugin:
-
-1. Download [plugin JAR file](http://TBD).
-2. Drop the file to the `lib` directory in your Osmosis installation (e.g. `/usr/share/osmosis`).
+the plugin just drop the file from `osmosis-plugin` directory to the `lib` directory in your Osmosis installation (e.g.
+`/usr/share/osmosis`).
 
 Populating the database with changes
 ====================================
