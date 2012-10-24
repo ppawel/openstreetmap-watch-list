@@ -13,8 +13,11 @@ Contents:
 
 osmosis-plugin/
   Contains a plugin for Osmosis that takes care of populating change tables.
-  See the `INSTALL.md` file for installation instructions. Plugin source code
-  is available [here](https://github.com/ppawel/osmosis/tree/changedb-plugin).
+  See the `INSTALL.md` file for installation instructions.
+
+  Plugin source code is available:
+
+  https://github.com/ppawel/osmosis/tree/changedb-plugin
 
 owl_viewer/
   A rails project which hosts the owl "viewer" which allows
