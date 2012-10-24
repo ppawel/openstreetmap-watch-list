@@ -11,6 +11,15 @@ Initial data load
 
 1. Use the `--write-pgsql` [Osmosis task](http://wiki.openstreetmap.org/wiki/Osmosis/Detailed_Usage#--write-pgsql_.28--wp.29) to load inital data.
 
+Installing OWL Osmosis plugin
+=============================
+
+OWL plugin for Osmosis is needed for the `--write-changed-change` task which populates OWL tables with data. To install
+the plugin:
+
+1. Download [plugin JAR file](http://TBD).
+2. Drop the file to the `lib` directory in your Osmosis installation (e.g. `/usr/share/osmosis`).
+
 Populating the database with changes
 ====================================
 
