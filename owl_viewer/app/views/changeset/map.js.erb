@@ -3,7 +3,10 @@
 <% @changesets.each_with_index do |changeset, index| %>
 { "type": "Feature",
   "geometry": <%= changeset.geojson.html_safe %>,
-  "properties": {"changeset_id": <%= changeset.id %>}
+  "properties": {
+    "changeset_id": <%= changeset.id %>,
+    "created_at": "<%= changeset.created_at %>"
+  }
   }
   <% if index < @changesets.size - 1 %>,<% end %>
 <% end %>

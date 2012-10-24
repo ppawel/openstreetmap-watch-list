@@ -204,7 +204,7 @@ private
     Changeset.find(:all,
       :select => "changesets.*, ST_AsGeoJSON(ST_Intersection(ST_SetSRID(Box2D(ST_GeomFromText('LINESTRING(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})')), 4326), geom), 5) AS geojson",
       :conditions => "ST_Intersects(ST_SetSRID(Box2D(ST_GeomFromText('LINESTRING(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})')), 4326), geom)",
-      #:limit => 100,
+      :limit => 100,
       :order => 'created_at DESC')
   end
 

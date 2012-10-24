@@ -111,8 +111,11 @@
             layerBasic = new OpenLayers.Layer.OSM();
             map.addLayer(layerBasic);
 
+            var strategy = new OpenLayers.Strategy.BBOX({resFactor: 1});
+
+
             layerVector = new OpenLayers.Layer.Vector("Polygon (Forever)", {
-                 strategies: [new OpenLayers.Strategy.BBOX({resFactor: 1})],
+                 strategies: [strategy],
                  protocol: new OpenLayers.Protocol.HTTP({
                      url: "map.js",
                      format: new OpenLayers.Format.GeoJSON()
@@ -126,6 +129,14 @@
                  visibility: true
             });
             map.addLayer(layerVector);
+
+            layerVector.events.on({
+              'loadend': function(obj) {
+                $("#visstatus").html($("#changeset_list_template").render(obj.object));
+                    }
+              }
+
+            );
       //map.events.register("zoomend", this, zoomEvent);
       map.events.register("moveend", map, updateLocation);
 
@@ -157,10 +168,23 @@
 
     <div id="map" class="smallmap"></div>
 
-<div id="visstatus" style="background:white; border:1px solid black; position:absolute; margin:0px; padding:10px; left:0px; bottom:60px; z-index:1000;">
+<div id="visstatus" style="background:white; border:1px solid black; position:absolute; margin:0px; padding:10px; left:0px; bottom:60px; max-height: 500px; z-index:1000; overflow: scroll;">
 <p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>
 </div>
 <div id="select" style="background:white; position:absolute; margin:0px; padding:10px; left:0px; bottom:0px; z-index:999;">
 <a id="feed_select_box" href="#">Click here to generate an RSS feed.</a><br/>
 <a id="feed_url_box" href="#"></a>
 </div>
+
+
+<script id="changeset_list_template" type="text/x-jsrender">
+Visible changesets<br />
+<i>(limit = 100)</i>
+<ul>
+{{for features}}
+  <li>
+    {{:attributes.created_at}} <a target="_blank" href="http://www.openstreetmap.org/browse/changeset/{{:attributes.changeset_id}}">{{:attributes.changeset_id}}</a>
+  </li>
+{{/for}}
+</ul>
+</script>
