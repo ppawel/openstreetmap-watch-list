@@ -38,7 +38,8 @@ ALTER TABLE ONLY changesets ADD CONSTRAINT pk_changesets PRIMARY KEY (id);
 DROP INDEX IF EXISTS idx_changes_changeset_id;
 CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
 
-
+DROP INDEX IF EXISTS idx_changesets_geom;
+CREATE INDEX idx_changesets_geom ON changesets USING gist (geom);
 
 DROP FUNCTION IF EXISTS Osmosis_ChangeDb_UpdateChangesetGeom(bigint);
 CREATE FUNCTION Osmosis_ChangeDb_UpdateChangesetGeom(bigint) RETURNS void AS $$
