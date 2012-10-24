@@ -20,8 +20,7 @@ First, [initialize replication directory](http://wiki.openstreetmap.org/wiki/Osm
 
 Then, setup (e.g. in crontab) the replication pipeline:
 
-    osmosis --read-replication-interval workingDirectory=<dir> --tee-change
-    --write-changedb-change authFile=<authFile> --write-pgsql-change authFile=<authFile>
+    osmosis --read-replication-interval workingDirectory=<dir> --tee-change  --write-changedb-change authFile=<authFile> --write-pgsql-change authFile=<authFile>
 
 This commands does couple of things:
 * Downloads OsmChange file for a specific replication interval (minute/hour/day) - according to the configuration in `configuration.txt`.
