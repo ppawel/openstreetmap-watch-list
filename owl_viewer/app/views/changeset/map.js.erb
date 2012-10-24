@@ -1,10 +1,11 @@
 { "type": "FeatureCollection",
   "features": [
-<% @changesets.each do |changeset| %>
+<% @changesets.each_with_index do |changeset, index| %>
 { "type": "Feature",
   "geometry": <%= changeset.geojson.html_safe %>,
   "properties": {"changeset_id": <%= changeset.id %>}
-  },
+  }
+  <% if index < @changesets.size - 1 %>,<% end %>
 <% end %>
   ],
   "crs": {

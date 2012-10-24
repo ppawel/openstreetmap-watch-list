@@ -108,7 +108,7 @@
                 displayProjection: new OpenLayers.Projection("EPSG:4326")
             } );
 
-            layerBasic = new OpenLayers.Layer.OSM.Mapnik("Mapnik");
+            layerBasic = new OpenLayers.Layer.OSM();
             map.addLayer(layerBasic);
 
             layerVector = new OpenLayers.Layer.Vector("Polygon (Forever)", {
@@ -119,14 +119,17 @@
                  }),
                  projection: new OpenLayers.Projection("EPSG:4326"),
                  displayProjection: new OpenLayers.Projection("EPSG:900913"),
-                 styleMap: new OpenLayers.StyleMap({'strokeWidth': 2, 'strokeColor': "black", fillColor: 'green', fillOpacity: 0.75}),
+                 styleMap: new OpenLayers.StyleMap({
+                   "default": {'strokeWidth': 4, 'strokeColor': "green"},
+                   "highlight": {'strokeWidth': 4, 'strokeColor': "blue"}
+                 }),
                  visibility: true
             });
             map.addLayer(layerVector);
       //map.events.register("zoomend", this, zoomEvent);
       map.events.register("moveend", map, updateLocation);
 
-      var highlightControl = new OpenLayers.Control.SelectFeature(layerVector, {"hover": true, "highlightOnly": true});
+      var highlightControl = new OpenLayers.Control.SelectFeature(layerVector, {"hover": true, "highlightOnly": true, "renderIntent": "highlight"});
       map.addControl(highlightControl);
             highlightControl.activate();
 
