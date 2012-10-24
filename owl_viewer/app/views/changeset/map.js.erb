@@ -1,24 +1,14 @@
 { "type": "FeatureCollection",
   "features": [
-<% @tiles.each do |t| %>
-    { "type": "Feature", 
-      "properties": { "tile": "<%= t %>" },
-      "geometry": {
-        "type": "Polygon", 
-        "coordinates": [ [
-  <% x, y = QuadTile::tile2xy(t) %>
-  [ <%= QuadTile::x2lon(x) %>,   <%= QuadTile::y2lat(y) %>   ],
-  [ <%= QuadTile::x2lon(x+1) %>, <%= QuadTile::y2lat(y) %>   ],
-  [ <%= QuadTile::x2lon(x+1) %>, <%= QuadTile::y2lat(y+1) %> ],
-  [ <%= QuadTile::x2lon(x) %>,   <%= QuadTile::y2lat(y+1) %> ],
-  [ <%= QuadTile::x2lon(x) %>,   <%= QuadTile::y2lat(y) %>   ]
-        ] ]
-      }
-    },
+<% @changesets.each do |changeset| %>
+{ "type": "Feature",
+  "geometry": <%= changeset.geojson.html_safe %>,
+  "properties": {"changeset_id": <%= changeset.id %>}
+  },
 <% end %>
   ],
   "crs": {
-    "type": "OGC", 
+    "type": "OGC",
     "properties": {
       "urn": "urn:ogc:def:crs:OGC:1.3:CRS84"
     }

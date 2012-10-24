@@ -4,83 +4,83 @@
         var zoom = 5;
         var map, layerBasic, layerVector, browseBoxControl;
 
-	function setupView(){
-	    map.zoomToExtent(layerVector.getDataExtent(), false);
+  function setupView(){
+      map.zoomToExtent(layerVector.getDataExtent(), false);
         }
 
-	function myFunc(ev) {
-	  window.location = "tile/" + ev.attributes["tile"];
-	}
+  function myFunc(ev) {
+    window.location = "tile/" + ev.attributes["tile"];
+  }
 
-	function zoomEvent() {
-	  var vis = map.getZoom() > 12;
-	  layerVector.setVisibility(vis);
-	  document.getElementById("visstatus").style.visibility = vis ? "hidden" : "visible";
-	}
+  function zoomEvent() {
+    var vis = map.getZoom() > 12;
+    //layerVector.setVisibility(vis);
+    //document.getElementById("visstatus").style.visibility = vis ? "hidden" : "visible";
+  }
 
-	function latLonToTile(lon, lat) {
-	  var x = (lon * 152.587890625 + 32768.0) / 2;
-	  var y = (lat * 152.587890625 + 32768.0) / 2;
+  function latLonToTile(lon, lat) {
+    var x = (lon * 152.587890625 + 32768.0) / 2;
+    var y = (lat * 152.587890625 + 32768.0) / 2;
 
-	  x = (x | (x << 8)) & 0x00ff00ff;
-	  x = (x | (x << 4)) & 0x0f0f0f0f;
+    x = (x | (x << 8)) & 0x00ff00ff;
+    x = (x | (x << 4)) & 0x0f0f0f0f;
           x = (x | (x << 2)) & 0x33333333;
           x = (x | (x << 1)) & 0x55555555;
-    
+
           y = (y | (y << 8)) & 0x00ff00ff;
           y = (y | (y << 4)) & 0x0f0f0f0f;
           y = (y | (y << 2)) & 0x33333333;
           y = (y | (y << 1)) & 0x55555555;
-    
+
           return (x << 1) | y;
         }
 
-	// more stolen from osm.org - functions for drag-selecting an area
-	function startDrag() {
-	  $("feed_select_box").innerHTML="Drag a box to define the area for the feed.";
-	  browseBoxControl.activate();
-	  return false;
-	}
-	function endDrag(bbox) {
-	  var bounds = bbox.getBounds();
-	  var projected = bounds.clone().transform(map.getProjectionObject(), map.displayProjection);
+  // more stolen from osm.org - functions for drag-selecting an area
+  function startDrag() {
+    $("feed_select_box").innerHTML="Drag a box to define the area for the feed.";
+    browseBoxControl.activate();
+    return false;
+  }
+  function endDrag(bbox) {
+    var bounds = bbox.getBounds();
+    var projected = bounds.clone().transform(map.getProjectionObject(), map.displayProjection);
 
-	  browseBoxControl.deactivate();
-	  tl = latLonToTile(projected.left, projected.top) * 4;
-	  br = latLonToTile(projected.right, projected.bottom) * 4 + 3;
-	  rss_link = "http://matt.dev.openstreetmap.org/owl_viewer/feed/"+tl+"-"+br+".rss";
-	  $("feed_url_box").innerHTML = rss_link;
-	  $("feed_url_box").href = rss_link;
+    browseBoxControl.deactivate();
+    tl = latLonToTile(projected.left, projected.top) * 4;
+    br = latLonToTile(projected.right, projected.bottom) * 4 + 3;
+    rss_link = "http://matt.dev.openstreetmap.org/owl_viewer/feed/"+tl+"-"+br+".rss";
+    $("feed_url_box").innerHTML = rss_link;
+    $("feed_url_box").href = rss_link;
 
-	  $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
+    $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
           $("feed_url_box").style.display = "inline";
-	}
-	
+  }
+
         // liberally stolen from osm.org
-        function updateLocation() {     
-          var lonlat = map.getCenter().transform(map.getProjectionObject(), map.displayProjection);  
-          var zoom = map.getZoom();     
-          var expiry = new Date();      
-                                        
-          expiry.setYear(expiry.getFullYear() + 10); 
+        function updateLocation() {
+          var lonlat = map.getCenter().transform(map.getProjectionObject(), map.displayProjection);
+          var zoom = map.getZoom();
+          var expiry = new Date();
+
+          expiry.setYear(expiry.getFullYear() + 10);
           var cookie_string = "_owl_location=" + lonlat.lon + "|" + lonlat.lat + "|" + zoom + "; expires=" + expiry.toGMTString();
-	  document.cookie = cookie_string;
-        }                                                                                                                       
+    document.cookie = cookie_string;
+        }
 
         // liberally stolen from OpenCycleMap. thanks, Andy!
-        function readCookie(name) {                         
-          var nameEQ = name + "=";                          
-          var ca = document.cookie.split(';');              
-          for(var i=0;i < ca.length;i++) {                  
-                  var c = ca[i];                            
+        function readCookie(name) {
+          var nameEQ = name + "=";
+          var ca = document.cookie.split(';');
+          for(var i=0;i < ca.length;i++) {
+                  var c = ca[i];
                   while (c.charAt(0)==' ') c = c.substring(1,c.length);
                   if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
-          }                                                                              
-          return null;                                                                   
-        }                                                                                
+          }
+          return null;
+        }
 
         // liberally stolen from OpenCycleMap. thanks, Andy!
-	function setCentreFromCookie() {
+  function setCentreFromCookie() {
           var centre = new OpenLayers.LonLat(-1.85, 53.8);
           var zoom = 6;
           var cookietext = readCookie('_owl_location');
@@ -90,7 +90,7 @@
             zoom = cb[2];
           }
           map.setCenter(centre.transform(map.displayProjection, map.getProjectionObject()), zoom);
-	}
+  }
 
         function init(){
             map = new OpenLayers.Map ("map", {
@@ -98,8 +98,8 @@
                     new OpenLayers.Control.Navigation(),
                     new OpenLayers.Control.PanZoomBar(),
                     new OpenLayers.Control.Attribution(),
-		    new OpenLayers.Control.Permalink(),
-	            new OpenLayers.Control.LayerSwitcher()],
+        new OpenLayers.Control.Permalink(),
+              new OpenLayers.Control.LayerSwitcher()],
                 maxExtent: new OpenLayers.Bounds(-20037508.34,-20037508.34,20037508.34,20037508.34),
                 maxResolution: 156543.0399,
                 numZoomLevels: 19,
@@ -117,36 +117,39 @@
                      url: "map.js",
                      format: new OpenLayers.Format.GeoJSON()
                  }),
-                 projection: new OpenLayers.Projection("EPSG:4326")
+                 projection: new OpenLayers.Projection("EPSG:4326"),
+                 displayProjection: new OpenLayers.Projection("EPSG:900913"),
+                 styleMap: new OpenLayers.StyleMap({'strokeWidth': 2, 'strokeColor': "black", fillColor: 'green', fillOpacity: 0.75}),
+                 visibility: true
             });
             map.addLayer(layerVector);
-	    map.events.register("zoomend", this, zoomEvent);
-	    map.events.register("moveend", map, updateLocation);
+      //map.events.register("zoomend", this, zoomEvent);
+      map.events.register("moveend", map, updateLocation);
 
-	    var highlightControl = new OpenLayers.Control.SelectFeature(layerVector, {"hover": true, "highlightOnly": true});
-	    map.addControl(highlightControl);
+      var highlightControl = new OpenLayers.Control.SelectFeature(layerVector, {"hover": true, "highlightOnly": true});
+      map.addControl(highlightControl);
             highlightControl.activate();
 
-	    var selectControl = new OpenLayers.Control.SelectFeature(layerVector, {"onSelect": myFunc});
-	    map.addControl(selectControl);
+      var selectControl = new OpenLayers.Control.SelectFeature(layerVector, {"onSelect": myFunc});
+      map.addControl(selectControl);
             selectControl.activate();
 
-	    if (!map.getCenter()) setCentreFromCookie();
+      if (!map.getCenter()) setCentreFromCookie();
 
             var vectors = new OpenLayers.Layer.Vector();
             browseBoxControl = new OpenLayers.Control.DrawFeature(vectors, OpenLayers.Handler.RegularPolygon, {
-		handlerOptions: {
-		sides: 4,
-		snapAngle: 90,
-		irregular: true,
-		persist: true,
-		callbacks: { done: endDrag }
-	      }
+    handlerOptions: {
+    sides: 4,
+    snapAngle: 90,
+    irregular: true,
+    persist: true,
+    callbacks: { done: endDrag }
+        }
             });
             map.addControl(browseBoxControl);
-	    $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
-	    $("feed_select_box").onclick = startDrag;
-	}
+      $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
+      $("feed_select_box").onclick = startDrag;
+  }
     </script>
 
     <div id="map" class="smallmap"></div>

@@ -43,7 +43,7 @@ class ChangesetController < ApplicationController
   def feed
     @ranges = params['range'].split(",").collect { |l| l.split("-").collect{|i| i.to_i} }
     size = QuadTile.ranges_size(@ranges)
-    if (size > 100000) 
+    if (size > 100000)
       RAILS_DEFAULT_LOGGER.info("rejected feed size: #{size}")
       @changesets = []
     else
@@ -78,7 +78,7 @@ private
 
   def filter_tiles_in_qtile(tiles, qtile_prefix, depth)
     filtered_tiles = Array.new
-    
+
     # Only include tiles whose first depth bytes match qtile_prefix
     qtile_hex = qtile_prefix.to_s(16)
     qtile_hex = qtile_hex.rjust(depth - qtile_hex.length, "0")
@@ -200,18 +200,28 @@ private
     return changed_tiles.uniq.sort
   end
 
+  def find_changesets_by_bbox(bbox)
+    Changeset.find(:all,
+      :select => 'changesets.*, ST_AsGeoJSON(ST_Envelope(geom)) AS geojson',
+      :conditions => "ST_Contains(ST_SetSRID(Box2D(ST_GeomFromText('LINESTRING(#{bbox[1]} #{bbox[0]}, #{bbox[3]} #{bbox[2]})')), 4326), geom)",
+      #:limit => 100,
+      :order => 'created_at DESC')
+  end
+
   def common_map(where_time, max_area)
     @tiles = []
     unless params['bbox'].nil?
       bbox = params['bbox'].split(/,/).map { |x| x.to_f }
       area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+      @changesets = find_changesets_by_bbox(bbox)
       #RAILS_DEFAULT_LOGGER.debug("area: #{area}")
       if (area < max_area)
         tiles_in_area = QuadTile.tiles_for_area(*bbox)
         # Chase down all the child tables to look for tiles with changes inside the bbox
-        @tiles = find_changed_tiles_among_tiles(where_time, tiles_in_area, 0, 0)
+        #@tiles = find_changed_tiles_among_tiles(where_time, tiles_in_area, 0, 0)
       end
     end
+    puts @tiles
     @tiles = @tiles.sort.uniq
     render :layout => 'with_map'
   end
