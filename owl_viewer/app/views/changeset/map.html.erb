@@ -16,6 +16,9 @@
     var vis = map.getZoom() > 12;
     layerVector.setVisibility(vis);
     //document.getElementById("visstatus").style.visibility = vis ? "hidden" : "visible";
+    if (!vis) {
+      $("#visstatus").html('<p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>');
+    }
   }
 
   function latLonToTile(lon, lat) {
@@ -178,7 +181,7 @@
 
 
 <script id="changeset_list_template" type="text/x-jsrender">
-Visible changesets <i>(limit = 100, shown from zoom level = 12)</i>
+Visible changesets <i>(limit = 100)</i>
 <br /><br />
 <ul style="list-style-type: none; padding: 0; margin: 0; font-size: smaller">
 {{for features}}
