@@ -11,3 +11,11 @@
  *= require_self
  *= require_tree .
 */
+
+.changeset_item {
+  background-color: white;
+}
+
+.changeset_item_selected {
+  background-color: lightgray;
+}

@@ -13,6 +13,16 @@
     window.location = "tile/" + ev.attributes["tile"];
   }
 
+  function showFeaturePopup(e) {
+    $('li[class="changeset_item_selected"]').attr('class', 'changeset_item');
+    $('li[id="changeset_' + e.feature.data.changeset_id +'"]').attr('class', 'changeset_item_selected');
+        $('#visstatus').scrollTo('li[id="changeset_' + e.feature.data.changeset_id +'"]');
+  }
+
+  function hideFeaturePopup(e) {
+    //$('li[class="changeset_item"]').attr('class', 'changeset_item_selected');
+  }
+
   function zoomEvent() {
     var vis = map.getZoom() > MIN_ZOOM_LEVEL;
     layerVector.setVisibility(vis);
@@ -148,13 +158,21 @@
       map.events.register("zoomend", this, zoomEvent);
       map.events.register("moveend", map, updateLocation);
 
-      var highlightControl = new OpenLayers.Control.SelectFeature(layerVector, {"hover": true, "highlightOnly": true, "renderIntent": "highlight"});
-      map.addControl(highlightControl);
-            highlightControl.activate();
+      var highlightControl = new OpenLayers.Control.SelectFeature(layerVector,
+      { "hover": true,
+        "highlightOnly": true,
+        "renderIntent": "highlight",
+        "eventListeners": {
+                    featurehighlighted: showFeaturePopup,
+                    featureunhighlighted: hideFeaturePopup
+                }});
 
-      var selectControl = new OpenLayers.Control.SelectFeature(layerVector, {"onSelect": myFunc});
-      map.addControl(selectControl);
-            selectControl.activate();
+      map.addControl(highlightControl);
+      highlightControl.activate();
+
+      //var selectControl = new OpenLayers.Control.SelectFeature(layerVector, {"onSelect": myFunc});
+      //map.addControl(selectControl);
+      //            selectControl.activate();
 
       if (!map.getCenter()) setCentreFromCookie();
 
@@ -184,13 +202,12 @@
 <a id="feed_url_box" href="#"></a>
 </div>-->
 
-
 <script id="changeset_list_template" type="text/x-jsrender">
 Visible changesets <i>(limit = 100)</i> <a target="_blank" href="" id="rss_link"><%= image_tag 'feed-icon-14x14.png' %></a>
 <br /><br />
 <ul style="list-style-type: none; padding: 0; margin: 0; font-size: smaller">
 {{for features}}
-  <li>
+  <li class="changeset_item" id="changeset_{{:attributes.changeset_id}}">
     {{:attributes.created_at}} <a target="_blank"
     href="http://www.openstreetmap.org/browse/changeset/{{:attributes.changeset_id}}">{{:attributes.changeset_id}}</a>
     by {{:attributes.user_name}}
