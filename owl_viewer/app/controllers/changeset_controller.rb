@@ -222,7 +222,6 @@ private
         #@tiles = find_changed_tiles_among_tiles(where_time, tiles_in_area, 0, 0)
       end
     end
-    puts @tiles
     @tiles = @tiles.sort.uniq
     render :layout => 'with_map'
   end

@@ -136,6 +136,8 @@
             layerVector.events.on({
               'loadend': function(obj) {
                 $("#visstatus").html($("#changeset_list_template").render(obj.object));
+                var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(8, false);
+                $("#rss_link").attr('href', '/map.rss?bbox=' + bbox);
                     }
               }
 
@@ -171,17 +173,17 @@
 
     <div id="map" class="smallmap"></div>
 
-<div id="visstatus" style="background:white; border:1px solid black; position:absolute; margin:0px; padding:10px; left:0px; bottom:60px; max-height: 500px; z-index:1000; overflow: scroll;">
+<div id="visstatus" style="background:white; border:1px solid black; position:absolute; margin:0px; padding:10px; left:0px; bottom:0px; max-height: 500px; z-index:1000; overflow: scroll;">
 <p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>
 </div>
-<div id="select" style="background:white; position:absolute; margin:0px; padding:10px; left:0px; bottom:0px; z-index:999;">
+<!--<div id="select" style="background:white; position:absolute; margin:0px; padding:10px; left:0px; bottom:0px; z-index:999;">
 <a id="feed_select_box" href="#">Click here to generate an RSS feed.</a><br/>
 <a id="feed_url_box" href="#"></a>
-</div>
+</div>-->
 
 
 <script id="changeset_list_template" type="text/x-jsrender">
-Visible changesets <i>(limit = 100)</i>
+Visible changesets <i>(limit = 100)</i> <a target="_blank" href="" id="rss_link"><%= image_tag 'feed-icon-14x14.png' %></a>
 <br /><br />
 <ul style="list-style-type: none; padding: 0; margin: 0; font-size: smaller">
 {{for features}}
