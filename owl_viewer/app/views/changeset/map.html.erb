@@ -14,7 +14,7 @@
 
   function zoomEvent() {
     var vis = map.getZoom() > 12;
-    //layerVector.setVisibility(vis);
+    layerVector.setVisibility(vis);
     //document.getElementById("visstatus").style.visibility = vis ? "hidden" : "visible";
   }
 
@@ -126,7 +126,7 @@
                    "default": {'strokeWidth': 4, 'strokeColor': "green"},
                    "highlight": {'strokeWidth': 4, 'strokeColor': "blue"}
                  }),
-                 visibility: true
+                 visibility: false
             });
             map.addLayer(layerVector);
 
@@ -137,7 +137,7 @@
               }
 
             );
-      //map.events.register("zoomend", this, zoomEvent);
+      map.events.register("zoomend", this, zoomEvent);
       map.events.register("moveend", map, updateLocation);
 
       var highlightControl = new OpenLayers.Control.SelectFeature(layerVector, {"hover": true, "highlightOnly": true, "renderIntent": "highlight"});
@@ -178,7 +178,7 @@
 
 
 <script id="changeset_list_template" type="text/x-jsrender">
-Visible changesets <i>(limit = 100)</i>
+Visible changesets <i>(limit = 100, shown from zoom level = 12)</i>
 <br /><br />
 <ul style="list-style-type: none; padding: 0; margin: 0; font-size: smaller">
 {{for features}}
