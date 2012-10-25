@@ -105,19 +105,7 @@ function init(){
   layerBasic = new OpenLayers.Layer.OSM();
   map.addLayer(layerBasic);
 
-  var strategy = new OpenLayers.Strategy.BBOX({
-    resFactor: 1/*,
-    merge: function(resp) {
-      //alert(resp.features.length);
-      for (var i = 0; i < resp.features.length; i++) {
-        //resp.features[i].geometry = new OpenLayers.Geometry.Point(map.center.lat, map.center.lon).transform('EPSG:900913', 'EPSG:4326');
-      }
-      layerVector.addFeatures([new OpenLayers.Feature.Vector(new OpenLayers.Geometry.Point(map.center.lat, map.center.lon).transform('EPSG:900913',
-      'EPSG:4326'))]);
-      OpenLayers.Strategy.BBOX.prototype.merge.call(this, resp);
-    }*/
-  });
-
+  var strategy = new OpenLayers.Strategy.BBOX({resFactor: 1});
 
   layerVector = new OpenLayers.Layer.Vector("Polygon (Forever)", {
        strategies: [strategy],
@@ -149,12 +137,6 @@ function init(){
 
   layerVector.events.on({
     'loadend': function(obj) {
-      if (layerVector.features.length > 0) {
-        for (var i = 0; i < layerVector.features.length; i++) {
-          //layerVector.features[i].geometry = new OpenLayers.Geometry.Point(map.center.lat, map.center.lon).transform('EPSG:900913', 'EPSG:4326');
-        }
-      }
-
       if (map.getZoom() > MIN_ZOOM_LEVEL) {
         $("#visstatus").html($("#changeset_list_template").render(obj.object));
 

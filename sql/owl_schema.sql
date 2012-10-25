@@ -59,9 +59,9 @@ changeset_geom := (
     UNION ALL
     SELECT (ST_Dump(new_geom)).geom FROM changes WHERE changeset_id = $1 AND element_type = 'Way'
     UNION ALL
-    SELECT ST_MakeLine(old_geom, old_geom) FROM changes WHERE changeset_id = $1 AND element_type = 'Node'
+    SELECT ST_Boundary(ST_Buffer(old_geom, 0.00000001, 1)) FROM changes WHERE changeset_id = $1 AND element_type = 'Node'
     UNION ALL
-    SELECT ST_MakeLine(new_geom, new_geom) FROM changes WHERE changeset_id = $1 AND element_type = 'Node'
+    SELECT ST_Boundary(ST_Buffer(new_geom, 0.00000001, 1)) FROM changes WHERE changeset_id = $1 AND element_type = 'Node'
   ) g);
 
 UPDATE changesets SET geom = changeset_geom WHERE id = $1;
