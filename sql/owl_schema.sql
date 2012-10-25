@@ -41,6 +41,9 @@ CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
 DROP INDEX IF EXISTS idx_changesets_geom;
 CREATE INDEX idx_changesets_geom ON changesets USING gist (geom);
 
+DROP INDEX IF EXISTS idx_changesets_created_at;
+CREATE INDEX idx_changesets_created_at ON changesets USING btree (created_at);
+
 DROP FUNCTION IF EXISTS Osmosis_ChangeDb_UpdateChangesetGeom(bigint);
 CREATE FUNCTION Osmosis_ChangeDb_UpdateChangesetGeom(bigint) RETURNS void AS $$
 DECLARE
