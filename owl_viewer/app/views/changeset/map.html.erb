@@ -1,150 +1,141 @@
 <script type="text/javascript">
-  var MIN_ZOOM_LEVEL = 12;
-  var lon = 5;
-  var lat = 40;
-  var zoom = 5;
-  var map, layerBasic, layerVector, browseBoxControl;
+var MIN_ZOOM_LEVEL = 12;
+var lon = 5;
+var lat = 40;
+var zoom = 5;
+var map, layerBasic, layerVector, browseBoxControl;
 
-  function setupView(){
-      map.zoomToExtent(layerVector.getDataExtent(), false);
-        }
+function setupView(){
+  map.zoomToExtent(layerVector.getDataExtent(), false);
+}
 
-  function myFunc(ev) {
-    window.location = "tile/" + ev.attributes["tile"];
+function showFeaturePopup(e) {
+  $('li[class="changeset_item_selected"]').attr('class', 'changeset_item');
+  $('li[id="changeset_' + e.feature.data.changeset_id +'"]').attr('class', 'changeset_item_selected');
+      $('#visstatus').scrollTo('li[id="changeset_' + e.feature.data.changeset_id +'"]');
+}
+
+function hideFeaturePopup(e) {
+  $('li[class="changeset_item_selected"]').attr('class', 'changeset_item');
+}
+
+function zoomEvent() {
+  var vis = map.getZoom() > MIN_ZOOM_LEVEL;
+  layerVector.setVisibility(vis);
+  //document.getElementById("visstatus").style.visibility = vis ? "hidden" : "visible";
+  if (!vis) {
+    $("#visstatus").html('<p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>');
   }
+}
 
-  function showFeaturePopup(e) {
-    $('li[class="changeset_item_selected"]').attr('class', 'changeset_item');
-    $('li[id="changeset_' + e.feature.data.changeset_id +'"]').attr('class', 'changeset_item_selected');
-        $('#visstatus').scrollTo('li[id="changeset_' + e.feature.data.changeset_id +'"]');
+// more stolen from osm.org - functions for drag-selecting an area
+function startDrag() {
+  $("feed_select_box").innerHTML="Drag a box to define the area for the feed.";
+  browseBoxControl.activate();
+  return false;
+}
+
+function endDrag(bbox) {
+  var bounds = bbox.getBounds();
+  var projected = bounds.clone().transform(map.getProjectionObject(), map.displayProjection);
+
+  browseBoxControl.deactivate();
+  tl = latLonToTile(projected.left, projected.top) * 4;
+  br = latLonToTile(projected.right, projected.bottom) * 4 + 3;
+  rss_link = "http://matt.dev.openstreetmap.org/owl_viewer/feed/"+tl+"-"+br+".rss";
+  $("feed_url_box").innerHTML = rss_link;
+  $("feed_url_box").href = rss_link;
+
+  $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
+        $("feed_url_box").style.display = "inline";
+}
+
+// liberally stolen from osm.org
+function updateLocation() {
+  var lonlat = map.getCenter().transform(map.getProjectionObject(), map.displayProjection);
+  var zoom = map.getZoom();
+  var expiry = new Date();
+
+  expiry.setYear(expiry.getFullYear() + 10);
+  var cookie_string = "_owl_location=" + lonlat.lon + "|" + lonlat.lat + "|" + zoom + "; expires=" + expiry.toGMTString();
+  document.cookie = cookie_string;
+}
+
+// liberally stolen from OpenCycleMap. thanks, Andy!
+function readCookie(name) {
+  var nameEQ = name + "=";
+  var ca = document.cookie.split(';');
+  for(var i=0;i < ca.length;i++) {
+          var c = ca[i];
+          while (c.charAt(0)==' ') c = c.substring(1,c.length);
+          if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
   }
+  return null;
+}
 
-  function hideFeaturePopup(e) {
-    $('li[class="changeset_item_selected"]').attr('class', 'changeset_item');
-  }
-
-  function zoomEvent() {
-    var vis = map.getZoom() > MIN_ZOOM_LEVEL;
-    layerVector.setVisibility(vis);
-    //document.getElementById("visstatus").style.visibility = vis ? "hidden" : "visible";
-    if (!vis) {
-      $("#visstatus").html('<p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>');
+// liberally stolen from OpenCycleMap. thanks, Andy!
+function setCentreFromCookie() {
+  var centre = new OpenLayers.LonLat(-1.85, 53.8);
+  var zoom = 6;
+  var cookietext = readCookie('_owl_location');
+  if (cookietext) {
+    var cb = cookietext.split('|');
+    centre = new OpenLayers.LonLat(cb[0], cb[1]);
+    zoom = cb[2];
     }
-  }
+  map.setCenter(centre.transform(map.displayProjection, map.getProjectionObject()), zoom);
+}
 
-  function latLonToTile(lon, lat) {
-    var x = (lon * 152.587890625 + 32768.0) / 2;
-    var y = (lat * 152.587890625 + 32768.0) / 2;
+function init(){
+  map = new OpenLayers.Map ("map", {
+      controls:[
+          new OpenLayers.Control.Navigation(),
+          new OpenLayers.Control.PanZoomBar(),
+          new OpenLayers.Control.Attribution(),
+          new OpenLayers.Control.Permalink(),
+    new OpenLayers.Control.LayerSwitcher()],
+      maxExtent: new OpenLayers.Bounds(-20037508.34,-20037508.34,20037508.34,20037508.34),
+      maxResolution: 156543.0399,
+      numZoomLevels: 19,
+      units: 'm',
+      projection: new OpenLayers.Projection("EPSG:900913"),
+      displayProjection: new OpenLayers.Projection("EPSG:4326")
+  } );
 
-    x = (x | (x << 8)) & 0x00ff00ff;
-    x = (x | (x << 4)) & 0x0f0f0f0f;
-          x = (x | (x << 2)) & 0x33333333;
-          x = (x | (x << 1)) & 0x55555555;
+  layerBasic = new OpenLayers.Layer.OSM();
+  map.addLayer(layerBasic);
 
-          y = (y | (y << 8)) & 0x00ff00ff;
-          y = (y | (y << 4)) & 0x0f0f0f0f;
-          y = (y | (y << 2)) & 0x33333333;
-          y = (y | (y << 1)) & 0x55555555;
-
-          return (x << 1) | y;
-        }
-
-  // more stolen from osm.org - functions for drag-selecting an area
-  function startDrag() {
-    $("feed_select_box").innerHTML="Drag a box to define the area for the feed.";
-    browseBoxControl.activate();
-    return false;
-  }
-  function endDrag(bbox) {
-    var bounds = bbox.getBounds();
-    var projected = bounds.clone().transform(map.getProjectionObject(), map.displayProjection);
-
-    browseBoxControl.deactivate();
-    tl = latLonToTile(projected.left, projected.top) * 4;
-    br = latLonToTile(projected.right, projected.bottom) * 4 + 3;
-    rss_link = "http://matt.dev.openstreetmap.org/owl_viewer/feed/"+tl+"-"+br+".rss";
-    $("feed_url_box").innerHTML = rss_link;
-    $("feed_url_box").href = rss_link;
-
-    $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
-          $("feed_url_box").style.display = "inline";
-  }
-
-        // liberally stolen from osm.org
-        function updateLocation() {
-          var lonlat = map.getCenter().transform(map.getProjectionObject(), map.displayProjection);
-          var zoom = map.getZoom();
-          var expiry = new Date();
-
-          expiry.setYear(expiry.getFullYear() + 10);
-          var cookie_string = "_owl_location=" + lonlat.lon + "|" + lonlat.lat + "|" + zoom + "; expires=" + expiry.toGMTString();
-    document.cookie = cookie_string;
-        }
-
-        // liberally stolen from OpenCycleMap. thanks, Andy!
-        function readCookie(name) {
-          var nameEQ = name + "=";
-          var ca = document.cookie.split(';');
-          for(var i=0;i < ca.length;i++) {
-                  var c = ca[i];
-                  while (c.charAt(0)==' ') c = c.substring(1,c.length);
-                  if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
-          }
-          return null;
-        }
-
-        // liberally stolen from OpenCycleMap. thanks, Andy!
-  function setCentreFromCookie() {
-          var centre = new OpenLayers.LonLat(-1.85, 53.8);
-          var zoom = 6;
-          var cookietext = readCookie('_owl_location');
-          if (cookietext) {
-            var cb = cookietext.split('|');
-            centre = new OpenLayers.LonLat(cb[0], cb[1]);
-            zoom = cb[2];
-          }
-          map.setCenter(centre.transform(map.displayProjection, map.getProjectionObject()), zoom);
-  }
-
-        function init(){
-            map = new OpenLayers.Map ("map", {
-                controls:[
-                    new OpenLayers.Control.Navigation(),
-                    new OpenLayers.Control.PanZoomBar(),
-                    new OpenLayers.Control.Attribution(),
-        new OpenLayers.Control.Permalink(),
-              new OpenLayers.Control.LayerSwitcher()],
-                maxExtent: new OpenLayers.Bounds(-20037508.34,-20037508.34,20037508.34,20037508.34),
-                maxResolution: 156543.0399,
-                numZoomLevels: 19,
-                units: 'm',
-                projection: new OpenLayers.Projection("EPSG:900913"),
-                displayProjection: new OpenLayers.Projection("EPSG:4326")
-            } );
-
-            layerBasic = new OpenLayers.Layer.OSM();
-            map.addLayer(layerBasic);
-
-            var strategy = new OpenLayers.Strategy.BBOX({resFactor: 1});
+  var strategy = new OpenLayers.Strategy.BBOX({
+    resFactor: 1/*,
+    merge: function(resp) {
+      //alert(resp.features.length);
+      for (var i = 0; i < resp.features.length; i++) {
+        //resp.features[i].geometry = new OpenLayers.Geometry.Point(map.center.lat, map.center.lon).transform('EPSG:900913', 'EPSG:4326');
+      }
+      layerVector.addFeatures([new OpenLayers.Feature.Vector(new OpenLayers.Geometry.Point(map.center.lat, map.center.lon).transform('EPSG:900913',
+      'EPSG:4326'))]);
+      OpenLayers.Strategy.BBOX.prototype.merge.call(this, resp);
+    }*/
+  });
 
 
-            layerVector = new OpenLayers.Layer.Vector("Polygon (Forever)", {
-                 strategies: [strategy],
-                 protocol: new OpenLayers.Protocol.HTTP({
-                     url: "map.js",
-                     format: new OpenLayers.Format.GeoJSON()
-                 }),
-                 projection: new OpenLayers.Projection("EPSG:4326"),
-                 displayProjection: new OpenLayers.Projection("EPSG:900913"),
-                 styleMap: new OpenLayers.StyleMap({
-                   "default": {'strokeWidth': 8, 'strokeColor': "yellow", 'strokeOpacity': 0.66},
-                   "highlight": {'strokeWidth': 8, 'strokeColor': "blue"}
-                 }),
-                 visibility: false
-            });
-            map.addLayer(layerVector);
+  layerVector = new OpenLayers.Layer.Vector("Polygon (Forever)", {
+       strategies: [strategy],
+       protocol: new OpenLayers.Protocol.HTTP({
+           url: "map.js",
+           format: new OpenLayers.Format.GeoJSON()
+       }),
+       projection: new OpenLayers.Projection("EPSG:4326"),
+       displayProjection: new OpenLayers.Projection("EPSG:900913"),
+       styleMap: new OpenLayers.StyleMap({
+         "default": {'strokeWidth': 8, 'strokeColor': "yellow", 'strokeOpacity': 0.66, pointRadius: 50, fillColor: "red",},
+         "highlight": {'strokeWidth': 8, 'strokeColor': "blue", pointRadius: 50, fillColor: "red",}
+       }),
+       visibility: false
+  });
+  map.addLayer(layerVector);
 
-            var highlightControl = new OpenLayers.Control.SelectFeature(layerVector,
+  var highlightControl = new OpenLayers.Control.SelectFeature(layerVector,
       { "hover": true,
         "highlightOnly": true,
         "renderIntent": "highlight",
@@ -153,64 +144,69 @@
                     featureunhighlighted: hideFeaturePopup
                 }});
 
-      map.addControl(highlightControl);
-      highlightControl.activate();
+  map.addControl(highlightControl);
+  highlightControl.activate();
 
-            layerVector.events.on({
-              'loadend': function(obj) {
-                if (map.getZoom() > MIN_ZOOM_LEVEL) {
-                  $("#visstatus").html($("#changeset_list_template").render(obj.object));
+  layerVector.events.on({
+    'loadend': function(obj) {
+      if (layerVector.features.length > 0) {
+        for (var i = 0; i < layerVector.features.length; i++) {
+          //layerVector.features[i].geometry = new OpenLayers.Geometry.Point(map.center.lat, map.center.lon).transform('EPSG:900913', 'EPSG:4326');
+        }
+      }
 
-                  var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(8, false);
-                  $("#rss_link").attr('href', '/map.rss?bbox=' + bbox);
+      if (map.getZoom() > MIN_ZOOM_LEVEL) {
+        $("#visstatus").html($("#changeset_list_template").render(obj.object));
 
-                  $(".changeset_item").on('hover', function(e) {
-                    if (e.type == 'mouseenter') {
-                      // Highlight row in the list.
-                      $(e.target).attr('class', 'changeset_item_selected');
-                    } else if (e.type == 'mouseleave') {
-                      $('li[class="changeset_item_selected"]').attr('class', 'changeset_item');
-                    }
+        var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(8, false);
+        $("#rss_link").attr('href', '/map.rss?bbox=' + bbox);
 
-                    // Highlight geometry.
-                    var changeset_id = parseInt($(e.target).attr('id').replace('changeset_', ''));
-                    var features = layerVector.getFeaturesByAttribute('changeset_id', changeset_id);
-                    if (features.length > 0) {
-                      if (e.type == 'mouseenter') {
-                        highlightControl.select(features[0]);
-                      } else if (e.type == 'mouseleave') {
-                        highlightControl.unselect(features[0]);
-                      }
-                    }
-                  });
+        $(".changeset_item").on('hover', function(e) {
+          if (e.type == 'mouseenter') {
+            // Highlight row in the list.
+            $(e.target).attr('class', 'changeset_item_selected');
+          } else if (e.type == 'mouseleave') {
+            $('li[class="changeset_item_selected"]').attr('class', 'changeset_item');
+          }
 
-                  $(".changeset_item").on('click', function(e) {
-                    // Zoom to geometry.
-                    var changeset_id = parseInt($(e.target).attr('id').replace('changeset_', ''));
-                    var features = layerVector.getFeaturesByAttribute('changeset_id', changeset_id);
-                    if (features.length > 0) {
-                      var dataExtent = features[0].geometry.getBounds();
-                      map.zoomToExtent(dataExtent, closest=true);
-                    }
-                  });
-                }
-              }
+          // Highlight geometry.
+          var changeset_id = parseInt($(e.target).attr('id').replace('changeset_', ''));
+          var features = layerVector.getFeaturesByAttribute('changeset_id', changeset_id);
+          if (features.length > 0) {
+            if (e.type == 'mouseenter') {
+              highlightControl.select(features[0]);
+            } else if (e.type == 'mouseleave') {
+              highlightControl.unselect(features[0]);
             }
+          }
+        });
 
-            );
-      map.events.register("zoomend", this, zoomEvent);
-      map.events.register("moveend", map, updateLocation);
+        $(".changeset_item").on('click', function(e) {
+          // Zoom to geometry.
+          var changeset_id = parseInt($(e.target).attr('id').replace('changeset_', ''));
+          var features = layerVector.getFeaturesByAttribute('changeset_id', changeset_id);
+          if (features.length > 0) {
+            var dataExtent = features[0].geometry.getBounds();
+            map.zoomToExtent(dataExtent, closest=true);
+          }
+        });
+      }
+    }
+  }
 
+  );
 
+  map.events.register("zoomend", this, zoomEvent);
+  map.events.register("moveend", map, updateLocation);
 
-      //var selectControl = new OpenLayers.Control.SelectFeature(layerVector, {"onSelect": myFunc});
-      //map.addControl(selectControl);
-      //            selectControl.activate();
+  //var selectControl = new OpenLayers.Control.SelectFeature(layerVector, {"onSelect": myFunc});
+  //map.addControl(selectControl);
+  //            selectControl.activate();
 
-      if (!map.getCenter()) setCentreFromCookie();
+  if (!map.getCenter()) setCentreFromCookie();
 
-            var vectors = new OpenLayers.Layer.Vector();
-            browseBoxControl = new OpenLayers.Control.DrawFeature(vectors, OpenLayers.Handler.RegularPolygon, {
+  var vectors = new OpenLayers.Layer.Vector();
+  browseBoxControl = new OpenLayers.Control.DrawFeature(vectors, OpenLayers.Handler.RegularPolygon, {
     handlerOptions: {
     sides: 4,
     snapAngle: 90,
@@ -218,12 +214,12 @@
     persist: true,
     callbacks: { done: endDrag }
         }
-            });
-            map.addControl(browseBoxControl);
-      $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
-      $("feed_select_box").onclick = startDrag;
-  }
-    </script>
+  });
+  map.addControl(browseBoxControl);
+  $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
+  $("feed_select_box").onclick = startDrag;
+}
+</script>
 
     <div id="map" class="smallmap"></div>
 
