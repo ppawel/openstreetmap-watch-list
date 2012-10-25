@@ -20,7 +20,7 @@
   }
 
   function hideFeaturePopup(e) {
-    //$('li[class="changeset_item"]').attr('class', 'changeset_item_selected');
+    $('li[class="changeset_item_selected"]').attr('class', 'changeset_item');
   }
 
   function zoomEvent() {
@@ -144,21 +144,7 @@
             });
             map.addLayer(layerVector);
 
-            layerVector.events.on({
-              'loadend': function(obj) {
-                if (map.getZoom() > MIN_ZOOM_LEVEL) {
-                  $("#visstatus").html($("#changeset_list_template").render(obj.object));
-                  var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(8, false);
-                  $("#rss_link").attr('href', '/map.rss?bbox=' + bbox);
-                }
-              }
-            }
-
-            );
-      map.events.register("zoomend", this, zoomEvent);
-      map.events.register("moveend", map, updateLocation);
-
-      var highlightControl = new OpenLayers.Control.SelectFeature(layerVector,
+            var highlightControl = new OpenLayers.Control.SelectFeature(layerVector,
       { "hover": true,
         "highlightOnly": true,
         "renderIntent": "highlight",
@@ -169,6 +155,53 @@
 
       map.addControl(highlightControl);
       highlightControl.activate();
+
+            layerVector.events.on({
+              'loadend': function(obj) {
+                if (map.getZoom() > MIN_ZOOM_LEVEL) {
+                  $("#visstatus").html($("#changeset_list_template").render(obj.object));
+
+                  var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(8, false);
+                  $("#rss_link").attr('href', '/map.rss?bbox=' + bbox);
+
+                  $(".changeset_item").on('hover', function(e) {
+                    if (e.type == 'mouseenter') {
+                      // Highlight row in the list.
+                      $(e.target).attr('class', 'changeset_item_selected');
+                    } else if (e.type == 'mouseleave') {
+                      $('li[class="changeset_item_selected"]').attr('class', 'changeset_item');
+                    }
+
+                    // Highlight geometry.
+                    var changeset_id = parseInt($(e.target).attr('id').replace('changeset_', ''));
+                    var features = layerVector.getFeaturesByAttribute('changeset_id', changeset_id);
+                    if (features.length > 0) {
+                      if (e.type == 'mouseenter') {
+                        highlightControl.select(features[0]);
+                      } else if (e.type == 'mouseleave') {
+                        highlightControl.unselect(features[0]);
+                      }
+                    }
+                  });
+
+                  $(".changeset_item").on('click', function(e) {
+                    // Zoom to geometry.
+                    var changeset_id = parseInt($(e.target).attr('id').replace('changeset_', ''));
+                    var features = layerVector.getFeaturesByAttribute('changeset_id', changeset_id);
+                    if (features.length > 0) {
+                      var dataExtent = features[0].geometry.getBounds();
+                      map.zoomToExtent(dataExtent, closest=true);
+                    }
+                  });
+                }
+              }
+            }
+
+            );
+      map.events.register("zoomend", this, zoomEvent);
+      map.events.register("moveend", map, updateLocation);
+
+
 
       //var selectControl = new OpenLayers.Control.SelectFeature(layerVector, {"onSelect": myFunc});
       //map.addControl(selectControl);
@@ -207,7 +240,7 @@ Visible changesets <i>(limit = 100)</i> <a target="_blank" href="" id="rss_link"
 <br /><br />
 <ul style="list-style-type: none; padding: 0; margin: 0; font-size: smaller">
 {{for features}}
-  <li class="changeset_item" id="changeset_{{:attributes.changeset_id}}">
+  <li class="changeset_item" id="changeset_{{:attributes.changeset_id}}" style="cursor: hand; cursor: pointer;">
     {{:attributes.created_at}} <a target="_blank"
     href="http://www.openstreetmap.org/browse/changeset/{{:attributes.changeset_id}}">{{:attributes.changeset_id}}</a>
     by {{:attributes.user_name}}
