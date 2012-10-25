@@ -1,8 +1,9 @@
 <script type="text/javascript">
-        var lon = 5;
-        var lat = 40;
-        var zoom = 5;
-        var map, layerBasic, layerVector, browseBoxControl;
+  var MIN_ZOOM_LEVEL = 12;
+  var lon = 5;
+  var lat = 40;
+  var zoom = 5;
+  var map, layerBasic, layerVector, browseBoxControl;
 
   function setupView(){
       map.zoomToExtent(layerVector.getDataExtent(), false);
@@ -13,7 +14,7 @@
   }
 
   function zoomEvent() {
-    var vis = map.getZoom() > 12;
+    var vis = map.getZoom() > MIN_ZOOM_LEVEL;
     layerVector.setVisibility(vis);
     //document.getElementById("visstatus").style.visibility = vis ? "hidden" : "visible";
     if (!vis) {
@@ -126,8 +127,8 @@
                  projection: new OpenLayers.Projection("EPSG:4326"),
                  displayProjection: new OpenLayers.Projection("EPSG:900913"),
                  styleMap: new OpenLayers.StyleMap({
-                   "default": {'strokeWidth': 4, 'strokeColor': "green"},
-                   "highlight": {'strokeWidth': 4, 'strokeColor': "blue"}
+                   "default": {'strokeWidth': 8, 'strokeColor': "yellow", 'strokeOpacity': 0.66},
+                   "highlight": {'strokeWidth': 8, 'strokeColor': "blue"}
                  }),
                  visibility: false
             });
@@ -135,11 +136,13 @@
 
             layerVector.events.on({
               'loadend': function(obj) {
-                $("#visstatus").html($("#changeset_list_template").render(obj.object));
-                var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(8, false);
-                $("#rss_link").attr('href', '/map.rss?bbox=' + bbox);
-                    }
+                if (map.getZoom() > MIN_ZOOM_LEVEL) {
+                  $("#visstatus").html($("#changeset_list_template").render(obj.object));
+                  var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(8, false);
+                  $("#rss_link").attr('href', '/map.rss?bbox=' + bbox);
+                }
               }
+            }
 
             );
       map.events.register("zoomend", this, zoomEvent);
