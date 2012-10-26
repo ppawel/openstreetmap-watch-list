@@ -7,4 +7,4 @@ if [ "$YEAR" = "" ]; then
 	exit 1
 fi
 
-wget -r -nH --cut-dirs=2 -A.gz http://planet.openstreetmap.org/cc-by-sa/history/$1
+wget --level=1 -r -nH --cut-dirs=2 -A.gz http://planet.openstreetmap.org/cc-by-sa/history/$1
