@@ -93,7 +93,8 @@ function init(){
           new OpenLayers.Control.PanZoomBar(),
           new OpenLayers.Control.Attribution(),
           new OpenLayers.Control.Permalink(),
-    new OpenLayers.Control.LayerSwitcher()],
+          new OpenLayers.Control.MousePosition(),
+          new OpenLayers.Control.LayerSwitcher()],
       maxExtent: new OpenLayers.Bounds(-20037508.34,-20037508.34,20037508.34,20037508.34),
       maxResolution: 156543.0399,
       numZoomLevels: 19,
@@ -105,7 +106,7 @@ function init(){
   layerBasic = new OpenLayers.Layer.OSM();
   map.addLayer(layerBasic);
 
-  var strategy = new OpenLayers.Strategy.BBOX({resFactor: 1});
+  var strategy = new OpenLayers.Strategy.BBOX({resFactor: 1, ratio: 1});
 
   layerVector = new OpenLayers.Layer.Vector("Polygon (Forever)", {
        strategies: [strategy],
@@ -140,7 +141,7 @@ function init(){
       if (map.getZoom() > MIN_ZOOM_LEVEL) {
         $("#visstatus").html($("#changeset_list_template").render(obj.object));
 
-        var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(8, false);
+        var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(10, false);
         $("#rss_link").attr('href', '/map.rss?bbox=' + bbox);
 
         $(".changeset_item").on('hover', function(e) {
