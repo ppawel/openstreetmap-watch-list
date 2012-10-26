@@ -28,28 +28,6 @@ function zoomEvent() {
   }
 }
 
-// more stolen from osm.org - functions for drag-selecting an area
-function startDrag() {
-  $("feed_select_box").innerHTML="Drag a box to define the area for the feed.";
-  browseBoxControl.activate();
-  return false;
-}
-
-function endDrag(bbox) {
-  var bounds = bbox.getBounds();
-  var projected = bounds.clone().transform(map.getProjectionObject(), map.displayProjection);
-
-  browseBoxControl.deactivate();
-  tl = latLonToTile(projected.left, projected.top) * 4;
-  br = latLonToTile(projected.right, projected.bottom) * 4 + 3;
-  rss_link = "http://matt.dev.openstreetmap.org/owl_viewer/feed/"+tl+"-"+br+".rss";
-  $("feed_url_box").innerHTML = rss_link;
-  $("feed_url_box").href = rss_link;
-
-  $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
-        $("feed_url_box").style.display = "inline";
-}
-
 // liberally stolen from osm.org
 function updateLocation() {
   var lonlat = map.getCenter().transform(map.getProjectionObject(), map.displayProjection);
@@ -182,29 +160,11 @@ function init(){
   map.events.register("zoomend", this, zoomEvent);
   map.events.register("moveend", map, updateLocation);
 
-  //var selectControl = new OpenLayers.Control.SelectFeature(layerVector, {"onSelect": myFunc});
-  //map.addControl(selectControl);
-  //            selectControl.activate();
-
   if (!map.getCenter()) setCentreFromCookie();
-
-  var vectors = new OpenLayers.Layer.Vector();
-  browseBoxControl = new OpenLayers.Control.DrawFeature(vectors, OpenLayers.Handler.RegularPolygon, {
-    handlerOptions: {
-    sides: 4,
-    snapAngle: 90,
-    irregular: true,
-    persist: true,
-    callbacks: { done: endDrag }
-        }
-  });
-  map.addControl(browseBoxControl);
-  $("feed_select_box").innerHTML = "Click here to generate an RSS feed.";
-  $("feed_select_box").onclick = startDrag;
 }
 </script>
 
-    <div id="map" class="smallmap"></div>
+<div id="map" class="smallmap"></div>
 
 <div id="visstatus" style="background:white; border:1px solid black; position:absolute; margin:0px; padding:10px; left:0px; bottom:0px; max-height: 500px; z-index:1000; overflow: scroll;">
 <p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>
