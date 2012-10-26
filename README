@@ -17,7 +17,7 @@ osmosis-plugin/
 
   Plugin source code is available:
 
-  https://github.com/ppawel/osmosis/tree/changedb-plugin
+  https://github.com/ppawel/osmosis/tree/owldb-plugin
 
 owl_viewer/
   A rails project which hosts the owl "viewer" which allows

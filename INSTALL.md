@@ -14,7 +14,7 @@ Initial data load
 Installing OWL Osmosis plugin
 =============================
 
-OWL plugin for Osmosis is needed for the `--write-changed-change` task which populates OWL tables with data. To install
+OWL plugin for Osmosis is needed for the `--write-owldb-change` task which populates OWL tables with data. To install
 the plugin just drop the file from `osmosis-plugin` directory to the `lib` directory in your Osmosis installation (e.g.
 `/usr/share/osmosis`).
 
@@ -27,7 +27,7 @@ First, [initialize replication directory](http://wiki.openstreetmap.org/wiki/Osm
 
 Then, setup (e.g. in crontab) the replication pipeline:
 
-    osmosis --read-replication-interval workingDirectory=<dir> --tee-change  --write-changedb-change authFile=<authFile> --write-pgsql-change authFile=<authFile>
+    osmosis --read-replication-interval workingDirectory=<dir> --tee-change  --write-owldb-change authFile=<authFile> --write-pgsql-change authFile=<authFile>
 
 This commands does couple of things:
 * Downloads OsmChange file for a specific replication interval (minute/hour/day) - according to the configuration in `configuration.txt`.
