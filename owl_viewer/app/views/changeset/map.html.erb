@@ -11,7 +11,7 @@ function setupView(){
 
 function showFeaturePopup(e) {
   $('li[class="changeset_item_selected"]').attr('class', 'changeset_item');
-  //$('li[id="changeset_' + e.feature.data.changeset_id +'"]').attr('class', 'changeset_item_selected');
+  $('li[id="changeset_' + e.feature.data.changeset_id +'"]').attr('class', 'changeset_item_selected');
   //    $('#visstatus').scrollTo('li[id="changeset_' + e.feature.data.changeset_id +'"]');
 }
 
@@ -62,6 +62,16 @@ function setCentreFromCookie() {
     zoom = cb[2];
     }
   map.setCenter(centre.transform(map.displayProjection, map.getProjectionObject()), zoom);
+}
+
+function getChangesetIdFromElement(el) {
+  var el_id = $(el).attr('id');
+
+  if(!el_id) {
+    el_id = $(el.parentElement).attr('id');
+  }
+
+  return parseInt(el_id.replace('changeset_', ''));
 }
 
 function init(){
@@ -131,7 +141,7 @@ function init(){
           }
 
           // Highlight geometry.
-          var changeset_id = parseInt($(e.target).attr('id').replace('changeset_', ''));
+          var changeset_id = getChangesetIdFromElement(e.target);
           var features = layerVector.getFeaturesByAttribute('changeset_id', changeset_id);
           if (features.length > 0) {
             if (e.type == 'mouseenter') {
@@ -144,7 +154,7 @@ function init(){
 
         $(".changeset_item").on('click', function(e) {
           // Zoom to geometry.
-          var changeset_id = parseInt($(e.target).attr('id').replace('changeset_', ''));
+          var changeset_id = getChangesetIdFromElement(e.target);
           var features = layerVector.getFeaturesByAttribute('changeset_id', changeset_id);
           if (features.length > 0) {
             var dataExtent = features[0].geometry.getBounds();
