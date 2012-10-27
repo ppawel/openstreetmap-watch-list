@@ -1,0 +1,21 @@
+{ "type": "FeatureCollection",
+  "features": [
+<%= @changesets.map do |changeset| %>
+{ "type": "Feature",
+  "geometry": <%= changeset.geojson.html_safe %>,
+  "properties": {
+    "changeset_id": <%= changeset.id %>,
+    "created_at": "<%= changeset.created_at %>",
+    "user_id": "<%= changeset.user.id %>",
+    "user_name": "<%= changeset.user.name %>"
+  }
+  }
+<% end.join(",") %>
+  ],
+  "crs": {
+    "type": "OGC",
+    "properties": {
+      "urn": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  }
+}
