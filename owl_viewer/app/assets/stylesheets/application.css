@@ -12,10 +12,47 @@
  *= require_tree .
 */
 
+body {
+  font-family: "HelveticaNeue", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+  font-weight: normal;
+  font-size: 14px;
+}
+
+#wrap {
+   width: 100%;
+}
+
+#left_col_container {
+  width: 20%;
+  height: 100%;
+  float: left;
+}
+
+#left_col {
+  padding: 5px;
+}
+
+#right_col {
+  float: right;
+  width: 80%;
+}
+
+#changeset_list {
+  max-height: 500px;
+  overflow: auto;
+  clear: both;
+}
+
 .changeset_item {
-  background-color: white;
+  background: #eeeeee;
+  margin: 3px;
+  line-height: 20px;
+  padding: 5px;
 }
 
 .changeset_item_selected {
-  background-color: lightgray;
+  background-color: lightblue;
+  margin: 3px;
+  line-height: 20px;
+  padding: 5px;
 }

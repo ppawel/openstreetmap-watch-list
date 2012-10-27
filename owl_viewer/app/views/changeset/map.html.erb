@@ -24,7 +24,7 @@ function zoomEvent() {
   layerVector.setVisibility(vis);
   //document.getElementById("visstatus").style.visibility = vis ? "hidden" : "visible";
   if (!vis) {
-    $("#visstatus").html('<p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>');
+    $("#changeset_list").html('<p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>');
   }
 }
 
@@ -127,7 +127,7 @@ function init(){
   layerVector.events.on({
     'loadend': function(obj) {
       if (map.getZoom() > MIN_ZOOM_LEVEL) {
-        $("#visstatus").html($("#changeset_list_template").render(obj.object));
+        $("#changeset_list").html($("#changeset_list_template").render(obj.object));
 
         var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(10, false);
         $("#rss_link").attr('href', '/map.rss?bbox=' + bbox);
@@ -174,25 +174,44 @@ function init(){
 }
 </script>
 
-<div id="map" class="smallmap"></div>
-
-<div id="visstatus" style="background:white; border:1px solid black; position:absolute; margin:0px; padding:10px; left:0px; bottom:0px; max-height: 500px; z-index:1000; overflow: scroll;">
-<p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>
+<div id="wrap">
+    <div id="left_col_container">
+    <div id="left_col">
+        <%= image_tag 'logo.png', :width => '128px', :style => 'float:left; padding: 5px' %>
+        <br>
+        <a target="_blank" style="font-weight: bold" href="http://wiki.openstreetmap.org/wiki/OWL_(OpenStreetMap_Watch_List)">OpenStreetMap Watch List</a>
+        <br>
+        <span style="font-size: smaller; text-align:center;">(<a target="_blank"
+        href="https://github.com/ppawel/openstreetmap-watch-list/tree/resurrection">resurrection</a> branch)
+        </span>
+        <br><br>
+        <b>BETA</b>
+        <div id="changeset_list">
+          <p align="center" style="color:red; text-style:sans-serif;">Data not visible at this zoom level, please zoom in to see stuff.</p>
+        </div>
+    </div>
+    </div>
+    <div id="right_col">
+        <div id="map" class="smallmap"></div>
+    </div>
 </div>
+
 <!--<div id="select" style="background:white; position:absolute; margin:0px; padding:10px; left:0px; bottom:0px; z-index:999;">
 <a id="feed_select_box" href="#">Click here to generate an RSS feed.</a><br/>
 <a id="feed_url_box" href="#"></a>
 </div>-->
 
 <script id="changeset_list_template" type="text/x-jsrender">
-Visible changesets <i>(limit = 100)</i> <a target="_blank" href="" id="rss_link"><%= image_tag 'feed-icon-14x14.png' %></a>
-<br /><br />
-<ul style="list-style-type: none; padding: 0; margin: 0; font-size: smaller">
+<h3>Visible changesets <i>(limit = 100)</i> <a target="_blank" href="" id="rss_link"><%= image_tag 'feed-icon-14x14.png' %></a></h3>
+<ul style="list-style-type: none; padding: 0; margin: 0">
 {{for features}}
-  <li class="changeset_item" id="changeset_{{:attributes.changeset_id}}" style="cursor: hand; cursor: pointer;">
-    {{:attributes.created_at}} <a target="_blank"
+  <li class="changeset_item" id="changeset_{{:attributes.changeset_id}}">
+    <a target="_blank"
     href="http://www.openstreetmap.org/browse/changeset/{{:attributes.changeset_id}}">{{:attributes.changeset_id}}</a>
-    by {{:attributes.user_name}}
+    by <a target="_blank"
+    href="http://www.openstreetmap.org/browse/user/{{:attributes.user_name}}">{{:attributes.user_name}}</a>
+    <br>
+    <span style="font-size: 12px; color: gray">{{:attributes.created_at}}</span>
   </li>
 {{/for}}
 </ul>
