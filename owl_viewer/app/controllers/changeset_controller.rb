@@ -17,8 +17,8 @@ class ChangesetController < ApplicationController
 private
   def find_changesets_by_bbox(bbox)
     Changeset.find(:all,
-      :select => "changesets.*, users.id AS user_id, users.name, ST_AsGeoJSON(ST_Intersection(ST_SetSRID(Box2D(ST_GeomFromText('LINESTRING(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})')), 4326), geom)) AS geojson",
-      :conditions => "ST_Intersects(ST_SetSRID(Box2D(ST_GeomFromText('LINESTRING(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})')), 4326), geom)",
+      :select => "changesets.*, users.id AS user_id, users.name, ST_AsGeoJSON(ST_Intersection(ST_SetSRID('BOX(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})'::box2d, 4326), geom)) AS geojson",
+      :conditions => "ST_Intersects(ST_SetSRID('BOX(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})'::box2d, 4326), geom)",
       :joins => :user,
       :limit => 100,
       :order => 'created_at DESC')
