@@ -12,7 +12,7 @@ Requires
 - Ruby (Ruby 1.9.x recommended)
 - Rails
 
-1) Configure database connection settings in `owl_viewer/config/database.yml`
+1) Copy `example.database.yml` in `owl_viewer/config/` to `database.yml` and configure.
 
 2) Install application
 
