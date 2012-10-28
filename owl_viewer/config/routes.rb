@@ -6,7 +6,7 @@ OwlViewer::Application.routes.draw do
   #   match 'products/:id' => 'catalog#view'
   # Keep in mind you can assign values other than :controller and :action
   match 'map'                 => 'changeset#map'
-  match 'map.:format'         => 'changeset#map'
+  match 'changesets.:format'  => 'changeset#changesets'
   match 'dailymap'            => 'changeset#dailymap'
   match 'dailymap.:format'    => 'changeset#dailymap'
   match 'weeklymap'           => 'changeset#weeklymap'

@@ -1,6 +1,7 @@
 { "type": "FeatureCollection",
   "features": [
-<%= @changesets.map do |changeset| %>
+<% if @changesets %>
+<% @changesets.each_with_index do |changeset, index| %>
 { "type": "Feature",
   "geometry": <%= changeset.geojson.html_safe %>,
   "properties": {
@@ -9,8 +10,9 @@
     "user_id": "<%= changeset.user.id %>",
     "user_name": "<%= changeset.user.name %>"
   }
-  }
-<% end.join(",") %>
+}<% if index < @changesets.size - 1 %>,<% end %>
+<% end %>
+<% end %>
   ],
   "crs": {
     "type": "OGC",
