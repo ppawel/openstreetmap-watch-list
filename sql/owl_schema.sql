@@ -70,7 +70,10 @@ $$ LANGUAGE plpgsql;
 
 DROP FUNCTION IF EXISTS OWL_UpdateChangesetChangeCount(bigint);
 CREATE FUNCTION OWL_UpdateChangesetChangeCount(bigint) RETURNS void AS $$
-UPDATE changesets cs SET change_count = (SELECT COUNT(*) FROM changes c WHERE c.changeset_id = cs.id);
+  UPDATE
+    changesets cs
+  SET num_changes = (SELECT COUNT(*) FROM changes c WHERE c.changeset_id = cs.id)
+  WHERE cs.id = $1;
 $$ LANGUAGE SQL;
 
 DROP FUNCTION IF EXISTS OWL_UpdateAllChangesetsGeom();
