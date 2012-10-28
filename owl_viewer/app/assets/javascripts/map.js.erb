@@ -133,7 +133,7 @@ function init(){
         $("#changeset_list").html($("#changeset_list_template").render(obj.object));
 
         var bbox = map.getExtent().transform('EPSG:900913', 'EPSG:4326').toBBOX(10, false);
-        $("#rss_link").attr('href', 'map.rss?bbox=' + bbox);
+        $("#rss_link").attr('href', 'changesets.rss?bbox=' + bbox);
 
         $(".changeset_item").on('hover', function(e) {
           if (e.type == 'mouseenter') {
