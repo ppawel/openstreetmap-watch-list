@@ -22,8 +22,7 @@ CREATE TABLE changesets (
   closed_at timestamp without time zone NOT NULL,
   num_changes integer,
   tags hstore,
-  geom geography,
-  change_count int
+  geom geography
 );
 
 -- Create a table for changes.
