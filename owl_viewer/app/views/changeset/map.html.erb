@@ -99,7 +99,7 @@ function init(){
   layerVector = new OpenLayers.Layer.Vector("Polygon (Forever)", {
        strategies: [strategy],
        protocol: new OpenLayers.Protocol.HTTP({
-           url: "map.js",
+           url: "map.geojson",
            format: new OpenLayers.Format.GeoJSON()
        }),
        projection: new OpenLayers.Projection("EPSG:4326"),
