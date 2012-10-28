@@ -11,9 +11,6 @@ CREATE TYPE element_type AS ENUM ('N', 'W', 'R');
 DROP TYPE IF EXISTS action;
 CREATE TYPE action AS ENUM ('CREATE', 'MODIFY', 'DELETE');
 
-DROP TYPE IF EXISTS change_type;
-CREATE TYPE change_type AS ENUM ('CREATE', 'DELETE', 'CHANGE_GEOM', 'CHANGE_TAGS');
-
 -- Create a table for changesets.
 CREATE TABLE changesets (
   id bigserial PRIMARY KEY,
@@ -28,20 +25,19 @@ CREATE TABLE changesets (
 -- Create a table for changes.
 CREATE TABLE changes (
   id bigserial PRIMARY KEY,
-  user_id bigint NOT NULL,
+  el_type element_type NOT NULL,
+  el_id bigint NOT NULL,
   version int NOT NULL,
   changeset_id bigint NOT NULL REFERENCES changesets,
   tstamp timestamp without time zone NOT NULL,
   action action NOT NULL,
-  change_type change_type NOT NULL,
-  el_type element_type NOT NULL,
-  el_id bigint NOT NULL,
-  tags hstore, -- If action is CREATE or DELETE, contains new/deleted element tags;
-               -- If action is MODIFY, contains tags of element existing in the database (if it exists - otherwise NULL).
-  new_tags hstore, -- If action is MODIFY, contains new tags of the element; otherwise NULL.
-  geom geography, -- If action is CREATE or DELETE, contains new/deleted element geometry;
-                  -- If action is MODIFY, contains geometry of element existing in the database (if it exists - otherwise NULL).
-  new_geom geography -- If action is MODIFY, contains new geometry of the element; otherwise NULL.
+  changed_tags boolean NOT NULL,
+  changed_geom boolean NOT NULL,
+  changed_members boolean NOT NULL, -- Always false if el_type = NODE.
+  current_tags hstore, -- If action is DELETE or MODIFY, contains tags of element existing in the database (if it exists); otherwise NULL.
+  new_tags hstore, -- If action is CREATE or MODIFY, contains new tags of the element; otherwise NULL.
+  current_geom geography, -- If action is DELETE or MODIFY, contains tags of element existing in the database (if it exists); otherwise NULL.
+  new_geom geography -- If action is CREATE or MODIFY, contains new geometry of the element; otherwise NULL.
 );
 
 CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
@@ -58,9 +54,9 @@ changeset_geom := (
   SELECT ST_Collect(DISTINCT g.geom)::geography
   FROM
   (
-    SELECT geom::geometry FROM changes WHERE changeset_id = $1
+    SELECT current_geom::geometry AS geom FROM changes WHERE changeset_id = $1
     UNION
-    SELECT new_geom::geometry FROM changes WHERE changeset_id = $1
+    SELECT new_geom::geometry AS geom FROM changes WHERE changeset_id = $1
   ) g);
 
 UPDATE changesets SET geom = changeset_geom WHERE id = $1;
