@@ -1,5 +1,0 @@
-SetHandler python-program
-PythonPath "['/home/matt/public_html/dupe_nodes/tiles/'] + sys.path"
-PythonHandler renderer::handle
-#ExpiresActive on
-#ExpiresDefault "access plus 1 hours"
