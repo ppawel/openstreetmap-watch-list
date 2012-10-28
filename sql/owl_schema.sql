@@ -1,5 +1,5 @@
 -- Database creation script for the OWL schema.
--- This script only contains OWL-specific part, to get the full schema run pgsnapshot_schema_0.6.sql first!
+-- This script only contains the OWL-specific part, to get the full schema, see INSTALL.md!
 
 -- Drop all tables if they exist.
 DROP TABLE IF EXISTS changes;
@@ -22,7 +22,7 @@ CREATE TABLE changesets (
   closed_at timestamp without time zone NOT NULL,
   num_changes integer,
   tags hstore,
-  geom geography
+  geom geography -- Aggregated geometry for this changeset's changes. Suitable for ST_Intersection/ST_Intersects calls.
 );
 
 -- Create a table for changes.
@@ -36,10 +36,12 @@ CREATE TABLE changes (
   change_type change_type NOT NULL,
   el_type element_type NOT NULL,
   el_id bigint NOT NULL,
-  tags hstore,
-  new_tags hstore,
-  geom geography,
-  new_geom geography
+  tags hstore, -- If action is CREATE or DELETE, contains new/deleted element tags;
+               -- If action is MODIFY, contains tags of element existing in the database (if it exists - otherwise NULL).
+  new_tags hstore, -- If action is MODIFY, contains new tags of the element; otherwise NULL.
+  geom geography, -- If action is CREATE or DELETE, contains new/deleted element geometry;
+                  -- If action is MODIFY, contains geometry of element existing in the database (if it exists - otherwise NULL).
+  new_geom geography -- If action is MODIFY, contains new geometry of the element; otherwise NULL.
 );
 
 CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
