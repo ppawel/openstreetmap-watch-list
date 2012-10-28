@@ -124,6 +124,10 @@ function init(){
   highlightControl.activate();
 
   layerVector.events.on({
+    'loadstart': function(obj) {
+      $("#changeset_list").html('<%= image_tag "ajax-loader.gif" %>');
+    },
+
     'loadend': function(obj) {
       if (map.getZoom() > MIN_ZOOM_LEVEL) {
         $("#changeset_list").html($("#changeset_list_template").render(obj.object));
