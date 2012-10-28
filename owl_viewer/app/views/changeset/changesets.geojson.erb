@@ -8,7 +8,8 @@
     "changeset_id": <%= changeset.id %>,
     "created_at": "<%= changeset.created_at %>",
     "user_id": "<%= changeset.user.id %>",
-    "user_name": "<%= changeset.user.name %>"
+    "user_name": "<%= changeset.user.name %>",
+    "num_changes": "<%= changeset.num_changes %>"
   }
 }<% if index < @changesets.size - 1 %>,<% end %>
 <% end %>
