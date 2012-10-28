@@ -17,7 +17,7 @@ CREATE TYPE change_type AS ENUM ('CREATE', 'DELETE', 'CHANGE_GEOM', 'CHANGE_TAGS
 -- Create a table for changesets.
 CREATE TABLE changesets (
   id bigserial PRIMARY KEY,
-  user_id bigint NOT NULL REFERENCES users,
+  user_id bigint NOT NULL,
   created_at timestamp without time zone NOT NULL,
   closed_at timestamp without time zone NOT NULL,
   num_changes integer NOT NULL DEFAULT 0,
@@ -29,7 +29,7 @@ CREATE TABLE changesets (
 -- Create a table for changes.
 CREATE TABLE changes (
   id bigserial PRIMARY KEY,
-  user_id bigint NOT NULL REFERENCES users,
+  user_id bigint NOT NULL,
   version int NOT NULL,
   changeset_id bigint NOT NULL REFERENCES changesets,
   tstamp timestamp without time zone NOT NULL,
@@ -79,7 +79,7 @@ DECLARE
 BEGIN
 FOR changeset_id IN SELECT id FROM changesets LOOP
   RAISE NOTICE '% Changeset %', clock_timestamp(), changeset_id;
-  PERFORM Osmosis_ChangeDb_UpdateChangesetGeom(changeset_id);
+  PERFORM OWL_UpdateChangesetGeom(changeset_id);
 END LOOP;
 END;
 $$ LANGUAGE plpgsql;
