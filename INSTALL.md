@@ -7,23 +7,23 @@ refer to http://wiki.openstreetmap.org/wiki/Osmosis/PostGIS_Setup.
 1) Set up PostGIS database
 
     # Assuming a database owl here, can be any other database name.
-    postgres createdb owl
-    postgres createlang plpgsql owl
-    postgres psql -f /path/to/pgsql/share/contrib/postgis-2.0/postgis.sql owl
-    postgres psql -f /path/to/pgsql/share/contrib/postgis-2.0/spatial_ref_sys.sql owl
+    createdb owl
+    createlang plpgsql owl
+    psql -f /path/to/pgsql/share/contrib/postgis-2.0/postgis.sql owl
+    psql -f /path/to/pgsql/share/contrib/postgis-2.0/spatial_ref_sys.sql owl
 
 2) Create hstore extension
 
-    postgres psql -c "CREATE EXTENSION hstore;" owl
+    psql -c "CREATE EXTENSION hstore;" owl
 
 3) Set up pg snapshot schema
 
-    postgres psql -f sql/pgsnapshot_schema_0.6.sql
-    postgres psql -f sql/pgsnapshot_schema_0.6_linestring.sql
+    psql -f sql/pgsnapshot_schema_0.6.sql owl
+    psql -f sql/pgsnapshot_schema_0.6_linestring.sql owl
 
 4) Install OWL schema
 
-    postgres psql -f sql/owl_schema.sql
+    psql -f sql/owl_schema.sql owl
 
 Install Osmosis
 ===============
@@ -36,6 +36,13 @@ For now we're using a modified version of Osmosis, this should just be an Osmosi
 
 Initial data import
 ===================
+
+*For developemnt*
+
+For development it's usually sufficient to import a single osc diff file. For instance:
+
+    curl -o 757.osc.gz http://planet.osm.org/replication/minute/000/069/757.osc.gz
+    osmosis --read-xml-change 757.osc --lpc --write-owldb-change database=owl user=postgres
 
 *From Planet file*
 
