@@ -305,6 +305,10 @@ L.TileLayer.GeoJSON = L.TileLayer.extend({
             tileBounds = new L.Bounds(nwTilePoint, seTilePoint);
 
         this._addTilesFromCenterOut(tileBounds);
+
+        if (this.options.unloadInvisibleTiles || this.options.reuseTiles) {
+          this._removeOtherTiles(tileBounds);
+        }
     },
 
     _addTilesFromCenterOut: function (bounds) {
@@ -334,7 +338,7 @@ L.TileLayer.GeoJSON = L.TileLayer.extend({
 
         // if its the first batch of tiles to load
         if (!this._tilesToLoad) {
-            this.fire('loading');
+          this.fire('loading');
         }
 
         this._tilesToLoad += tilesToLoad;
@@ -498,7 +502,13 @@ L.TileLayer.GeoJSON = L.TileLayer.extend({
                     if(feature.id in tile._layer._geoJSONFeatures) {
                         continue;
                     }
-                    tile.addData(feature);
+
+                    try{
+                      // TODO there is a problem with this for some requests
+                      tile.addData(feature);
+                    } catch(e){
+                    }
+
                     tile._layer._geoJSONFeatures[feature.id] = feature;
                 }
 

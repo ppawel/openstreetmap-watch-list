@@ -82,7 +82,8 @@ function init(){
 
   var geojsonURL = 'changesets/{z}/{x}/{y}.geojson';
   var geojsonLayer = new L.TileLayer.GeoJSON(geojsonURL, {
-    tileSize: 256
+    tileSize: 256,
+    unloadInvisibleTiles: true
     });
 
   geojsonLayer.setGeoJSONOptions({
@@ -102,6 +103,24 @@ function init(){
           "fillOpacity": 0.2
       },
       hoverOffset: new L.Point(30,-16)
+  });
+
+  geojsonLayer.on('load', function(e) {
+    var features = new Array();
+
+    for (var id in e.target._geoJSONFeatures) {
+      features.push(e.target._geoJSONFeatures[id]);
+    }
+
+    $("#changeset_list").html($("#changeset_list_template").render({"features": features}));
+
+    //$("#changeset_list").html('asd');
+    //alert(geojsonLayer._tilesToLoad);
+    //alert(e);
+  });
+
+  geojsonLayer.on('loading', function(e) {
+    $("#changeset_list").html('<%= image_tag "ajax-loader.gif" %>');
   });
 
   map.addLayer(geojsonLayer);
