@@ -106,17 +106,19 @@ function init(){
   });
 
   geojsonLayer.on('load', function(e) {
+    var changesetIds = new Array();
     var features = new Array();
 
     for (var id in e.target._geoJSONFeatures) {
-      features.push(e.target._geoJSONFeatures[id]);
+      var changeset_id = e.target._geoJSONFeatures[id].properties['changeset_id'];
+
+      if (changesetIds.indexOf(changeset_id) == -1) {
+        features.push(e.target._geoJSONFeatures[id]);
+        changesetIds.push(changeset_id);
+      }
     }
 
     $("#changeset_list").html($("#changeset_list_template").render({"features": features}));
-
-    //$("#changeset_list").html('asd');
-    //alert(geojsonLayer._tilesToLoad);
-    //alert(e);
   });
 
   geojsonLayer.on('loading', function(e) {
