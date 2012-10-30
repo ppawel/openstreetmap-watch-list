@@ -6,8 +6,9 @@ class ChangesetController < ApplicationController
   end
 
   def tile
-    bbox = xyz_to_bbox(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
-    @changesets = find_changesets_by_bbox(bbox, 20)
+    #bbox = xyz_to_bbox(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
+    #@changesets = find_changesets_by_bbox(bbox, 20)
+    @changesets = find_changesets_by_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i, 20)
     render :template => "changeset/changesets.#{params[:format]}", :layout => false
   end
 
@@ -23,6 +24,18 @@ private
       :joins => :user,
       :limit => limit,
       :order => 'created_at DESC')
+  end
+
+  def find_changesets_by_tile(x, y, zoom, limit)
+    Changeset.find_by_sql("
+      SELECT cs.*, ST_AsGeoJSON(ST_Union(cst.geom::geometry)) AS geojson
+      FROM changeset_tiles cst
+      INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
+      WHERE zoom = #{zoom} AND tile_x = #{x} AND tile_y = #{y}
+      GROUP BY cs.id
+      ORDER BY cs.created_at
+      LIMIT #{limit}
+      ")
   end
 
   def xyz_to_bbox(x, y, z)
