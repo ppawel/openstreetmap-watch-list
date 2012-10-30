@@ -14,4 +14,6 @@
 //= require jquery_ujs
 //= require jquery.scrollTo-min
 //= require jsrender
+//= require leaflet-src
+//= require TileLayer.GeoJSON
 //= require_tree .

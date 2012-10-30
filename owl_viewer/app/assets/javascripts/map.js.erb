@@ -74,6 +74,39 @@ function getChangesetIdFromElement(el) {
 }
 
 function init(){
+  map = L.map('map').setView([51.505, -0.09], 13);
+
+  L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18
+  }).addTo(map);
+
+  var geojsonURL = 'changesets/{z}/{x}/{y}.geojson';
+  var geojsonLayer = new L.TileLayer.GeoJSON(geojsonURL, {
+    tileSize: 256
+    });
+
+  geojsonLayer.setGeoJSONOptions({
+      pointToLayer: function(featureData, latlng) {},
+      /* style of GeoJSON feature */
+      style: {
+          "color": "yellow",
+          "fillColor": "yellow",
+          "weight": 8,
+          "opacity": 0.75,
+          "fillOpacity": 0.75
+      },
+      /* style of GeoJSON feature when hovered */
+      hoverStyle: {
+          "color": "blue",
+          "opacity": 0.2,
+          "fillOpacity": 0.2
+      },
+      hoverOffset: new L.Point(30,-16)
+  });
+
+  map.addLayer(geojsonLayer);
+
+/*
   map = new OpenLayers.Map ("map", {
       controls:[
           new OpenLayers.Control.Navigation(),
@@ -93,7 +126,7 @@ function init(){
   layerBasic = new OpenLayers.Layer.OSM();
   map.addLayer(layerBasic);
 
-  var strategy = new OpenLayers.Strategy.BBOX({resFactor: 1, ratio: 1});
+  var strategy = new OpenLayers.Strategy.Tiles({resFactor: 1, ratio: 1});
 
   layerVector = new OpenLayers.Layer.Vector("Polygon (Forever)", {
        strategies: [strategy],
@@ -173,5 +206,5 @@ function init(){
   map.events.register("zoomend", this, zoomEvent);
   map.events.register("moveend", map, updateLocation);
 
-  if (!map.getCenter()) setCentreFromCookie();
+  if (!map.getCenter()) setCentreFromCookie();*/
 }

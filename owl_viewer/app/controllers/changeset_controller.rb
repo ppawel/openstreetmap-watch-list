@@ -1,13 +1,13 @@
 class ChangesetController < ApplicationController
   def changesets
     bbox = params[:bbox].split(/,/).map { |x| x.to_f }
-    @changesets = find_changesets_by_bbox(bbox)
+    @changesets = find_changesets_by_bbox(bbox, 100)
     render :template => "changeset/changesets.#{params[:format]}", :layout => false
   end
 
   def tile
     bbox = xyz_to_bbox(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
-    @changesets = find_changesets_by_bbox(bbox)
+    @changesets = find_changesets_by_bbox(bbox, 20)
     render :template => "changeset/changesets.#{params[:format]}", :layout => false
   end
 
@@ -16,12 +16,12 @@ class ChangesetController < ApplicationController
   end
 
 private
-  def find_changesets_by_bbox(bbox)
+  def find_changesets_by_bbox(bbox, limit)
     Changeset.find(:all,
       :select => "changesets.*, users.id AS user_id, users.name, ST_AsGeoJSON(ST_Intersection(ST_SetSRID('BOX(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})'::box2d, 4326), geom)) AS geojson",
       :conditions => "ST_Intersects(ST_SetSRID('BOX(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})'::box2d, 4326), geom)",
       :joins => :user,
-      :limit => 100,
+      :limit => limit,
       :order => 'created_at DESC')
   end
 

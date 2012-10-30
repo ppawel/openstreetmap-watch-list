@@ -3,6 +3,7 @@
 <% if @changesets %>
 <% @changesets.each_with_index do |changeset, index| %>
 { "type": "Feature",
+  "id": "<%= changeset.id %>_<%= rand(666666) %>",
   "geometry": <%= changeset.geojson.html_safe %>,
   "properties": {
     "changeset_id": <%= changeset.id %>,
