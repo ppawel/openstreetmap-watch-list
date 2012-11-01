@@ -1,15 +1,13 @@
 class ChangesetController < ApplicationController
   def changesets
-    bbox = params[:bbox].split(/,/).map { |x| x.to_f }
-    @changesets = find_changesets_by_bbox(bbox, 100)
-    render :template => "changeset/changesets.#{params[:format]}", :layout => false
-  end
-
-  def tile
-    #bbox = xyz_to_bbox(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
-    #@changesets = find_changesets_by_bbox(bbox, 20)
     @changesets = find_changesets_by_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i, 20)
-    render :template => "changeset/changesets.#{params[:format]}", :layout => false
+
+    if params[:nogeom] == 'true'
+      render :template => 'changeset/changesets_nogeom', :layout => false
+    else
+      #render :template => 'changeset/changesets', :layout => false
+      render :json => changesets_to_geojson(@changesets), :callback => params[:callback]
+    end
   end
 
 private
@@ -32,6 +30,28 @@ private
       ORDER BY cs.created_at
       LIMIT #{limit}
       ")
+  end
+
+  def changesets_to_geojson(changesets)
+    geojson = { "type" => "FeatureCollection", "features" => []}
+
+    changesets.each do |changeset|
+      feature = { "type" => "Feature",
+        "id" => "#{changeset.id}_#{rand(666666)}",
+        "geometry" => JSON[changeset.geojson],
+        "properties" => {
+          "changeset_id" => changeset.id,
+          "created_at" => changeset.created_at,
+          "user_id" => changeset.user.id,
+          "user_name" => changeset.user.name,
+          "num_changes" => changeset.num_changes
+        }
+      }
+
+      geojson['features'] << feature
+    end
+
+    geojson
   end
 
   def xyz_to_bbox(x, y, z)
