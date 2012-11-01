@@ -24,6 +24,7 @@ refer to http://wiki.openstreetmap.org/wiki/Osmosis/PostGIS_Setup.
 4) Install OWL schema
 
     psql -f sql/owl_schema.sql owl
+    psql -f sql/owl_functions.sql owl
 
 Install Osmosis
 ===============
@@ -31,6 +32,7 @@ Install Osmosis
 For now we're using a modified version of Osmosis, this should just be an Osmosis plugin in the future.
 
     git clone -b owldb-plugin https://github.com/ppawel/osmosis.git
+    cd osmosis/
     ant build
     # Copy resulting build to a path of your convenience
 

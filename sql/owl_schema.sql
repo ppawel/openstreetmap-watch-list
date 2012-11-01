@@ -54,4 +54,4 @@ CREATE TABLE changes (
 CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
 CREATE INDEX idx_changesets_geom ON changesets USING gist (geom);
 CREATE INDEX idx_changesets_created_at ON changesets USING btree (created_at);
-CREATE INDEX idx_changeset_tiless_changeset_id ON changeset_tiless USING btree (changeset_id);
+CREATE INDEX idx_changeset_tiles_changeset_id ON changeset_tiles USING btree (changeset_id);
