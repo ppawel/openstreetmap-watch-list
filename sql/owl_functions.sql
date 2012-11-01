@@ -111,10 +111,10 @@ BEGIN
   FOR i IN tile_xy_topleft.tile_x..tile_xy_bottomright.tile_x LOOP
     FOR j IN tile_xy_topleft.tile_y..tile_xy_bottomright.tile_y LOOP
       tile_box := OWL_TileXYToBOX($2, i, j);
-      --RAISE NOTICE 'Processing tile % % % ...', i, j, tile_box;
       tile_geom := ST_Intersection(ST_SetSRID(tile_box, 4326), changeset_geom);
 
       IF NOT ST_IsEmpty(tile_geom) THEN
+        RAISE NOTICE 'Geometry for changeset % tile (% %)', $1, i, j;
         --RAISE NOTICE 'Got ourselves a tile geometry';
         count := count + 1;
 
