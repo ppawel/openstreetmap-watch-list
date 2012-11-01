@@ -84,7 +84,7 @@ This command:
 - downloads OsmChange file for a specific replication interval (minute/hour/day) - according to the configuration in the `configuration.txt` file.
 - populates OWL tables and then applies changes to regular data tables (same as `--write-pgsql-change` task).
 
-Set up owl_viewer
-=================
+Set up rails app
+================
 
-See `owls_viewer/README.md`.
+See `rails/README.md`.
