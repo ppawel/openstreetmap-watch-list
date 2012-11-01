@@ -1,10 +1,7 @@
         OWL: OpenStreetMap Watch List
         =============================
 
-OWL isn't really a single bit of software, it's a collection of
-scripts and programs built up in a very ad-hoc way. And, of course,
-almost completely lacking in documentation. Hopefully that will
-change!
+OWL is a service that allows monitoring and analyzing changes in OpenStreetMap data.
 
 Wiki: http://wiki.openstreetmap.org/wiki/OWL_(OpenStreetMap_Watch_List)
 
@@ -12,17 +9,16 @@ Contents:
 ---------
 
 osmosis-plugin/
-  Contains a plugin for Osmosis that takes care of populating change tables.
+  Contains a plugin for Osmosis that takes care of populating the database.
   See the `INSTALL.md` file for installation instructions.
 
-  Plugin source code is available:
+  Plugin source code is available here:
 
   https://github.com/ppawel/osmosis/tree/owldb-plugin
 
-owl_viewer/
-  A rails project which hosts the owl "viewer" which allows
-  people to browse changes in their area and generates the RSS
-  feeds.
+rails/
+  A Rails project which hosts the API which allows applications
+  to interface with OWL.
 
 scripts/
   Miscellaneous scripts to keep bits of the database up-to-date,
@@ -30,6 +26,3 @@ scripts/
 
 sql/
   SQL scripts for setting up a database with OWL schema.
-
-dupe_nodes/
-  The scripts for the duplicate nodes map.
