@@ -12,10 +12,6 @@ class ChangesetController < ApplicationController
     render :template => "changeset/changesets.#{params[:format]}", :layout => false
   end
 
-  def map
-    @title = "owl_viewer | Map of all changes"
-  end
-
 private
   def find_changesets_by_bbox(bbox, limit)
     Changeset.find(:all,
