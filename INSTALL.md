@@ -39,7 +39,7 @@ For now we're using a modified version of Osmosis, this should just be an Osmosi
 Initial data import
 ===================
 
-*For developemnt*
+*For development*
 
 For development it's usually sufficient to import a single osc diff file. For instance:
 
@@ -59,7 +59,9 @@ The OWL database schema is compatible with the Osmosis pgsnapshot schema so you 
 
 *From full history Planet file*
 
-TODO: Is this supported at all right now?
+Technically it would be possible to avoid processing osc diffs by using a full history diff. However, this is not
+supported right now (and probably never will be since it is not really too practical - it would take a Very Long Time to
+process full history planet).
 
 Populating the database with changes
 ====================================
@@ -75,8 +77,6 @@ The easiest way to do this is to set up the Osmosis interval replication.
     # Make sure to use the OWL specific osmosis version built above
     osmosis \
     --read-replication-interval workingDirectory=replication/ \
-    --tee-change \
-    --write-owldb-change database=owl user=postgres \
     --write-pgsql-change database=owl user=postgres
 
 This command:
@@ -84,7 +84,18 @@ This command:
 - downloads OsmChange file for a specific replication interval (minute/hour/day) - according to the configuration in the `configuration.txt` file.
 - populates OWL tables and then applies changes to regular data tables (same as `--write-pgsql-change` task).
 
-Set up rails app
+Generating geometry tiles
+=========================
+
+OWL serves changeset geometries using tiles - similar to regular map tiles (images). The tiles need to be generated
+after data is imported into the database.
+
+Generating tiles is done using the `owl_tiler.rb` script. To see the list of possible options and usage instructions,
+execute the script without any options, like so:
+
+    owl_tiler.rb
+
+Set up Rails app
 ================
 
 See `rails/README.md`.
