@@ -34,6 +34,8 @@ opt = OptionParser.new do |opts|
   end
 end
 
+opt.parse!
+
 if !options[:zoom] or !options[:changesets]
   puts opt.help
   exit 1
@@ -44,7 +46,7 @@ end
 tiler = Tiler.new(@conn)
 
 for zoom in options[:zoom]
-  @conn.query("SELECT id FROM changesets ORDER BY created_at DESC LIMIT 10").each do |row|
+  @conn.query("SELECT id FROM changesets ORDER BY created_at DESC").each do |row|
     @conn.transaction do |c|
       changeset_id = row['id'].to_i
       puts "Generating tiles for changeset #{changeset_id} at zoom level #{zoom}..."
