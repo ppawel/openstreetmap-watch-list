@@ -33,9 +33,6 @@ class Tiler
   end
 
   def generate(zoom, changeset_id, options = {})
-    existing_tiles = []
-    process = false
-
     if options[:retile]
       removed_count = clear_tiles(changeset_id, zoom)
       puts "    Removed existing tiles: #{removed_count}"
@@ -43,12 +40,7 @@ class Tiler
     else
       existing_tiles = get_existing_tiles(changeset_id, zoom)
       puts "    Existing tiles: #{existing_tiles.size}"
-      process = existing_tiles.empty?
-    end
-
-    if !process
-      puts "    Not processing!"
-      return existing_tiles.size
+      return existing_tiles.size if !existing_tiles.empty?
     end
 
     bbox = changeset_bbox(changeset_id)
