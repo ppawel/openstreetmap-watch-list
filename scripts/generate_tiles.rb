@@ -26,8 +26,7 @@ tiler = Tiler.new(@conn)
   @conn.transaction do |c|
     changeset_id = row['id'].to_i
     puts "Generating tiles for changeset #{changeset_id} at zoom level #{ZOOM_LEVEL}..."
-    tiler.generate(ZOOM_LEVEL, changeset_id)
+    tile_count = tiler.generate(ZOOM_LEVEL, changeset_id)
+    puts "Done, tile count: #{tile_count}"
   end
-  #tile_count = @conn.query("SELECT OWL_GenerateChangesetTiles(#{changeset_id}, #{ZOOM_LEVEL})").getvalue(0, 0)
-  #puts "Done, tile count: #{tile_count}"
 end

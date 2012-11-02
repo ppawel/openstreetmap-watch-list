@@ -24,6 +24,7 @@ def tile2latlon(xtile, ytile, zoom)
   return lat_deg, lon_deg
 end
 
+# Implements tiling logic.
 class Tiler
   attr_accessor :conn
 
@@ -32,10 +33,16 @@ class Tiler
   end
 
   def generate(zoom, changeset_id)
-    clear_tiles(changeset_id, zoom)
+    removed_count = clear_tiles(changeset_id, zoom)
+    puts "    Removed existing tiles: #{removed_count}"
+
     bbox = changeset_bbox(changeset_id)
-    puts bbox
+    puts "    bbox = #{bbox}"
+
+    count = 0
     tiles = bbox_to_tiles(zoom, bbox)
+
+    puts "    Tiles to process: #{tiles.size}"
 
     tiles.each do |tile|
       x, y = tile[0], tile[1]
@@ -49,19 +56,20 @@ class Tiler
         FROM changesets WHERE id = #{changeset_id}").getvalue(0, 0)
 
       if geom != '0107000020E610000000000000' and geom
-        puts 'got tile'
+        puts "    Got geometry for tile (#{x}, #{y})"
         @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, tile_x, tile_y, geom)
           VALUES (#{changeset_id}, #{zoom}, #{x}, #{y}, '#{geom}')")
+        count += 1
       end
     end
 
-    puts tiles.inspect
+    count
   end
 
   protected
 
   def clear_tiles(changeset_id, zoom)
-    @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}")
+    @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
   end
 
   def bbox_to_tiles(zoom, bbox)
