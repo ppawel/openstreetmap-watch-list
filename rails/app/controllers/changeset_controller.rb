@@ -18,7 +18,7 @@ private
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
       WHERE zoom = #{zoom} AND x = #{x} AND y = #{y}
       GROUP BY cs.id
-      ORDER BY cs.created_at
+      ORDER BY cs.created_at DESC
       LIMIT #{limit}
       ")
   end
