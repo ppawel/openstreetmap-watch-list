@@ -26,11 +26,11 @@ CREATE TABLE changesets (
 -- Create a table for changeset tiles.
 CREATE TABLE changeset_tiles (
   changeset_id bigint REFERENCES changesets,
-  tile_x int NOT NULL,
-  tile_y int NOT NULL,
+  x int NOT NULL,
+  y int NOT NULL,
   zoom int NOT NULL,
   geom geography,
-  PRIMARY KEY (changeset_id, tile_x, tile_y, zoom)
+  PRIMARY KEY (changeset_id, x, y, zoom)
 );
 
 -- Create a table for changes.

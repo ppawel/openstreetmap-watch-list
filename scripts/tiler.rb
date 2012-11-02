@@ -57,7 +57,7 @@ class Tiler
 
       if geom != '0107000020E610000000000000' and geom
         puts "    Got geometry for tile (#{x}, #{y})"
-        @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, tile_x, tile_y, geom)
+        @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
           VALUES (#{changeset_id}, #{zoom}, #{x}, #{y}, '#{geom}')")
         count += 1
       end

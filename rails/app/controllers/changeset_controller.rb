@@ -11,21 +11,12 @@ class ChangesetController < ApplicationController
   end
 
 private
-  def find_changesets_by_bbox(bbox, limit)
-    Changeset.find(:all,
-      :select => "changesets.*, users.id AS user_id, users.name, ST_AsGeoJSON(ST_Intersection(ST_SetSRID('BOX(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})'::box2d, 4326), geom)) AS geojson",
-      :conditions => "ST_Intersects(ST_SetSRID('BOX(#{bbox[0]} #{bbox[1]}, #{bbox[2]} #{bbox[3]})'::box2d, 4326), geom)",
-      :joins => :user,
-      :limit => limit,
-      :order => 'created_at DESC')
-  end
-
   def find_changesets_by_tile(x, y, zoom, limit)
     Changeset.find_by_sql("
       SELECT cs.*, ST_AsGeoJSON(ST_Union(cst.geom::geometry)) AS geojson
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
-      WHERE zoom = #{zoom} AND tile_x = #{x} AND tile_y = #{y}
+      WHERE zoom = #{zoom} AND x = #{x} AND y = #{y}
       GROUP BY cs.id
       ORDER BY cs.created_at
       LIMIT #{limit}
@@ -52,19 +43,5 @@ private
     end
 
     geojson
-  end
-
-  def xyz_to_bbox(x, y, z)
-    tl = xyz_to_latlon(x, y, z)
-    br = xyz_to_latlon(x + 1, y + 1, z)
-    [tl[0], tl[1], br[0], br[1]]
-  end
-
-  def xyz_to_latlon(x, y, z)
-    n = 2 ** z
-    lon_deg = x.to_f / n * 360.0 - 180.0
-    lat_rad = Math.atan(Math.sinh(Math::PI * (1 - 2 * y.to_f / n)))
-    lat_deg = lat_rad * 180.0 / Math::PI
-    return lon_deg, lat_deg
   end
 end
