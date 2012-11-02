@@ -2,16 +2,11 @@
 
 require 'optparse'
 require 'pg'
+require 'yaml'
 
 require './scripts/tilerlib'
 
-$config = {
-  'host' => 'localhost',
-  'port' => 5432,
-  'dbname' => 'osmdb',
-  'user' => 'ppawel',
-  'password' => 'aa'
-}
+$config = YAML.load_file('rails/config/database.yml')['development']
 
 options = {}
 
@@ -49,7 +44,8 @@ if !options[:zoom] or !options[:changesets]
   exit 1
 end
 
-@conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['dbname'], :user => $config['user'], :password => $config['password'])
+@conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
+  :user => $config['username'], :password => $config['password'])
 
 tiler = Tiler.new(@conn)
 
