@@ -32,9 +32,24 @@ class Tiler
     @conn = conn
   end
 
-  def generate(zoom, changeset_id)
-    removed_count = clear_tiles(changeset_id, zoom)
-    puts "    Removed existing tiles: #{removed_count}"
+  def generate(zoom, changeset_id, options = {})
+    existing_tiles = []
+    process = false
+
+    if options[:retile]
+      removed_count = clear_tiles(changeset_id, zoom)
+      puts "    Removed existing tiles: #{removed_count}"
+      process = true
+    else
+      existing_tiles = get_existing_tiles(changeset_id, zoom)
+      puts "    Existing tiles: #{existing_tiles.size}"
+      process = existing_tiles.empty?
+    end
+
+    if !process
+      puts "    Not processing!"
+      return existing_tiles.size
+    end
 
     bbox = changeset_bbox(changeset_id)
     puts "    bbox = #{bbox}"
@@ -67,6 +82,15 @@ class Tiler
   end
 
   protected
+
+  def get_existing_tiles(changeset_id, zoom)
+    tiles = []
+    @conn.query("SELECT x, y
+        FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").to_a.each do |row|
+      tiles << [row['x'].to_i, row['y'].to_i]
+    end
+    tiles
+  end
 
   def clear_tiles(changeset_id, zoom)
     @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples

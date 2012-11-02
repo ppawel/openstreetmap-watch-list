@@ -23,7 +23,7 @@ opt = OptionParser.new do |opts|
   opts.on("--changesets <value>", String,
       "List of changesets; possible values for this option:",
       "all - all changesets from the database",
-      "<n> - number of last changesets to consider") do |c|
+      "Default is 'all'.") do |c|
     options[:changesets] = c
   end
 
@@ -32,9 +32,17 @@ opt = OptionParser.new do |opts|
   opts.on("--zoom x,y,z", Array, "Comma-separated list of zoom levels, e.g. 4,5,6") do |list|
     options[:zoom] = list.map(&:to_i)
   end
+
+  opts.separator('')
+
+  opts.on("--retile", "Remove existing tiles and regenerate tiles from scratch (optional, default is false)") do |o|
+    options[:retile] = o
+  end
 end
 
 opt.parse!
+
+options[:changesets] ||= 'all'
 
 if !options[:zoom] or !options[:changesets]
   puts opt.help
@@ -50,7 +58,7 @@ for zoom in options[:zoom]
     @conn.transaction do |c|
       changeset_id = row['id'].to_i
       puts "Generating tiles for changeset #{changeset_id} at zoom level #{zoom}..."
-      tile_count = tiler.generate(zoom, changeset_id)
+      tile_count = tiler.generate(zoom, changeset_id, options)
       puts "Done, tile count: #{tile_count}"
     end
   end
