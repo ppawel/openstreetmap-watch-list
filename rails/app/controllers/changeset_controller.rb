@@ -13,11 +13,11 @@ class ChangesetController < ApplicationController
 private
   def find_changesets_by_tile(x, y, zoom, limit)
     Changeset.find_by_sql("
-      SELECT cs.*, ST_AsGeoJSON(ST_Union(cst.geom::geometry)) AS geojson
+      SELECT cs.id, cs.created_at, cs.num_changes, cs.user_id, ST_AsGeoJSON(ST_Union(cst.geom::geometry)) AS geojson
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
       WHERE zoom = #{zoom} AND x = #{x} AND y = #{y}
-      GROUP BY cs.id
+      GROUP BY cs.id, cs.created_at, cs.num_changes, cs.user_id
       ORDER BY cs.created_at DESC
       LIMIT #{limit}
       ")
