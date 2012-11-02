@@ -1,9 +1,7 @@
-OWL VIEWER RAILS APP
+OWL RAILS APP
 ====================
 
-This is a rails app (although it's not really used in a railsy way)
-which provides the main UI to OWL, viewing changes and providing RSS
-feeds for areas.
+This is a Rails app which provides the main OWL API
 
 ## Installation
 
@@ -12,20 +10,15 @@ Requires
 - Ruby (Ruby 1.9.x recommended)
 - Rails
 
-1) Copy `example.database.yml` in `owl_viewer/config/` to `database.yml` and configure.
+1) Copy `example.database.yml` in `rails/config/` to `database.yml` and configure.
 
 2) Install application
 
-    cd owl_viewer/
+    cd rails/
     bundle install
     rails server
 
 3) Run rails server
 
-    cd owl_viewer/
+    cd rails/
     rails server
-
-## Todo
-
-- Make more railsy, with more than one controller, etc... proper modelification of the OWL database?
-- Make translatable?
