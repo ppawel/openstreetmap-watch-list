@@ -58,7 +58,7 @@ class Tiler
 
       geom = @conn.query("
         SELECT ST_Intersection(
-          geom::geometry,
+          geom,
           ST_SetSRID(ST_MakeBox2D(ST_MakePoint(#{lon2}, #{lat1}), ST_MakePoint(#{lon1}, #{lat2})), 4326))
         FROM changesets WHERE id = #{changeset_id}").getvalue(0, 0)
 
@@ -68,6 +68,7 @@ class Tiler
           VALUES (#{changeset_id}, #{zoom}, #{x}, #{y}, '#{geom}')")
         count += 1
       end
+
     end
 
     count
