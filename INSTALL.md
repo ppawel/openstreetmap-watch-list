@@ -93,7 +93,8 @@ after data is imported into the database.
 Generating tiles is done using the `owl_tiler.rb` script. To see the list of possible options and usage instructions,
 execute the script without any options, like so:
 
-    owl_tiler.rb
+    cd tiler
+    ./owl_tiler.rb --retile --changesets=all -zoom=15,16,17,18
 
 Set up Rails app
 ================
