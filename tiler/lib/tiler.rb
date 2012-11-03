@@ -64,6 +64,23 @@ class Tiler
     ids
   end
 
+  def generate_summary_tiles(summary_zoom)
+    subtiles_per_tile = 2**16 / 2**summary_zoom
+
+    for x in (0..2**summary_zoom - 1)
+      for y in (0..2**summary_zoom - 1)
+        num_changesets = @conn.query("
+          SELECT COUNT(*) AS num_changesets
+          FROM changeset_tiles
+          WHERE zoom = 16
+            AND x >= #{x * subtiles_per_tile} AND x < #{(x + 1) * subtiles_per_tile}
+            AND y >= #{y * subtiles_per_tile} AND y < #{(y + 1) * subtiles_per_tile}
+          ").to_a[0]['num_changesets'].to_i
+        puts num_changesets
+      end
+    end
+  end
+
   protected
 
   def changeset_tiles(changeset_id, zoom)
