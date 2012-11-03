@@ -27,15 +27,10 @@ class Tiler
     bbox = changeset_bbox(changeset_id)
     @@log.debug "bbox = #{bbox}"
 
-    count = 0
-    tiles = bbox_to_tiles(zoom, bbox)
-
+    tiles = changeset_tiles(changeset_id, zoom)
     @@log.debug "Tiles to process: #{tiles.size}"
 
-    #if tiles.size > 256
-      tiles = reduced_tiles(changeset_id, zoom)
-      @@log.debug "Tiles to process (reduced): #{tiles.size}"
-    #end
+    count = 0
 
     tiles.each do |tile|
       x, y = tile[0], tile[1]
@@ -71,7 +66,7 @@ class Tiler
 
   protected
 
-  def reduced_tiles(changeset_id, zoom)
+  def changeset_tiles(changeset_id, zoom)
     tiles = []
     change_bboxes(changeset_id).collect {|bbox| tiles += bbox_to_tiles(zoom, bbox)}
     tiles.uniq
