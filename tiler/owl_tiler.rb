@@ -60,6 +60,8 @@ options[:changesets] ||= ['all']
 options[:geometry_tiles] ||= []
 options[:summary_tiles] ||= []
 
+puts options.inspect
+
 @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
   :user => $config['username'], :password => $config['password'])
 
@@ -76,16 +78,21 @@ for summary_zoom in options[:summary_tiles]
   puts "Took #{Time.now - before}s"
 end
 
+changeset_ids = tiler.get_changeset_ids(options)
+
 for zoom in options[:geometry_tiles]
-  tiler.get_changeset_ids(options).each do |changeset_id|
+  count = 0
+  puts "Changesets to process: #{changeset_ids.size}"
+  changeset_ids.each do |changeset_id|
     before = Time.now
 
     @conn.transaction do |c|
-      puts "Generating tiles for changeset #{changeset_id} at zoom level #{zoom}..."
+      puts "Generating tiles for changeset #{changeset_id} at zoom level #{zoom}... (#{count + 1} of #{changeset_ids.size})"
       tile_count = tiler.generate(zoom, changeset_id, options)
       puts "Done, tile count: #{tile_count}"
     end
 
-    puts "Changeset #{changeset_id} took #{Time.now - before}s"
+    count += 1
+    puts "Changeset #{changeset_id} took #{Time.now - before}s (#{count + 1} of #{changeset_ids.size})"
   end
 end

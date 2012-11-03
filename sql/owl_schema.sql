@@ -12,6 +12,9 @@ CREATE TYPE element_type AS ENUM ('N', 'W', 'R');
 DROP TYPE IF EXISTS action;
 CREATE TYPE action AS ENUM ('CREATE', 'MODIFY', 'DELETE');
 
+DROP TYPE IF EXISTS tile_type;
+CREATE TYPE tile_type AS ENUM ('GEOMETRY', 'SUMMARY');
+
 -- Create a table for changesets.
 CREATE TABLE changesets (
   id bigserial PRIMARY KEY,
@@ -25,12 +28,13 @@ CREATE TABLE changesets (
 
 -- Create a table for changeset tiles.
 CREATE TABLE changeset_tiles (
-  changeset_id bigint REFERENCES changesets,
+  type tile_type NOT NULL,
+  changeset_id bigint,
   x int NOT NULL,
   y int NOT NULL,
   zoom int NOT NULL,
   geom geography,
-  PRIMARY KEY (changeset_id, x, y, zoom)
+  num_changesets int
 );
 
 -- Create a table for changes.

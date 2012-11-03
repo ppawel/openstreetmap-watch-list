@@ -45,8 +45,8 @@ class Tiler
 
       if geom != '0107000020E610000000000000' and geom
         @@log.debug "    Got geometry for tile (#{x}, #{y})"
-        @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
-          VALUES (#{changeset_id}, #{zoom}, #{x}, #{y}, '#{geom}')")
+        @conn.query("INSERT INTO changeset_tiles (type, changeset_id, zoom, x, y, geom)
+          VALUES ('GEOMETRY', #{changeset_id}, #{zoom}, #{x}, #{y}, '#{geom}')")
         count += 1
       end
     end
@@ -65,18 +65,23 @@ class Tiler
   end
 
   def generate_summary_tiles(summary_zoom)
+    clear_summary_tiles(summary_zoom)
     subtiles_per_tile = 2**16 / 2**summary_zoom
 
     for x in (0..2**summary_zoom - 1)
       for y in (0..2**summary_zoom - 1)
         num_changesets = @conn.query("
-          SELECT COUNT(*) AS num_changesets
+          SELECT COUNT(DISTINCT changeset_id) AS num_changesets
           FROM changeset_tiles
           WHERE zoom = 16
             AND x >= #{x * subtiles_per_tile} AND x < #{(x + 1) * subtiles_per_tile}
             AND y >= #{y * subtiles_per_tile} AND y < #{(y + 1) * subtiles_per_tile}
           ").to_a[0]['num_changesets'].to_i
-        puts num_changesets
+
+        @@log.debug "Tile (#{x}, #{y}), num_changesets = #{num_changesets}"
+
+        @conn.query("INSERT INTO changeset_tiles (type, num_changesets, zoom, x, y)
+          VALUES ('SUMMARY', #{num_changesets}, #{summary_zoom}, #{x}, #{y})")
       end
     end
   end
@@ -99,7 +104,11 @@ class Tiler
   end
 
   def clear_tiles(changeset_id, zoom)
-    @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
+    @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom} AND type = 'GEOMETRY'").cmd_tuples
+  end
+
+  def clear_summary_tiles(zoom)
+    @conn.query("DELETE FROM changeset_tiles WHERE zoom = #{zoom} AND type = 'SUMMARY'").cmd_tuples
   end
 
   def changeset_bbox(changeset_id)
