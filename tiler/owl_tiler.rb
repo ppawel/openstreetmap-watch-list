@@ -18,9 +18,10 @@ opt = OptionParser.new do |opts|
 
   opts.separator('')
 
-  opts.on("--changesets <value>", String,
+  opts.on("--changesets x,y,z", Array,
       "List of changesets; possible values for this option:",
       "all - all changesets from the database",
+      "id1,id2,id3 - list of specific changeset ids to process",
       "Default is 'all'.") do |c|
     options[:changesets] = c
   end
@@ -40,7 +41,7 @@ end
 
 opt.parse!
 
-options[:changesets] ||= 'all'
+options[:changesets] ||= ['all']
 
 if !options[:zoom] or !options[:changesets]
   puts opt.help
@@ -53,9 +54,8 @@ end
 tiler = Tiler::Tiler.new(@conn)
 
 for zoom in options[:zoom]
-  @conn.query("SELECT id FROM changesets ORDER BY created_at DESC").each do |row|
+  tiler.get_changeset_ids(options).each do |changeset_id|
     before = Time.now
-    changeset_id = row['id'].to_i
 
     @conn.transaction do |c|
       puts "Generating tiles for changeset #{changeset_id} at zoom level #{zoom}..."

@@ -59,6 +59,16 @@ class Tiler
     count
   end
 
+  def get_changeset_ids(options)
+    ids = []
+    if options[:changesets] == ['all']
+      @conn.query("SELECT id FROM changesets ORDER BY created_at DESC").each {|row| ids << row['id'].to_i}
+    else
+      ids = options[:changesets]
+    end
+    ids
+  end
+
   protected
 
   def reduced_tiles(changeset_id, zoom)
