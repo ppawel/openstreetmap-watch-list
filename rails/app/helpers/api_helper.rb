@@ -1,15 +1,15 @@
-module ChangesetHelper
+module ApiHelper
   def xy2tile(x, y)
     x = (x | (x << 8)) & 0x00ff00ff
     x = (x | (x << 4)) & 0x0f0f0f0f
     x = (x | (x << 2)) & 0x33333333
     x = (x | (x << 1)) & 0x55555555
-    
+
     y = (y | (y << 8)) & 0x00ff00ff
     y = (y | (y << 4)) & 0x0f0f0f0f
     y = (y | (y << 2)) & 0x33333333
     y = (y | (y << 1)) & 0x55555555
-    
+
     return (x << 1) | y
   end
 

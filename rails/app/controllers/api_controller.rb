@@ -1,4 +1,4 @@
-class ChangesetController < ApplicationController
+class ApiController < ApplicationController
   def changesets
     @changesets = find_changesets(params[:x].to_i, params[:y].to_i, params[:zoom].to_i, 20)
 
