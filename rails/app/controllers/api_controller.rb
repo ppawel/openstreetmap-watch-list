@@ -12,6 +12,7 @@ class ApiController < ApplicationController
 
   def summary
     @tile = find_summary_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
+    render :json => @tile
   end
 
 private
@@ -28,11 +29,7 @@ private
   end
 
   def find_summary_tile(x, y, zoom)
-    SummaryTile.find_by_sql("
-      SELECT *
-      FROM changeset_tiles cst
-      WHERE zoom = #{zoom} AND x = #{x} AND y = #{y}
-      ")
+    SummaryTile.find(:first, :conditions => {:zoom => zoom, :x => x, :y => y})
   end
 
   def changesets_to_geojson(changesets)
