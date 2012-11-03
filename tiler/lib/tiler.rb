@@ -45,8 +45,8 @@ class Tiler
 
       if geom != '0107000020E610000000000000' and geom
         @@log.debug "    Got geometry for tile (#{x}, #{y})"
-        @conn.query("INSERT INTO changeset_tiles (type, changeset_id, zoom, x, y, geom)
-          VALUES ('GEOMETRY', #{changeset_id}, #{zoom}, #{x}, #{y}, '#{geom}')")
+        @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
+          VALUES (#{changeset_id}, #{zoom}, #{x}, #{y}, '#{geom}')")
         count += 1
       end
     end
@@ -80,8 +80,8 @@ class Tiler
 
         @@log.debug "Tile (#{x}, #{y}), num_changesets = #{num_changesets}"
 
-        @conn.query("INSERT INTO changeset_tiles (type, num_changesets, zoom, x, y)
-          VALUES ('SUMMARY', #{num_changesets}, #{summary_zoom}, #{x}, #{y})")
+        @conn.query("INSERT INTO summary_tiles (num_changesets, zoom, x, y)
+          VALUES (#{num_changesets}, #{summary_zoom}, #{x}, #{y})")
       end
     end
   end
@@ -104,11 +104,11 @@ class Tiler
   end
 
   def clear_tiles(changeset_id, zoom)
-    @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom} AND type = 'GEOMETRY'").cmd_tuples
+    @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
   end
 
   def clear_summary_tiles(zoom)
-    @conn.query("DELETE FROM changeset_tiles WHERE zoom = #{zoom} AND type = 'SUMMARY'").cmd_tuples
+    @conn.query("DELETE FROM summary_tiles WHERE zoom = #{zoom}").cmd_tuples
   end
 
   def changeset_bbox(changeset_id)

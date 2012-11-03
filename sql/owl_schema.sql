@@ -5,15 +5,13 @@
 DROP TABLE IF EXISTS changes;
 DROP TABLE IF EXISTS changeset_tiles;
 DROP TABLE IF EXISTS changesets;
+DROP TABLE IF EXISTS summary_tiles;
 
 DROP TYPE IF EXISTS element_type;
 CREATE TYPE element_type AS ENUM ('N', 'W', 'R');
 
 DROP TYPE IF EXISTS action;
 CREATE TYPE action AS ENUM ('CREATE', 'MODIFY', 'DELETE');
-
-DROP TYPE IF EXISTS tile_type;
-CREATE TYPE tile_type AS ENUM ('GEOMETRY', 'SUMMARY');
 
 -- Create a table for changesets.
 CREATE TABLE changesets (
@@ -28,13 +26,12 @@ CREATE TABLE changesets (
 
 -- Create a table for changeset tiles.
 CREATE TABLE changeset_tiles (
-  type tile_type NOT NULL,
   changeset_id bigint,
   x int NOT NULL,
   y int NOT NULL,
   zoom int NOT NULL,
   geom geography,
-  num_changesets int
+  PRIMARY KEY (changeset_id, x, y, zoom)
 );
 
 -- Create a table for changes.
@@ -53,6 +50,15 @@ CREATE TABLE changes (
   new_tags hstore, -- If action is CREATE or MODIFY, contains new tags of the element; otherwise NULL.
   current_geom geography, -- If action is DELETE or MODIFY, contains tags of element existing in the database (if it exists); otherwise NULL.
   new_geom geography -- If action is CREATE or MODIFY, contains new geometry of the element; otherwise NULL.
+);
+
+-- Create a table for summary tiles.
+CREATE TABLE summary_tiles (
+  x int NOT NULL,
+  y int NOT NULL,
+  zoom int NOT NULL,
+  num_changesets int,
+  PRIMARY KEY (x, y, zoom)
 );
 
 CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
