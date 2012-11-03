@@ -1,13 +1,15 @@
-def degrees(rad)
+module OWL
+
+def self.degrees(rad)
   rad * 180 / Math::PI
 end
 
-def radians(angle)
+def self.radians(angle)
   angle / 180 * Math::PI
 end
 
 # Translated to Ruby rom http://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
-def latlon2tile(lat_deg, lon_deg, zoom)
+def self.latlon2tile(lat_deg, lon_deg, zoom)
   lat_rad = radians(lat_deg)
   n = 2.0 ** zoom
   xtile = ((lon_deg + 180.0) / 360.0 * n).floor
@@ -16,12 +18,28 @@ def latlon2tile(lat_deg, lon_deg, zoom)
 end
 
 # Translated to Ruby rom http://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
-def tile2latlon(xtile, ytile, zoom)
+def self.tile2latlon(xtile, ytile, zoom)
   n = 2.0 ** zoom
   lon_deg = xtile / n * 360.0 - 180.0
   lat_rad = Math.atan(Math.sinh(Math::PI * (1 - 2 * ytile / n.to_f)))
   lat_deg = degrees(lat_rad)
   return lat_deg, lon_deg
+end
+
+def self.bbox_to_tiles(zoom, bbox)
+  tiles = []
+  top_left = latlon2tile(bbox['xmin'], bbox['ymin'], zoom)
+  bottom_right = latlon2tile(bbox['xmax'], bbox['ymax'], zoom)
+  min_y = [top_left[1], bottom_right[1]].min
+  max_y = [top_left[1], bottom_right[1]].max
+
+  (top_left[0]..bottom_right[0]).each do |x|
+    (min_y..max_y).each do |y|
+      tiles << [x, y]
+    end
+  end
+
+  tiles.uniq
 end
 
 # Implements tiling logic.
@@ -47,14 +65,19 @@ class Tiler
     puts "    bbox = #{bbox}"
 
     count = 0
-    tiles = bbox_to_tiles(zoom, bbox)
+    tiles = OWL::bbox_to_tiles(zoom, bbox)
 
     puts "    Tiles to process: #{tiles.size}"
 
+    #if tiles.size > 256
+      tiles = reduced_tiles(changeset_id, zoom)
+      puts "    Tiles to process (reduced): #{tiles.size}"
+    #end
+
     tiles.each do |tile|
       x, y = tile[0], tile[1]
-      lat1, lon1 =  tile2latlon(x, y, zoom)
-      lat2, lon2 =  tile2latlon(x + 1, y + 1, zoom)
+      lat1, lon1 = OWL::tile2latlon(x, y, zoom)
+      lat2, lon2 = OWL::tile2latlon(x + 1, y + 1, zoom)
 
       geom = @conn.query("
         SELECT ST_Intersection(
@@ -68,13 +91,18 @@ class Tiler
           VALUES (#{changeset_id}, #{zoom}, #{x}, #{y}, '#{geom}')")
         count += 1
       end
-
     end
 
     count
   end
 
   protected
+
+  def reduced_tiles(changeset_id, zoom)
+    tiles = []
+    change_bboxes(changeset_id).collect {|bbox| tiles += OWL::bbox_to_tiles(zoom, bbox)}
+    tiles.uniq
+  end
 
   def get_existing_tiles(changeset_id, zoom)
     tiles = []
@@ -89,22 +117,6 @@ class Tiler
     @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
   end
 
-  def bbox_to_tiles(zoom, bbox)
-    tiles = []
-    top_left = latlon2tile(bbox['xmin'], bbox['ymin'], zoom)
-    bottom_right = latlon2tile(bbox['xmax'], bbox['ymax'], zoom)
-    min_y = [top_left[1], bottom_right[1]].min
-    max_y = [top_left[1], bottom_right[1]].max
-
-    (top_left[0]..bottom_right[0]).each do |x|
-      (min_y..max_y).each do |y|
-        tiles << [x, y]
-      end
-    end
-
-    tiles
-  end
-
   def changeset_bbox(changeset_id)
     result = @conn.query("SELECT ST_XMin(geom::geometry) AS ymin, ST_XMax(geom::geometry) AS ymax,
       ST_YMin(geom::geometry) AS xmin, ST_YMax(geom::geometry) AS xmax
@@ -112,4 +124,20 @@ class Tiler
     row = result.to_a[0]
     row.merge(row) {|k, v| v.to_f}
   end
+
+  def change_bboxes(changeset_id)
+    bboxes = []
+    @conn.query("SELECT ST_XMin(current_geom::geometry) AS ymin, ST_XMax(current_geom::geometry) AS ymax,
+        ST_YMin(current_geom::geometry) AS xmin, ST_YMax(current_geom::geometry) AS xmax
+        FROM changes WHERE changeset_id = #{changeset_id}
+          UNION
+        SELECT ST_XMin(new_geom::geometry) AS ymin, ST_XMax(new_geom::geometry) AS ymax,
+        ST_YMin(new_geom::geometry) AS xmin, ST_YMax(new_geom::geometry) AS xmax
+        FROM changes WHERE changeset_id = #{changeset_id}").to_a.each do |row|
+      bboxes << row.merge(row) {|k, v| v.to_f}
+    end
+    bboxes
+  end
+end
+
 end

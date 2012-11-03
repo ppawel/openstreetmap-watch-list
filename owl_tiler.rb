@@ -47,7 +47,7 @@ end
 @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
   :user => $config['username'], :password => $config['password'])
 
-tiler = Tiler.new(@conn)
+tiler = OWL::Tiler.new(@conn)
 
 for zoom in options[:zoom]
   @conn.query("SELECT id FROM changesets ORDER BY created_at DESC").each do |row|
