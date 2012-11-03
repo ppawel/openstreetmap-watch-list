@@ -12,7 +12,7 @@ class ApiController < ApplicationController
 
   def summary
     @tile = find_summary_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
-    render :json => @tile
+    render :json => @tile, :callback => params[:callback]
   end
 
 private
