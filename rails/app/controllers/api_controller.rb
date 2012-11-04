@@ -11,7 +11,8 @@ class ApiController < ApplicationController
   end
 
   def summary
-    @tile = find_summary_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
+    #@tile = find_summary_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
+    @tile = generate_summary_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
     render :json => @tile, :callback => params[:callback]
   end
 
@@ -30,6 +31,17 @@ private
 
   def find_summary_tile(x, y, zoom)
     SummaryTile.find(:first, :conditions => {:zoom => zoom, :x => x, :y => y})
+  end
+
+  # On-the-fly variant of find_summary_tile
+  def generate_summary_tile(x, y, zoom)
+    subtiles_per_tile = 2**16 / 2**zoom
+    SummaryTile.find_by_sql("SELECT COUNT(DISTINCT changeset_id) AS num_changesets
+          FROM changeset_tiles
+          WHERE zoom = 16
+            AND x >= #{x * subtiles_per_tile} AND x < #{(x + 1) * subtiles_per_tile}
+            AND y >= #{y * subtiles_per_tile} AND y < #{(y + 1) * subtiles_per_tile}
+          ")[0]
   end
 
   def changesets_to_geojson(changesets)
