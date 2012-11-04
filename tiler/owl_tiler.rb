@@ -36,8 +36,8 @@ opt = OptionParser.new do |opts|
 
   opts.separator('')
 
-  opts.on("--processing-limit N", "Skip changesets with number of tiles to process larger than N") do |o|
-    options[:processing_limit] = o
+  opts.on("--processing-limit N", "Skip changesets with number of tiles to process larger than N") do |limit|
+    options[:processing_limit] = limit.to_i
   end
 
   opts.separator('')
