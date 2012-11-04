@@ -26,3 +26,6 @@ scripts/
 
 sql/
   SQL scripts for setting up a database with OWL schema.
+
+tiler/
+  A tool for creating geometry tiles that are served by the API.

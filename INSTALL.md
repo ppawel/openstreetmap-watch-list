@@ -90,11 +90,15 @@ Generating geometry tiles
 OWL serves changeset geometries using tiles - similar to regular map tiles (images). The tiles need to be generated
 after data is imported into the database.
 
-Generating tiles is done using the `owl_tiler.rb` script. To see the list of possible options and usage instructions,
-execute the script without any options, like so:
+Generating tiles is done using the `owl_tiler.rb` script. To generate tiles for zoom level 16:
 
     cd tiler
-    ./owl_tiler.rb --retile --changesets=all -zoom=15,16,17,18
+    ./owl_tiler.rb --geometry-tiles 16
+
+To see the list of possible options and usage instructions, execute the script without any options, like so:
+
+    cd tiler
+    ./owl_tiler.rb
 
 Set up Rails app
 ================
