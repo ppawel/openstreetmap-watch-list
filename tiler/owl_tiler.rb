@@ -36,12 +36,17 @@ opt = OptionParser.new do |opts|
 
   opts.separator('')
 
-  opts.on("--processing-limit N", "Skip changesets with number of tiles to process larger than N") do |limit|
-    options[:processing_limit] = limit.to_i
+  opts.on("--processing-tile-limit N", "Skip changesets with number of tiles to process larger than N") do |limit|
+    options[:processing_tile_limit] = limit.to_i
   end
 
   opts.separator('')
 
+  opts.on("--processing-change-limit N", "Skip changesets with number of changes larger than N") do |limit|
+    options[:processing_change_limit] = limit.to_i
+  end
+
+  opts.separator('')
   opts.on("--retile", "Remove existing tiles and regenerate tiles from scratch (optional, default is false)") do |o|
     options[:retile] = o
   end
@@ -64,6 +69,7 @@ end
 
 options[:changesets] ||= ['all']
 options[:geometry_tiles] ||= []
+options[:processing_change_limit] ||= 11111
 options[:summary_tiles] ||= []
 
 puts options.inspect

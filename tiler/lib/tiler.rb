@@ -17,7 +17,7 @@ class Tiler
     tiles = changeset_tiles(changeset_id, zoom)
     @@log.debug "Tiles to process: #{tiles.size}"
 
-    return -1 if options[:processing_limit] and tiles.size > options[:processing_limit]
+    return -1 if options[:processing_tile_limit] and tiles.size > options[:processing_tile_limit]
 
     count = 0
 
@@ -48,7 +48,7 @@ class Tiler
     if options[:changesets] == ['all']
       @conn.query("SELECT id
         FROM changesets
-        WHERE last_tiled_at IS NULL
+        WHERE last_tiled_at IS NULL AND num_changes < #{options[:processing_change_limit]}
         ORDER BY created_at DESC").each {|row| ids << row['id'].to_i}
     else
       ids = options[:changesets]
