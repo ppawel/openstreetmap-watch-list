@@ -14,9 +14,6 @@ class Tiler
   end
 
   def generate(zoom, changeset_id, options = {})
-    bbox = changeset_bbox(changeset_id)
-    @@log.debug "bbox = #{bbox}"
-
     tiles = changeset_tiles(changeset_id, zoom)
     @@log.debug "Tiles to process: #{tiles.size}"
 
@@ -89,7 +86,9 @@ class Tiler
 
   def changeset_tiles(changeset_id, zoom)
     tiles = []
-    change_bboxes(changeset_id).collect {|bbox| tiles += bbox_to_tiles(zoom, bbox)}
+    bboxes = change_bboxes(changeset_id)
+    @@log.debug "Change bboxes: #{bboxes.size}"
+    bboxes.collect {|bbox| tiles += bbox_to_tiles(zoom, bbox)}
     tiles.uniq
   end
 
@@ -110,14 +109,6 @@ class Tiler
     @conn.query("DELETE FROM summary_tiles WHERE zoom = #{zoom}").cmd_tuples
   end
 
-  def changeset_bbox(changeset_id)
-    result = @conn.query("SELECT ST_XMin(geom::geometry) AS ymin, ST_XMax(geom::geometry) AS ymax,
-      ST_YMin(geom::geometry) AS xmin, ST_YMax(geom::geometry) AS xmax
-      FROM changesets WHERE id = #{changeset_id}")
-    row = result.to_a[0]
-    row.merge(row) {|k, v| v.to_f}
-  end
-
   def change_bboxes(changeset_id)
     bboxes = []
     @conn.query("SELECT ST_XMin(current_geom::geometry) AS ymin, ST_XMax(current_geom::geometry) AS ymax,
@@ -129,7 +120,7 @@ class Tiler
         FROM changes WHERE changeset_id = #{changeset_id}").to_a.each do |row|
       bboxes << row.merge(row) {|k, v| v.to_f}
     end
-    bboxes
+    bboxes.uniq
   end
 end
 
