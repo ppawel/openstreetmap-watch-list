@@ -14,23 +14,13 @@ class Tiler
   end
 
   def generate(zoom, changeset_id, options = {})
-    if options[:retile]
-      removed_count = clear_tiles(changeset_id, zoom)
-      @@log.debug "Removed existing tiles: #{removed_count}"
-      process = true
-    else
-      existing_tiles = get_existing_tiles(changeset_id, zoom)
-      @@log.debug "Existing tiles: #{existing_tiles.size}"
-      return existing_tiles.size if !existing_tiles.empty?
-    end
-
     bbox = changeset_bbox(changeset_id)
     @@log.debug "bbox = #{bbox}"
 
     tiles = changeset_tiles(changeset_id, zoom)
     @@log.debug "Tiles to process: #{tiles.size}"
 
-    return -1 if tiles.size > options[:processing_limit]
+    return -1 if options[:processing_limit] and tiles.size > options[:processing_limit]
 
     count = 0
 
