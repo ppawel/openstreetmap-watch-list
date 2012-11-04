@@ -36,6 +36,12 @@ opt = OptionParser.new do |opts|
 
   opts.separator('')
 
+  opts.on("--processing-limit N", "Skip changesets with number of tiles to process larger than N") do |o|
+    options[:processing_limit] = o
+  end
+
+  opts.separator('')
+
   opts.on("--retile", "Remove existing tiles and regenerate tiles from scratch (optional, default is false)") do |o|
     options[:retile] = o
   end
@@ -58,6 +64,7 @@ end
 
 options[:changesets] ||= ['all']
 options[:geometry_tiles] ||= []
+options[:processing_limit] ||= 256
 options[:summary_tiles] ||= []
 
 puts options.inspect
@@ -84,15 +91,16 @@ for zoom in options[:geometry_tiles]
   count = 0
   puts "Changesets to process: #{changeset_ids.size}"
   changeset_ids.each do |changeset_id|
+    count += 1
     before = Time.now
 
     @conn.transaction do |c|
-      puts "Generating tiles for changeset #{changeset_id} at zoom level #{zoom}... (#{count + 1} of #{changeset_ids.size})"
+      puts "Generating tiles for changeset #{changeset_id} at zoom level #{zoom}... (#{count} of #{changeset_ids.size})"
       tile_count = tiler.generate(zoom, changeset_id, options)
+      tiler.update_tiled_at(changeset_id)
       puts "Done, tile count: #{tile_count}"
     end
 
-    count += 1
-    puts "Changeset #{changeset_id} took #{Time.now - before}s (#{count + 1} of #{changeset_ids.size})"
+    puts "Changeset #{changeset_id} took #{Time.now - before}s (#{count} of #{changeset_ids.size})"
   end
 end

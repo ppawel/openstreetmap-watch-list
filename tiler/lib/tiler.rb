@@ -30,6 +30,8 @@ class Tiler
     tiles = changeset_tiles(changeset_id, zoom)
     @@log.debug "Tiles to process: #{tiles.size}"
 
+    return -1 if tiles.size > options[:processing_limit]
+
     count = 0
 
     tiles.each do |tile|
@@ -57,11 +59,18 @@ class Tiler
   def get_changeset_ids(options)
     ids = []
     if options[:changesets] == ['all']
-      @conn.query("SELECT id FROM changesets ORDER BY created_at DESC").each {|row| ids << row['id'].to_i}
+      @conn.query("SELECT id
+        FROM changesets
+        WHERE last_tiled_at IS NULL
+        ORDER BY created_at DESC").each {|row| ids << row['id'].to_i}
     else
       ids = options[:changesets]
     end
     ids
+  end
+
+  def update_tiled_at(changeset_id)
+    @conn.query("UPDATE changesets SET last_tiled_at = NOW() WHERE id = #{changeset_id}")
   end
 
   def generate_summary_tiles(summary_zoom)

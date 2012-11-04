@@ -19,6 +19,7 @@ CREATE TABLE changesets (
   user_id bigint NOT NULL,
   created_at timestamp without time zone NOT NULL,
   closed_at timestamp without time zone NOT NULL,
+  last_tiled_at timestamp without time zone NOT NULL,
   num_changes integer,
   tags hstore,
   geom geography -- Aggregated geometry for this changeset's changes. Suitable for ST_Intersection/ST_Intersects calls.
@@ -64,4 +65,5 @@ CREATE TABLE summary_tiles (
 CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
 CREATE INDEX idx_changesets_geom ON changesets USING gist (geom);
 CREATE INDEX idx_changesets_created_at ON changesets USING btree (created_at);
+CREATE INDEX idx_changesets_last_tiled_at ON changesets USING btree (last_tiled_at);
 CREATE INDEX idx_changeset_tiles_changeset_id ON changeset_tiles USING btree (changeset_id);
