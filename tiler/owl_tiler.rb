@@ -103,7 +103,7 @@ for zoom in options[:geometry_tiles]
       puts "Generating tiles for changeset #{changeset_id} at zoom level #{zoom}... (#{count} of #{changeset_ids.size})"
 
       if options[:retile]
-        removed_count = clear_tiles(changeset_id, zoom)
+        removed_count = tiler.clear_tiles(changeset_id, zoom)
         puts "Removed existing tiles: #{removed_count}"
       end
 

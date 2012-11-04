@@ -82,6 +82,10 @@ class Tiler
     end
   end
 
+  def clear_tiles(changeset_id, zoom)
+    @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
+  end
+
   protected
 
   def changeset_tiles(changeset_id, zoom)
@@ -99,10 +103,6 @@ class Tiler
       tiles << [row['x'].to_i, row['y'].to_i]
     end
     tiles
-  end
-
-  def clear_tiles(changeset_id, zoom)
-    @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
   end
 
   def clear_summary_tiles(zoom)
