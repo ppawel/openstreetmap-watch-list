@@ -41,7 +41,7 @@ CREATE TABLE changes (
   el_type element_type NOT NULL,
   el_id bigint NOT NULL,
   version int NOT NULL,
-  changeset_id bigint NOT NULL REFERENCES changesets,
+  changeset_id bigint NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   action action NOT NULL,
   changed_tags boolean NOT NULL,
