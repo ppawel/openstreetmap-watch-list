@@ -21,7 +21,7 @@ class Tiler
 
     count = 0
 
-    tiles.each do |tile|
+    tiles.each_with_index do |tile, index|
       x, y = tile[0], tile[1]
       lat1, lon1 = tile2latlon(x, y, zoom)
       lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
@@ -29,11 +29,12 @@ class Tiler
       geom = @conn.query("
         SELECT ST_Intersection(
           geom,
-          ST_SetSRID(ST_MakeBox2D(ST_MakePoint(#{lon2}, #{lat1}), ST_MakePoint(#{lon1}, #{lat2})), 4326))
+          ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))
         FROM changesets WHERE id = #{changeset_id}").getvalue(0, 0)
 
       if geom != '0107000020E610000000000000' and geom
-        @@log.debug "    Got geometry for tile (#{x}, #{y})"
+        # Tile geometry is not empty - need to save the tile!
+        @@log.debug "  Got geometry for tile (#{x}, #{y}) [tile #{index + 1} / #{tiles.size}]"
         @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
           VALUES (#{changeset_id}, #{zoom}, #{x}, #{y}, '#{geom}')")
         count += 1
