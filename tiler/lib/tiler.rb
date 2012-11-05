@@ -43,14 +43,23 @@ class Tiler
     count
   end
 
+  ##
+  # Retrieves a list of changeset ids according to given options.
+  #
   def get_changeset_ids(options)
-    ids = []
+    sql = "SELECT id FROM changesets WHERE num_changes < #{options[:processing_change_limit]}"
+
+    unless options[:retile]
+      # We are NOT retiling so skip changesets that have been already tiled.
+      sql += " AND last_tiled_at IS NULL"
+    end
+
+    sql += " ORDER BY created_at DESC"
+
     if options[:changesets] == ['all']
-      @conn.query("SELECT id
-        FROM changesets
-        WHERE last_tiled_at IS NULL AND num_changes < #{options[:processing_change_limit]}
-        ORDER BY created_at DESC").each {|row| ids << row['id'].to_i}
+      ids = @conn.query(sql).collect {|row| row['id'].to_i}
     else
+      # List of changeset ids must have been provided.
       ids = options[:changesets]
     end
     ids
