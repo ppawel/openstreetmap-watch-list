@@ -61,7 +61,7 @@ def self.parse_cmdline_options
 
   options[:changesets] ||= ['all']
   options[:geometry_tiles] ||= []
-  options[:processing_change_limit] ||= 11111
+  options[:processing_change_limit] ||= 500000
   options[:summary_tiles] ||= []
 
   options
