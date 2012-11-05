@@ -17,6 +17,7 @@ puts options.inspect
 
 @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
   :user => $config['username'], :password => $config['password'])
+@conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (changeset_id int, x int, y int, zoom int, tile_bbox geometry);')
 
 tiler = Tiler::Tiler.new(@conn)
 

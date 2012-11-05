@@ -18,6 +18,7 @@ class Tiler
     @@log.debug "Tiles to process: #{tiles.size}"
 
     return -1 if options[:processing_tile_limit] and tiles.size > options[:processing_tile_limit]
+    @conn.exec('TRUNCATE _tile_bboxes')
 
     count = 0
 
@@ -26,20 +27,15 @@ class Tiler
       lat1, lon1 = tile2latlon(x, y, zoom)
       lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
 
-      geom = @conn.query("
-        SELECT ST_Intersection(
-          geom,
-          ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))
-        FROM changesets WHERE id = #{changeset_id}").getvalue(0, 0)
-
-      if geom != '0107000020E610000000000000' and geom
-        # Tile geometry is not empty - need to save the tile!
-        @@log.debug "  Got geometry for tile (#{x}, #{y}) [tile #{index + 1} / #{tiles.size}]"
-        @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
-          VALUES (#{changeset_id}, #{zoom}, #{x}, #{y}, '#{geom}')")
-        count += 1
-      end
+      @conn.query("INSERT INTO _tile_bboxes VALUES (#{changeset_id}, #{x}, #{y}, #{zoom},
+        ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
+
+    count = @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
+      SELECT bb.changeset_id, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox) AS geom
+      FROM _tile_bboxes bb
+      INNER JOIN changesets cs ON (cs.id = bb.changeset_id)
+      WHERE ST_Intersects(geom, bb.tile_bbox)").cmd_tuples
 
     count
   end
