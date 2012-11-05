@@ -9,12 +9,10 @@ Contents:
 ---------
 
 osmosis-plugin/
-  Contains a plugin for Osmosis that takes care of populating the database.
-  See the `INSTALL.md` file for installation instructions.
+  Git submodule containing a plugin for Osmosis that takes care of
+  populating the database.
 
-  Plugin source code is available here:
-
-  https://github.com/ppawel/osmosis/tree/owldb-plugin
+  See the `INSTALL.md` file for installation and usage instructions.
 
 rails/
   A Rails project which hosts the API which allows applications

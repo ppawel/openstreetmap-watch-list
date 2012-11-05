@@ -29,10 +29,12 @@ refer to http://wiki.openstreetmap.org/wiki/Osmosis/PostGIS_Setup.
 Install Osmosis
 ===============
 
-For now we're using a modified version of Osmosis, this should just be an Osmosis plugin in the future.
+For now we're using a modified version of Osmosis, this should just be an Osmosis plugin in the future. To build Osmosis
+with the OWL plugin, do the following in a checked out OWL repository:
 
-    git clone -b owldb-plugin https://github.com/ppawel/osmosis.git
-    cd osmosis/
+    git submodule init
+    git submodule update
+    cd osmosis-plugin
     ant build
     # Copy resulting build to a path of your convenience
 
