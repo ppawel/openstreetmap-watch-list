@@ -98,11 +98,11 @@ class Tiler
   protected
 
   def changeset_tiles(changeset_id, zoom)
-    tiles = []
+    tiles = Set.new
     bboxes = change_bboxes(changeset_id)
     @@log.debug "Change bboxes: #{bboxes.size}"
-    bboxes.collect {|bbox| tiles += bbox_to_tiles(zoom, bbox)}
-    tiles.uniq
+    bboxes.collect {|bbox| tiles.merge(bbox_to_tiles(zoom, bbox))}
+    tiles
   end
 
   def get_existing_tiles(changeset_id, zoom)

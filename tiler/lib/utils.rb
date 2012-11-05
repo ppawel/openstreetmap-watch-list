@@ -1,3 +1,5 @@
+require 'set'
+
 def degrees(rad)
   rad * 180 / Math::PI
 end
@@ -25,7 +27,7 @@ def tile2latlon(xtile, ytile, zoom)
 end
 
 def bbox_to_tiles(zoom, bbox)
-  tiles = []
+  tiles = Set.new
   top_left = latlon2tile(bbox['xmin'], bbox['ymin'], zoom)
   bottom_right = latlon2tile(bbox['xmax'], bbox['ymax'], zoom)
   min_y = [top_left[1], bottom_right[1]].min
@@ -36,6 +38,5 @@ def bbox_to_tiles(zoom, bbox)
       tiles << [x, y]
     end
   end
-
-  tiles.uniq
+  tiles
 end
