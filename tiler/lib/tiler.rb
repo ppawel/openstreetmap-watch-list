@@ -11,7 +11,8 @@ class Tiler
 
   def initialize(conn)
     @conn = conn
-    @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (changeset_id int, x int, y int, zoom int, tile_bbox geometry);')
+    @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry);')
+    @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (x int, y int, zoom int, tile_geom geometry);')
   end
 
   def generate(zoom, changeset_id, options = {})
@@ -19,7 +20,9 @@ class Tiler
     @@log.debug "Tiles to process: #{tiles.size}"
 
     return -1 if options[:processing_tile_limit] and tiles.size > options[:processing_tile_limit]
+
     @conn.exec('TRUNCATE _tile_bboxes')
+    @conn.exec('TRUNCATE _tile_changes_tmp')
 
     count = 0
 
@@ -28,15 +31,29 @@ class Tiler
       lat1, lon1 = tile2latlon(x, y, zoom)
       lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
 
-      @conn.query("INSERT INTO _tile_bboxes VALUES (#{changeset_id}, #{x}, #{y}, #{zoom},
+      @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
 
-    count = @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
-      SELECT bb.changeset_id, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox) AS geom
+    @@log.debug "Created _tile_bboxes"
+
+    count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
+      SELECT bb.zoom, bb.x, bb.y, ST_MakeValid(ST_Intersection(current_geom, bb.tile_bbox)::geometry)
       FROM _tile_bboxes bb
-      INNER JOIN changesets cs ON (cs.id = bb.changeset_id)
-      WHERE ST_Intersects(geom, bb.tile_bbox)").cmd_tuples
+      INNER JOIN changes cs ON ST_Intersects(current_geom, bb.tile_bbox)
+      WHERE cs.changeset_id = #{changeset_id}
+        UNION
+      SELECT bb.zoom, bb.x, bb.y, ST_MakeValid(ST_Intersection(new_geom, bb.tile_bbox)::geometry)
+      FROM _tile_bboxes bb
+      INNER JOIN changes cs ON ST_Intersects(new_geom, bb.tile_bbox)
+      WHERE cs.changeset_id = #{changeset_id}").cmd_tuples
+
+    @@log.debug "Created _tile_changes_tmp (count = #{count})"
+
+    count = @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
+      SELECT #{changeset_id}, zoom, x, y, ST_Union(tile_geom)
+      FROM _tile_changes_tmp tmp
+      GROUP BY zoom, x, y").cmd_tuples
 
     count
   end
