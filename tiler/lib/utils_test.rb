@@ -1,7 +1,7 @@
 require 'test/unit'
 require './tilerlib'
 
-class TilerTest < Test::Unit::TestCase
+class UtilsTest < Test::Unit::TestCase
   def test_bbox_to_tiles
     tiles = OWL::bbox_to_tiles(18, {'ymin' => -95.2174366, 'ymax' => -95.2174366, 'xmin' => 18.4330814, 'xmax' => 18.4330814})
     assert_equal(61736, tiles[0][0])
