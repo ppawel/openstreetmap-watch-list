@@ -19,7 +19,7 @@ CREATE TABLE changesets (
   user_id bigint NOT NULL,
   created_at timestamp without time zone NOT NULL,
   closed_at timestamp without time zone NOT NULL,
-  last_tiled_at timestamp without time zone NOT NULL,
+  last_tiled_at timestamp without time zone,
   num_changes integer,
   tags hstore,
   geom geography -- Aggregated geometry for this changeset's changes. Suitable for ST_Intersection/ST_Intersects calls.
