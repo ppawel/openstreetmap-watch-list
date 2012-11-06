@@ -62,11 +62,11 @@ class Tiler
   # Retrieves a list of changeset ids according to given options.
   #
   def get_changeset_ids(options)
-    sql = "SELECT id FROM changesets WHERE num_changes < #{options[:processing_change_limit]}"
+    sql = "SELECT id FROM changesets cs WHERE num_changes < #{options[:processing_change_limit]}"
 
     unless options[:retile]
       # We are NOT retiling so skip changesets that have been already tiled.
-      sql += " AND last_tiled_at IS NULL"
+      sql += " AND NOT EXISTS (SELECT 1 FROM changeset_tiles WHERE changeset_id = cs.id)"
     end
 
     sql += " ORDER BY created_at DESC"
@@ -78,10 +78,6 @@ class Tiler
       ids = options[:changesets]
     end
     ids
-  end
-
-  def update_tiled_at(changeset_id)
-    @conn.query("UPDATE changesets SET last_tiled_at = NOW() WHERE id = #{changeset_id}")
   end
 
   def generate_summary_tiles(summary_zoom)

@@ -49,7 +49,6 @@ for zoom in options[:geometry_tiles]
       end
 
       tile_count = tiler.generate(zoom, changeset_id, options)
-      tiler.update_tiled_at(changeset_id)
       puts "Done, tile count: #{tile_count}"
     end
 
