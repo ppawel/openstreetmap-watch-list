@@ -9,6 +9,20 @@ class TilerTest < Test::Unit::TestCase
   def test_basic_tiling
     setup_db
     tiler = Tiler::Tiler.new(@conn)
+    #changeset_ids = tiler.get_changeset_ids(prepare_options)
+    count = tiler.generate(16, 13517262, prepare_options)
+    assert_equal(62, count)
+    #puts changeset_ids.inspect
+  end
+
+  def prepare_options
+    options = {}
+    options[:changesets] ||= ['all']
+    options[:geometry_tiles] ||= []
+    options[:processing_change_limit] ||= 500000
+    options[:summary_tiles] ||= []
+    options[:retile] = true
+    options
   end
 
   def setup_db
