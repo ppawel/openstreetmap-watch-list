@@ -23,11 +23,13 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE FUNCTION OWL_UpdateChangesetChangeCount(bigint) RETURNS void AS $$
-  UPDATE
-    changesets cs
-  SET num_changes = (SELECT COUNT(*) FROM changes c WHERE c.changeset_id = cs.id)
-  WHERE cs.id = $1;
-$$ LANGUAGE SQL;
+DECLARE
+  change_count int;
+BEGIN
+  change_count := (SELECT COUNT(*) FROM changes WHERE changeset_id = $1);
+  UPDATE changesets cs SET num_changes = change_count WHERE cs.id = $1;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE FUNCTION OWL_UpdateAllChangesetsGeom() RETURNS void AS $$
 DECLARE
