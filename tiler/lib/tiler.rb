@@ -38,12 +38,12 @@ class Tiler
     @@log.debug "Created _tile_bboxes"
 
     count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
-      SELECT bb.zoom, bb.x, bb.y, ST_MakeValid(ST_Intersection(current_geom, bb.tile_bbox)::geometry)
+      SELECT bb.zoom, bb.x, bb.y, ST_MakeValid(ST_Intersection(ST_MakeValid(current_geom::geometry), bb.tile_bbox)::geometry)
       FROM _tile_bboxes bb
       INNER JOIN changes cs ON ST_Intersects(current_geom, bb.tile_bbox)
       WHERE cs.changeset_id = #{changeset_id}
         UNION
-      SELECT bb.zoom, bb.x, bb.y, ST_MakeValid(ST_Intersection(new_geom, bb.tile_bbox)::geometry)
+      SELECT bb.zoom, bb.x, bb.y, ST_MakeValid(ST_Intersection(ST_MakeValid(new_geom::geometry), bb.tile_bbox)::geometry)
       FROM _tile_bboxes bb
       INNER JOIN changes cs ON ST_Intersects(new_geom, bb.tile_bbox)
       WHERE cs.changeset_id = #{changeset_id}").cmd_tuples

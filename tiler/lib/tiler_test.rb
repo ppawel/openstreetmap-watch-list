@@ -8,11 +8,18 @@ require 'tiler'
 class TilerTest < Test::Unit::TestCase
   def test_basic_tiling
     setup_db
+    exec_sql_file('test_data.sql')
     tiler = Tiler::Tiler.new(@conn)
-    #changeset_ids = tiler.get_changeset_ids(prepare_options)
     count = tiler.generate(16, 13517262, prepare_options)
     assert_equal(62, count)
-    #puts changeset_ids.inspect
+  end
+
+  def test_invalid_geometry
+    setup_db
+    exec_sql_file('test_changeset_13440045.sql')
+    tiler = Tiler::Tiler.new(@conn)
+    count = tiler.generate(16, 13440045, prepare_options)
+    assert_equal(14, count)
   end
 
   def prepare_options
@@ -30,7 +37,6 @@ class TilerTest < Test::Unit::TestCase
     @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
       :user => $config['username'], :password => $config['password'])
     exec_sql_file('../../sql/owl_schema.sql')
-    exec_sql_file('test_data.sql')
   end
 
   def exec_sql_file(file)
