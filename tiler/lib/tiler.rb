@@ -62,22 +62,20 @@ class Tiler
   # Retrieves a list of changeset ids according to given options.
   #
   def get_changeset_ids(options)
-    sql = "SELECT id FROM changesets cs WHERE num_changes < #{options[:processing_change_limit]}"
-
-    unless options[:retile]
-      # We are NOT retiling so skip changesets that have been already tiled.
-      sql += " AND NOT EXISTS (SELECT 1 FROM changeset_tiles WHERE changeset_id = cs.id)"
-    end
-
-    sql += " ORDER BY created_at DESC"
-
     if options[:changesets] == ['all']
-      ids = @conn.query(sql).collect {|row| row['id'].to_i}
+      sql = "(SELECT id FROM changesets cs WHERE num_changes < #{options[:processing_change_limit]}
+        ORDER BY created_at DESC)"
+
+      unless options[:retile]
+        # We are NOT retiling so skip changesets that have been already tiled.
+        sql += " EXCEPT SELECT changeset_id FROM changeset_tiles GROUP BY changeset_id"
+      end
+
+      @conn.query(sql).collect {|row| row['id'].to_i}
     else
       # List of changeset ids must have been provided.
-      ids = options[:changesets]
+      options[:changesets]
     end
-    ids
   end
 
   def generate_summary_tiles(summary_zoom)
