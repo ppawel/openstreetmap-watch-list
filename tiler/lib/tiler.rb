@@ -11,6 +11,7 @@ class Tiler
 
   def initialize(conn)
     @conn = conn
+    @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (changeset_id int, x int, y int, zoom int, tile_bbox geometry);')
   end
 
   def generate(zoom, changeset_id, options = {})
