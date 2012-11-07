@@ -64,7 +64,13 @@ class Tiler
   #
   def get_changeset_ids(options)
     if options[:changesets] == ['all']
-      sql = "(SELECT id FROM changesets cs WHERE num_changes < #{options[:processing_change_limit]}
+      sql = "(
+        SELECT cs.id
+        FROM changesets cs
+        INNER JOIN changes c ON (c.changeset_id = cs.id)
+        WHERE num_changes < #{options[:processing_change_limit]} AND
+          c.current_geom IS NOT NULL OR c.new_geom IS NOT NULL
+        GROUP BY cs.id
         ORDER BY created_at DESC)"
 
       unless options[:retile]
@@ -132,7 +138,7 @@ class Tiler
     bboxes = []
     @conn.query("SELECT ST_XMin(current_geom::geometry) AS ymin, ST_XMax(current_geom::geometry) AS ymax,
         ST_YMin(current_geom::geometry) AS xmin, ST_YMax(current_geom::geometry) AS xmax
-        FROM changes WHERE changeset_id = #{changeset_id}
+        FROM changes WHERE changeset_id = #{changeset_id} AND current_geom IS NOT NULL
           UNION
         SELECT ST_XMin(new_geom::geometry) AS ymin, ST_XMax(new_geom::geometry) AS ymax,
         ST_YMin(new_geom::geometry) AS xmin, ST_YMax(new_geom::geometry) AS xmax
