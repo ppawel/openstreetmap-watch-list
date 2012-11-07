@@ -3,6 +3,7 @@
 $:.unshift File.absolute_path(File.dirname(__FILE__) + '/lib/')
 
 require 'pg'
+require 'parallel'
 require 'yaml'
 
 require 'cmdline_options'
@@ -36,6 +37,7 @@ changeset_ids = tiler.get_changeset_ids(options)
 for zoom in options[:geometry_tiles]
   count = 0
   puts "Changesets to process: #{changeset_ids.size}"
+
   changeset_ids.each do |changeset_id|
     count += 1
     before = Time.now
