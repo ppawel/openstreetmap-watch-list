@@ -20,18 +20,6 @@ puts options.inspect
   :user => $config['username'], :password => $config['password'])
 
 tiler = Tiler::Tiler.new(@conn)
-
-for summary_zoom in options[:summary_tiles]
-  before = Time.now
-
-  @conn.transaction do |c|
-    puts "Generating summary tiles for zoom level #{summary_zoom}..."
-    tiler.generate_summary_tiles(summary_zoom)
-  end
-
-  puts "Took #{Time.now - before}s"
-end
-
 changeset_ids = tiler.get_changeset_ids(options)
 
 for zoom in options[:geometry_tiles]
