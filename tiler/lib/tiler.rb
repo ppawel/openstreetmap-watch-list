@@ -39,7 +39,7 @@ class Tiler
         INNER JOIN changes c ON (c.changeset_id = cs.id)
         WHERE num_changes < #{options[:processing_change_limit]} AND
           c.current_geom IS NOT NULL OR c.new_geom IS NOT NULL
-        GROUP BY cs.id
+        GROUP BY cs.id, cs.created_at
         ORDER BY created_at DESC)"
 
       unless options[:retile]
