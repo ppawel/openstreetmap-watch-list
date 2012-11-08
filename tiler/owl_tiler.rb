@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+STDOUT.sync = true
+
 $:.unshift File.absolute_path(File.dirname(__FILE__) + '/lib/')
 
 require 'pg'
