@@ -34,12 +34,7 @@ for zoom in options[:geometry_tiles]
 
     @conn.transaction do |c|
       puts "Generating tiles for changeset #{changeset_id} at zoom level #{zoom}... (#{count} of #{changeset_ids.size})"
-
-      if options[:retile]
-        removed_count = tiler.clear_tiles(changeset_id, zoom)
-        puts "Removed existing tiles: #{removed_count}"
-      end
-
+      tiler.clear_tiles(changeset_id, zoom) if options[:retile]
       tile_count = tiler.generate(zoom, changeset_id, options)
       puts "Done, tile count: #{tile_count}"
     end

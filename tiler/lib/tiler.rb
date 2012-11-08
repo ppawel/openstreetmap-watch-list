@@ -55,7 +55,9 @@ class Tiler
   end
 
   def clear_tiles(changeset_id, zoom)
-    @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
+    count = @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
+    @@log.debug "Removed existing tiles: #{count}"
+    count
   end
 
   protected
@@ -91,9 +93,10 @@ class Tiler
     tiles = bbox_to_tiles(zoom, box2d_to_bbox(change["#{geom_type}_bbox"]))
 
     if tiles.size > 64
+      @@log.debug "Way #{change['el_id']} [#{geom_type}]: reducing tiles from #{tiles.size}..."
       size_before = tiles.size
       reduce_tiles(tiles, changeset_id, change, geom_type, zoom)
-      @@log.debug "Reduced tiles: #{size_before} -> #{tiles.size}"
+      @@log.debug "Way #{change['el_id']} [#{geom_type}]: reduced tiles: #{size_before} -> #{tiles.size}"
     end
 
     for tile in tiles
@@ -105,7 +108,7 @@ class Tiler
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
 
-    @@log.debug "Way #{change['el_id']}: processing #{tiles.size} tile(s) [#{geom_type}]"
+    @@log.debug "Way #{change['el_id']} [#{geom_type}]: processing #{tiles.size} tile(s)"
 
     count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
       SELECT bb.zoom, bb.x, bb.y, ST_Intersection(ST_MakeValid(#{geom_type}_geom::geometry), bb.tile_bbox)::geometry
@@ -113,11 +116,11 @@ class Tiler
       INNER JOIN changes cs ON ST_Intersects(#{geom_type}_geom, bb.tile_bbox)
       WHERE cs.id = #{change['id']}").cmd_tuples
 
-    @@log.debug "Way #{change['el_id']}: created #{count} tile(s) [#{geom_type}]"
+    @@log.debug "Way #{change['el_id']} [#{geom_type}]: created #{count} tile(s)"
   end
 
   def reduce_tiles(tiles, changeset_id, change, geom_type, zoom)
-    for source_zoom in [11, 12, 13, 14]
+    for source_zoom in [10, 11, 12, 13, 14]
       for tile in bbox_to_tiles(source_zoom, box2d_to_bbox(change["#{geom_type}_bbox"]))
         x, y = tile[0], tile[1]
         lat1, lon1 = tile2latlon(x, y, source_zoom)
