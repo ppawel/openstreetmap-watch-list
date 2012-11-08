@@ -121,30 +121,15 @@ class Tiler
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
 
+    @@log.debug "Way #{change['el_id']}: processing #{tiles.size} tile(s) [#{geom_type}]"
+
     count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
       SELECT bb.zoom, bb.x, bb.y, ST_Intersection(ST_MakeValid(#{geom_type}_geom::geometry), bb.tile_bbox)::geometry
       FROM _tile_bboxes bb
       INNER JOIN changes cs ON ST_Intersects(#{geom_type}_geom, bb.tile_bbox)
       WHERE cs.id = #{change['id']}").cmd_tuples
 
-    @@log.debug "Way #{change['el_id']}: created #{count} / #{tiles.size} tile(s) [#{geom_type}]"
-  end
-
-  def changeset_tiles(changeset_id, zoom)
-    tiles = Set.new
-    bboxes = change_bboxes(changeset_id)
-    @@log.debug "Change bboxes: #{bboxes.size}"
-    bboxes.collect {|bbox| tiles.merge(bbox_to_tiles(zoom, bbox))}
-    tiles
-  end
-
-  def get_existing_tiles(changeset_id, zoom)
-    tiles = []
-    @conn.query("SELECT x, y
-        FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").to_a.each do |row|
-      tiles << [row['x'].to_i, row['y'].to_i]
-    end
-    tiles
+    @@log.debug "Way #{change['el_id']}: created #{count} tile(s) [#{geom_type}]"
   end
 
   def clear_summary_tiles(zoom)
