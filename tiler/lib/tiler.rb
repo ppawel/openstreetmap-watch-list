@@ -19,7 +19,7 @@ class Tiler
     @conn.exec('TRUNCATE _tile_changes_tmp')
 
     process_node_changes(changeset_id, zoom)
-    process_way_changes(changeset_id, zoom)
+    process_way_changes(changeset_id, zoom, options)
 
     @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
       SELECT #{changeset_id}, zoom, x, y, ST_Collect(ST_MakeValid(tile_geom))
@@ -80,17 +80,22 @@ class Tiler
     end
   end
 
-  def process_way_changes(changeset_id, zoom)
+  def process_way_changes(changeset_id, zoom, options)
     for change in get_way_changes(changeset_id)
-      process_way_change(changeset_id, change, 'current', zoom) unless change['current_bbox'].nil?
-      process_way_change(changeset_id, change, 'new', zoom) unless change['new_bbox'].nil?
+      process_way_change(changeset_id, change, 'current', zoom, options) unless change['current_bbox'].nil?
+      process_way_change(changeset_id, change, 'new', zoom, options) unless change['new_bbox'].nil?
     end
   end
 
-  def process_way_change(changeset_id, change, geom_type, zoom)
+  def process_way_change(changeset_id, change, geom_type, zoom, options)
     @conn.exec('TRUNCATE _tile_bboxes')
 
     tiles = bbox_to_tiles(zoom, box2d_to_bbox(change["#{geom_type}_bbox"]))
+
+    if options[:processing_tile_limit] and tiles.size >= options[:processing_tile_limit]
+      @@log.debug "Way #{change['el_id']} [#{geom_type}]: above tile limit, skipping..."
+      return
+    end
 
     if tiles.size > 64
       @@log.debug "Way #{change['el_id']} [#{geom_type}]: reducing tiles from #{tiles.size}..."
@@ -120,7 +125,7 @@ class Tiler
   end
 
   def reduce_tiles(tiles, changeset_id, change, geom_type, zoom)
-    for source_zoom in [10, 11, 12, 13, 14]
+    for source_zoom in [4, 6, 8, 10, 11, 12, 13, 14]
       for tile in bbox_to_tiles(source_zoom, box2d_to_bbox(change["#{geom_type}_bbox"]))
         x, y = tile[0], tile[1]
         lat1, lon1 = tile2latlon(x, y, source_zoom)
