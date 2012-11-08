@@ -79,7 +79,7 @@ The easiest way to do this is to set up the Osmosis interval replication.
     # Make sure to use the OWL specific osmosis version built above
     osmosis \
     --read-replication-interval workingDirectory=replication/ \
-    --write-pgsql-change database=owl user=postgres
+    --write-owldb-change database=owl user=postgres
 
 This command:
 
