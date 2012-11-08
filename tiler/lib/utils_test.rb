@@ -11,4 +11,12 @@ class UtilsTest < Test::Unit::TestCase
     assert_equal(964, tiles[0][0])
     assert_equal(1834, tiles[0][1])
   end
+
+  def test_box2d_to_bbox
+    bbox = box2d_to_bbox('BOX(5.8243191 45.1378079,5.8243191 45.1378079)')
+    assert_equal(5.8243191, bbox[0])
+    assert_equal(45.1378079, bbox[1])
+    assert_equal(5.8243191, bbox[2])
+    assert_equal(45.1378079, bbox[3])
+  end
 end

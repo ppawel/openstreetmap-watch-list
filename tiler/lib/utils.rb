@@ -26,10 +26,20 @@ def tile2latlon(xtile, ytile, zoom)
   return lat_deg, lon_deg
 end
 
+##
+# Converts PostGIS' BOX2D string representation to a list.
+#
+def box2d_to_bbox(box2d)
+  box2d.gsub(',', ' ').gsub('BOX(', '').gsub(')', '').split(' ').map(&:to_f)
+end
+
+##
+# bbox is [xmin, ymin, xmax, ymax]
+#
 def bbox_to_tiles(zoom, bbox)
   tiles = Set.new
-  top_left = latlon2tile(bbox['xmin'], bbox['ymin'], zoom)
-  bottom_right = latlon2tile(bbox['xmax'], bbox['ymax'], zoom)
+  top_left = latlon2tile(bbox[1], bbox[0], zoom)
+  bottom_right = latlon2tile(bbox[3], bbox[2], zoom)
   min_y = [top_left[1], bottom_right[1]].min
   max_y = [top_left[1], bottom_right[1]].max
 

@@ -16,47 +16,16 @@ class Tiler
   end
 
   def generate(zoom, changeset_id, options = {})
-    tiles = changeset_tiles(changeset_id, zoom)
-    @@log.debug "Tiles to process: #{tiles.size}"
-
-    return -1 if options[:processing_tile_limit] and tiles.size > options[:processing_tile_limit]
-
-    @conn.exec('TRUNCATE _tile_bboxes')
     @conn.exec('TRUNCATE _tile_changes_tmp')
 
-    count = 0
+    process_node_changes(changeset_id, zoom)
+    process_way_changes(changeset_id, zoom)
 
-    tiles.each_with_index do |tile, index|
-      x, y = tile[0], tile[1]
-      lat1, lon1 = tile2latlon(x, y, zoom)
-      lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
-
-      @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
-        ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
-    end
-
-    @@log.debug "Created _tile_bboxes"
-
-    count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
-      SELECT bb.zoom, bb.x, bb.y, ST_Intersection(ST_MakeValid(current_geom::geometry), bb.tile_bbox)::geometry
-      FROM _tile_bboxes bb
-      INNER JOIN changes cs ON ST_Intersects(current_geom, bb.tile_bbox)
-      WHERE cs.changeset_id = #{changeset_id}
-        UNION
-      SELECT bb.zoom, bb.x, bb.y, ST_Intersection(ST_MakeValid(new_geom::geometry), bb.tile_bbox)::geometry
-      FROM _tile_bboxes bb
-      INNER JOIN changes cs ON ST_Intersects(new_geom, bb.tile_bbox)
-      WHERE cs.changeset_id = #{changeset_id}").cmd_tuples
-
-    @@log.debug "Created _tile_changes_tmp (count = #{count})"
-
-    count = @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
+    @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
       SELECT #{changeset_id}, zoom, x, y, ST_Collect(ST_MakeValid(tile_geom))
       FROM _tile_changes_tmp tmp
       WHERE NOT ST_IsEmpty(tile_geom)
       GROUP BY zoom, x, y").cmd_tuples
-
-    count
   end
 
   ##
@@ -113,6 +82,54 @@ class Tiler
 
   protected
 
+  def process_node_changes(changeset_id, zoom)
+    for change in get_node_changes(changeset_id)
+      if change['current_lat']
+        tile = latlon2tile(change['current_lat'].to_f, change['current_lon'].to_f, zoom)
+        @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom) VALUES
+          (#{zoom}, #{tile[0]}, #{tile[1]},
+          ST_SetSRID(ST_GeomFromText('POINT(#{change['current_lon']} #{change['current_lat']})'), 4326))")
+      end
+
+      if change['new_lat']
+        tile = latlon2tile(change['new_lat'].to_f, change['new_lon'].to_f, zoom)
+        @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom) VALUES
+          (#{zoom}, #{tile[0]}, #{tile[1]},
+          ST_SetSRID(ST_GeomFromText('POINT(#{change['new_lon']} #{change['new_lat']})'), 4326))")
+      end
+    end
+  end
+
+  def process_way_changes(changeset_id, zoom)
+    for change in get_way_changes(changeset_id)
+      process_way_change(changeset_id, change, 'current', zoom) unless change['current_bbox'].nil?
+      process_way_change(changeset_id, change, 'new', zoom) unless change['new_bbox'].nil?
+    end
+  end
+
+  def process_way_change(changeset_id, change, geom_type, zoom)
+    @conn.exec('TRUNCATE _tile_bboxes')
+
+    tiles = bbox_to_tiles(zoom, box2d_to_bbox(change["#{geom_type}_bbox"]))
+
+    for tile in tiles
+      x, y = tile[0], tile[1]
+      lat1, lon1 = tile2latlon(x, y, zoom)
+      lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
+
+      @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
+        ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
+    end
+
+    count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
+      SELECT bb.zoom, bb.x, bb.y, ST_Intersection(ST_MakeValid(#{geom_type}_geom::geometry), bb.tile_bbox)::geometry
+      FROM _tile_bboxes bb
+      INNER JOIN changes cs ON ST_Intersects(#{geom_type}_geom, bb.tile_bbox)
+      WHERE cs.id = #{change['id']}").cmd_tuples
+
+    @@log.debug "Way #{change['el_id']}: created #{count} / #{tiles.size} tile(s) [#{geom_type}]"
+  end
+
   def changeset_tiles(changeset_id, zoom)
     tiles = Set.new
     bboxes = change_bboxes(changeset_id)
@@ -134,18 +151,23 @@ class Tiler
     @conn.query("DELETE FROM summary_tiles WHERE zoom = #{zoom}").cmd_tuples
   end
 
-  def change_bboxes(changeset_id)
-    bboxes = []
-    @conn.query("SELECT ST_XMin(current_geom::geometry) AS ymin, ST_XMax(current_geom::geometry) AS ymax,
-        ST_YMin(current_geom::geometry) AS xmin, ST_YMax(current_geom::geometry) AS xmax
-        FROM changes WHERE changeset_id = #{changeset_id} AND current_geom IS NOT NULL
-          UNION
-        SELECT ST_XMin(new_geom::geometry) AS ymin, ST_XMax(new_geom::geometry) AS ymax,
-        ST_YMin(new_geom::geometry) AS xmin, ST_YMax(new_geom::geometry) AS xmax
-        FROM changes WHERE changeset_id = #{changeset_id}").to_a.each do |row|
-      bboxes << row.merge(row) {|k, v| v.to_f}
-    end
-    bboxes.uniq
+  def get_node_changes(changeset_id)
+    @conn.query("SELECT
+        ST_X(current_geom::geometry) AS current_lon,
+        ST_Y(current_geom::geometry) AS current_lat,
+        ST_X(new_geom::geometry) AS new_lon,
+        ST_Y(new_geom::geometry) AS new_lat
+      FROM changes WHERE changeset_id = #{changeset_id} AND el_type = 'N'").to_a
+  end
+
+  def get_way_changes(changeset_id)
+    @conn.query("SELECT
+        id,
+        el_id,
+        Box2D(current_geom::geometry) AS current_bbox,
+        Box2D(new_geom::geometry) AS new_bbox
+        FROM changes
+        WHERE changeset_id = #{changeset_id} AND el_type = 'W'").to_a
   end
 end
 
