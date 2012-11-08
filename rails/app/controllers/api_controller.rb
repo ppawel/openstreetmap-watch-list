@@ -16,6 +16,13 @@ class ApiController < ApplicationController
     render :json => @tile, :callback => params[:callback]
   end
 
+  def feed
+    zoom = params[:zoom].to_i
+    from_x, from_y = params[:from].split('/').map(&:to_i)
+    to_x, to_y = params[:to].split('/').map(&:to_i)
+    @changesets = find_changesets_by_range(zoom, from_x, from_y, to_x, to_y, 30)
+  end
+
 private
   def find_changesets(x, y, zoom, limit)
     Changeset.find_by_sql("
@@ -24,6 +31,20 @@ private
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
       WHERE zoom = #{zoom} AND x = #{x} AND y = #{y}
       GROUP BY cs.id, cs.created_at, cs.num_changes, cs.user_id
+      ORDER BY cs.created_at DESC
+      LIMIT #{limit}
+      ")
+  end
+
+  def find_changesets_by_range(zoom, from_x, from_y, to_x, to_y, limit)
+    subtiles_per_tile = 2**16 / 2**zoom
+    Changeset.find_by_sql("
+      SELECT DISTINCT cs.*
+      FROM changeset_tiles cst
+      INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
+      WHERE zoom = 16
+            AND x >= #{from_x * subtiles_per_tile} AND x < #{(to_x + 1) * subtiles_per_tile}
+            AND y >= #{from_y * subtiles_per_tile} AND y < #{(to_y + 1) * subtiles_per_tile}
       ORDER BY cs.created_at DESC
       LIMIT #{limit}
       ")

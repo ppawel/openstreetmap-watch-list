@@ -4,4 +4,5 @@ OwlViewer::Application.routes.draw do
 
   match 'changesets/:zoom/:x/:y' => 'api#changesets', :zoom => /\d+/, :x => /\d+/, :y => /\d+/
   match 'summary/:zoom/:x/:y' => 'api#summary', :zoom => /\d+/, :x => /\d+/, :y => /\d+/
+  match 'feed.atom' => 'api#feed', :as => :feed, :defaults => { :format => 'atom' }
 end
