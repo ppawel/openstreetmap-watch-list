@@ -42,9 +42,19 @@ def bbox_to_tiles(zoom, bbox)
   bottom_right = latlon2tile(bbox[3], bbox[2], zoom)
   min_y = [top_left[1], bottom_right[1]].min
   max_y = [top_left[1], bottom_right[1]].max
-
   (top_left[0]..bottom_right[0]).each do |x|
     (min_y..max_y).each do |y|
+      tiles << [x, y]
+    end
+  end
+  tiles
+end
+
+def subtiles(tile, source_zoom, target_zoom)
+  tiles = Set.new
+  subtiles_per_tile = 2**target_zoom / 2**source_zoom
+  (tile[0] * subtiles_per_tile..(tile[0] + 1) * subtiles_per_tile - 1).each do |x|
+    (tile[1] * subtiles_per_tile..(tile[1] + 1) * subtiles_per_tile - 1).each do |y|
       tiles << [x, y]
     end
   end

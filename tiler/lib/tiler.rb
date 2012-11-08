@@ -90,6 +90,12 @@ class Tiler
 
     tiles = bbox_to_tiles(zoom, box2d_to_bbox(change["#{geom_type}_bbox"]))
 
+    if tiles.size > 64
+      size_before = tiles.size
+      reduce_tiles(tiles, changeset_id, change, geom_type, zoom)
+      @@log.debug "Reduced tiles: #{size_before} -> #{tiles.size}"
+    end
+
     for tile in tiles
       x, y = tile[0], tile[1]
       lat1, lon1 = tile2latlon(x, y, zoom)
@@ -110,6 +116,24 @@ class Tiler
     @@log.debug "Way #{change['el_id']}: created #{count} tile(s) [#{geom_type}]"
   end
 
+  def reduce_tiles(tiles, changeset_id, change, geom_type, zoom)
+    for source_zoom in [11, 12, 13, 14]
+      for tile in bbox_to_tiles(source_zoom, box2d_to_bbox(change["#{geom_type}_bbox"]))
+        x, y = tile[0], tile[1]
+        lat1, lon1 = tile2latlon(x, y, source_zoom)
+        lat2, lon2 = tile2latlon(x + 1, y + 1, source_zoom)
+        intersects = @conn.query("
+          SELECT ST_Intersects(ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326), #{geom_type}_geom)
+          FROM changes cs
+          WHERE cs.id = #{change['id']}").getvalue(0, 0) == 't'
+        if !intersects
+          subtiles = subtiles(tile, source_zoom, zoom)
+          tiles.subtract(subtiles)
+        end
+      end
+    end
+  end
+
   def get_node_changes(changeset_id)
     @conn.query("SELECT
         ST_X(current_geom::geometry) AS current_lon,
@@ -125,8 +149,7 @@ class Tiler
         el_id,
         Box2D(current_geom::geometry) AS current_bbox,
         Box2D(new_geom::geometry) AS new_bbox
-        FROM changes
-        WHERE changeset_id = #{changeset_id} AND el_type = 'W'").to_a
+      FROM changes WHERE changeset_id = #{changeset_id} AND el_type = 'W'").to_a
   end
 end
 
