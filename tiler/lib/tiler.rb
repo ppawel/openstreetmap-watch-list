@@ -34,12 +34,9 @@ class Tiler
   def get_changeset_ids(options)
     if options[:changesets] == ['all']
       sql = "(
-        SELECT cs.id
-        FROM changesets cs
-        INNER JOIN changes c ON (c.changeset_id = cs.id)
-        WHERE num_changes < #{options[:processing_change_limit]} AND
-          c.current_geom IS NOT NULL OR c.new_geom IS NOT NULL
-        GROUP BY cs.id, cs.created_at
+        SELECT id
+        FROM changesets
+        WHERE num_changes < #{options[:processing_change_limit]}
         ORDER BY created_at DESC)"
 
       unless options[:retile]
