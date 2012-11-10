@@ -79,8 +79,8 @@ class Tiler
 
   def process_way_changes(changeset_id, zoom, options)
     for change in get_way_changes(changeset_id)
-      process_way_change(changeset_id, change, 'current', zoom, options) unless change['current_bbox'].nil?
-      process_way_change(changeset_id, change, 'new', zoom, options) unless change['new_bbox'].nil?
+      process_way_change(changeset_id, change, 'both', zoom, options) unless change['both_bbox'].nil?
+      #process_way_change(changeset_id, change, 'new', zoom, options) unless change['new_bbox'].nil?
     end
   end
 
@@ -113,9 +113,10 @@ class Tiler
     @@log.debug "Way #{change['el_id']} [#{geom_type}]: processing #{tiles.size} tile(s)"
 
     count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
-      SELECT bb.zoom, bb.x, bb.y, ST_Intersection(ST_MakeValid(#{geom_type}_geom::geometry), bb.tile_bbox)::geometry
+      SELECT bb.zoom, bb.x, bb.y,
+        ST_Intersection(ST_Collect(current_geom::geometry, new_geom::geometry), bb.tile_bbox)::geometry
       FROM _tile_bboxes bb
-      INNER JOIN changes cs ON ST_Intersects(#{geom_type}_geom, bb.tile_bbox)
+      INNER JOIN changes cs ON ST_Intersects(ST_Collect(current_geom::geometry, new_geom::geometry), bb.tile_bbox)
       WHERE cs.id = #{change['id']}").cmd_tuples
 
     @@log.debug "Way #{change['el_id']} [#{geom_type}]: created #{count} tile(s)"
@@ -128,7 +129,9 @@ class Tiler
         lat1, lon1 = tile2latlon(x, y, source_zoom)
         lat2, lon2 = tile2latlon(x + 1, y + 1, source_zoom)
         intersects = @conn.query("
-          SELECT ST_Intersects(ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326), #{geom_type}_geom)
+          SELECT ST_Intersects(
+            ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326),
+            ST_Collect(current_geom::geometry, new_geom::geometry))
           FROM changes cs
           WHERE cs.id = #{change['id']}").getvalue(0, 0) == 't'
         if !intersects
@@ -152,9 +155,9 @@ class Tiler
     @conn.query("SELECT
         id,
         el_id,
-        Box2D(current_geom::geometry) AS current_bbox,
-        Box2D(new_geom::geometry) AS new_bbox
-      FROM changes WHERE changeset_id = #{changeset_id} AND el_type = 'W'").to_a
+        Box2D(ST_Collect(current_geom::geometry, new_geom::geometry)) AS both_bbox
+      FROM changes WHERE changeset_id = #{changeset_id} AND el_type = 'W'
+      ORDER BY el_id").to_a
   end
 end
 
