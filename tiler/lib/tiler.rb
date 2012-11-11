@@ -110,7 +110,14 @@ class Tiler
 
     count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
       SELECT bb.zoom, bb.x, bb.y,
-        ST_Intersection(ST_Collect(current_geom::geometry, new_geom::geometry), bb.tile_bbox)::geometry
+        CASE
+          WHEN current_geom IS NOT NULL AND new_geom IS NOT NULL THEN
+            ST_Intersection(ST_Union(current_geom::geometry, new_geom::geometry), bb.tile_bbox)::geometry
+          WHEN current_geom IS NOT NULL THEN
+            ST_Intersection(current_geom, bb.tile_bbox)::geometry
+          WHEN new_geom IS NOT NULL THEN
+            ST_Intersection(new_geom, bb.tile_bbox)::geometry
+        END
       FROM _tile_bboxes bb
       INNER JOIN changes cs ON ST_Intersects(ST_Collect(current_geom::geometry, new_geom::geometry), bb.tile_bbox)
       WHERE cs.id = #{change['id']}").cmd_tuples
