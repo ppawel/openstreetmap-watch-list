@@ -79,26 +79,25 @@ class Tiler
 
   def process_way_changes(changeset_id, zoom, options)
     for change in get_way_changes(changeset_id)
-      process_way_change(changeset_id, change, 'both', zoom, options) unless change['both_bbox'].nil?
-      #process_way_change(changeset_id, change, 'new', zoom, options) unless change['new_bbox'].nil?
+      process_way_change(changeset_id, change, zoom, options) unless change['both_bbox'].nil?
     end
   end
 
-  def process_way_change(changeset_id, change, geom_type, zoom, options)
+  def process_way_change(changeset_id, change, zoom, options)
     @conn.exec('TRUNCATE _tile_bboxes')
 
-    tiles = bbox_to_tiles(zoom, box2d_to_bbox(change["#{geom_type}_bbox"]))
+    tiles = bbox_to_tiles(zoom, box2d_to_bbox(change["both_bbox"]))
 
     if options[:processing_tile_limit] and tiles.size >= options[:processing_tile_limit]
-      @@log.debug "Way #{change['el_id']} [#{geom_type}]: above tile limit, skipping..."
+      @@log.debug "Way #{change['el_id']}: above tile limit, skipping..."
       return
     end
 
     if tiles.size > 64
-      @@log.debug "Way #{change['el_id']} [#{geom_type}]: reducing tiles from #{tiles.size}..."
+      @@log.debug "Way #{change['el_id']}: reducing tiles from #{tiles.size}..."
       size_before = tiles.size
-      reduce_tiles(tiles, changeset_id, change, geom_type, zoom)
-      @@log.debug "Way #{change['el_id']} [#{geom_type}]: reduced tiles: #{size_before} -> #{tiles.size}"
+      reduce_tiles(tiles, changeset_id, change, zoom)
+      @@log.debug "Way #{change['el_id']}: reduced tiles: #{size_before} -> #{tiles.size}"
     end
 
     for tile in tiles
@@ -110,7 +109,7 @@ class Tiler
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
 
-    @@log.debug "Way #{change['el_id']} [#{geom_type}]: processing #{tiles.size} tile(s)"
+    @@log.debug "Way #{change['el_id']}: processing #{tiles.size} tile(s)"
 
     count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
       SELECT bb.zoom, bb.x, bb.y,
@@ -119,12 +118,12 @@ class Tiler
       INNER JOIN changes cs ON ST_Intersects(ST_Collect(current_geom::geometry, new_geom::geometry), bb.tile_bbox)
       WHERE cs.id = #{change['id']}").cmd_tuples
 
-    @@log.debug "Way #{change['el_id']} [#{geom_type}]: created #{count} tile(s)"
+    @@log.debug "Way #{change['el_id']}: created #{count} tile(s)"
   end
 
-  def reduce_tiles(tiles, changeset_id, change, geom_type, zoom)
+  def reduce_tiles(tiles, changeset_id, change, zoom)
     for source_zoom in [4, 6, 8, 10, 11, 12, 13, 14]
-      for tile in bbox_to_tiles(source_zoom, box2d_to_bbox(change["#{geom_type}_bbox"]))
+      for tile in bbox_to_tiles(source_zoom, box2d_to_bbox(change["both_bbox"]))
         x, y = tile[0], tile[1]
         lat1, lon1 = tile2latlon(x, y, source_zoom)
         lat2, lon2 = tile2latlon(x + 1, y + 1, source_zoom)
