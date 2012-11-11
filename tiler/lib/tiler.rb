@@ -22,7 +22,7 @@ class Tiler
     process_way_changes(changeset_id, zoom, options)
 
     @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
-      SELECT #{changeset_id}, zoom, x, y, ST_Collect(ST_MakeValid(tile_geom))
+      SELECT #{changeset_id}, zoom, x, y, ST_Collect(tile_geom)
       FROM _tile_changes_tmp tmp
       WHERE NOT ST_IsEmpty(tile_geom)
       GROUP BY zoom, x, y").cmd_tuples
