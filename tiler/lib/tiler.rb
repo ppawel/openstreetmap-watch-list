@@ -15,6 +15,9 @@ class Tiler
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (x int, y int, zoom int, tile_geom geometry);')
   end
 
+  ##
+  # Generates tiles for given zoom and changeset.
+  #
   def generate(zoom, changeset_id, options = {})
     @conn.exec('TRUNCATE _tile_changes_tmp')
 
@@ -29,15 +32,12 @@ class Tiler
   end
 
   ##
-  # Retrieves a list of changeset ids according to given options.
+  # Retrieves a list of changeset ids according to given options. If --retile option is NOT specified then
+  # changesets that already have tiles in the database are skipped.
   #
   def get_changeset_ids(options)
     if options[:changesets] == ['all']
-      sql = "(
-        SELECT id
-        FROM changesets
-        WHERE num_changes < #{options[:processing_change_limit]}
-        ORDER BY created_at DESC)"
+      sql = "(SELECT id FROM changesets ORDER BY created_at DESC)"
 
       unless options[:retile]
         # We are NOT retiling so skip changesets that have been already tiled.
@@ -51,6 +51,10 @@ class Tiler
     end
   end
 
+  ##
+  # Removes tiles for given zoom and changeset. This is useful when retiling (creating new tiles) to avoid
+  # duplicate primary key error during insert.
+  #
   def clear_tiles(changeset_id, zoom)
     count = @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
     @@log.debug "Removed existing tiles: #{count}"
@@ -88,13 +92,8 @@ class Tiler
 
     tiles = bbox_to_tiles(zoom, box2d_to_bbox(change["both_bbox"]))
 
-    if options[:processing_tile_limit] and tiles.size >= options[:processing_tile_limit]
-      @@log.debug "Way #{change['el_id']}: above tile limit, skipping..."
-      return
-    end
-
+    # Does not make sense to reduce small changesets.
     if tiles.size > 64
-      @@log.debug "Way #{change['el_id']}: reducing tiles from #{tiles.size}..."
       size_before = tiles.size
       reduce_tiles(tiles, changeset_id, change, zoom)
       @@log.debug "Way #{change['el_id']}: reduced tiles: #{size_before} -> #{tiles.size}"
@@ -108,8 +107,6 @@ class Tiler
       @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
-
-    @@log.debug "Way #{change['el_id']}: processing #{tiles.size} tile(s)"
 
     count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
       SELECT bb.zoom, bb.x, bb.y,

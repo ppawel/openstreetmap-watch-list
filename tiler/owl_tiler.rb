@@ -22,23 +22,23 @@ puts options.inspect
   :user => $config['username'], :password => $config['password'])
 
 tiler = Tiler::Tiler.new(@conn)
+
 changeset_ids = tiler.get_changeset_ids(options)
+zoom = options[:zoom_level]
+count = 0
 
-for zoom in options[:geometry_tiles]
-  count = 0
-  puts "Changesets to process: #{changeset_ids.size}"
+puts "Changesets to process: #{changeset_ids.size}"
 
-  changeset_ids.each do |changeset_id|
-    count += 1
-    before = Time.now
+changeset_ids.each do |changeset_id|
+  count += 1
+  before = Time.now
 
-    @conn.transaction do |c|
-      puts "Generating tiles for changeset #{changeset_id} at zoom level #{zoom}... (#{count} of #{changeset_ids.size})"
-      tiler.clear_tiles(changeset_id, zoom) if options[:retile]
-      tile_count = tiler.generate(zoom, changeset_id, options)
-      puts "Done, tile count: #{tile_count}"
-    end
-
-    puts "Changeset #{changeset_id} took #{Time.now - before}s (#{count} of #{changeset_ids.size})"
+  @conn.transaction do |c|
+    puts "Generating tiles for changeset #{changeset_id}... (#{count} of #{changeset_ids.size})"
+    tiler.clear_tiles(changeset_id, zoom) if options[:retile]
+    tile_count = tiler.generate(zoom, changeset_id, options)
+    puts "Done, tile count: #{tile_count}"
   end
+
+  puts "Changeset #{changeset_id} took #{Time.now - before}s (#{count} of #{changeset_ids.size})"
 end

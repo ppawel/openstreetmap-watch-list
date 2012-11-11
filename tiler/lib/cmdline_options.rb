@@ -9,11 +9,9 @@ def self.parse_cmdline_options
     opts.banner = "Usage: owl_tiler.rb [options]"
 
     opts.separator('')
-    opts.separator('Geometry tiles')
-    opts.separator('')
 
-    opts.on("--geometry-tiles x,y,z", Array, "Comma-separated list of zoom levels for which to generate geometry tiles") do |list|
-      options[:geometry_tiles] = list.map(&:to_i)
+    opts.on("--zoom-level z", "Zoom level for which to generate geometry tiles (optional, default is 16)") do |z|
+      options[:zoom_level] = z.to_i
     end
 
     opts.separator('')
@@ -27,42 +25,15 @@ def self.parse_cmdline_options
     end
 
     opts.separator('')
-
-    opts.on("--processing-tile-limit N", "Skip changesets with number of tiles to process larger than N") do |limit|
-      options[:processing_tile_limit] = limit.to_i
-    end
-
-    opts.separator('')
-
-    opts.on("--processing-change-limit N", "Skip changesets with number of changes larger than N") do |limit|
-      options[:processing_change_limit] = limit.to_i
-    end
-
-    opts.separator('')
     opts.on("--retile", "Remove existing tiles and regenerate tiles from scratch (optional, default is false)") do |o|
       options[:retile] = o
-    end
-
-    opts.separator('')
-    opts.separator('Summary tiles')
-    opts.separator('')
-
-    opts.on("--summary-tiles x,y,z", Array, "Comma-separated list of zoom levels for which to generate summary tiles") do |list|
-      options[:summary_tiles] = list.map(&:to_i)
     end
   end
 
   opt.parse!
 
-  if !options[:geometry_tiles] and !options[:summary_tiles]
-    puts opt.help
-    exit 1
-  end
-
   options[:changesets] ||= ['all']
-  options[:geometry_tiles] ||= []
-  options[:processing_change_limit] ||= 500000
-  options[:summary_tiles] ||= []
+  options[:zoom_level] ||= 16
 
   options
 end
