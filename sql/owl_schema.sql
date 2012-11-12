@@ -22,7 +22,7 @@ CREATE TABLE changesets (
   last_tiled_at timestamp without time zone,
   num_changes integer,
   tags hstore,
-  geom geography -- Aggregated geometry for this changeset's changes. Suitable for ST_Intersection/ST_Intersects calls.
+  geom geometry(GEOMETRY, 4326) -- Aggregated geometry(GEOMETRY, 4326) for this changeset's changes. Suitable for ST_Intersection/ST_Intersects calls.
 );
 
 -- Create a table for changeset tiles.
@@ -31,7 +31,7 @@ CREATE TABLE changeset_tiles (
   x int NOT NULL,
   y int NOT NULL,
   zoom int NOT NULL,
-  geom geography,
+  geom geometry(GEOMETRY, 4326),
   PRIMARY KEY (changeset_id, x, y, zoom)
 );
 
@@ -49,8 +49,8 @@ CREATE TABLE changes (
   changed_members boolean NOT NULL, -- Always false if el_type = NODE.
   current_tags hstore, -- If action is DELETE or MODIFY, contains tags of element existing in the database (if it exists); otherwise NULL.
   new_tags hstore, -- If action is CREATE or MODIFY, contains new tags of the element; otherwise NULL.
-  current_geom geography, -- If action is DELETE or MODIFY, contains tags of element existing in the database (if it exists); otherwise NULL.
-  new_geom geography -- If action is CREATE or MODIFY, contains new geometry of the element; otherwise NULL.
+  current_geom geometry(GEOMETRY, 4326), -- If action is DELETE or MODIFY, contains tags of element existing in the database (if it exists); otherwise NULL.
+  new_geom geometry(GEOMETRY, 4326) -- If action is CREATE or MODIFY, contains new geometry(GEOMETRY, 4326) of the element; otherwise NULL.
 );
 
 -- Create a table for summary tiles.
