@@ -40,8 +40,8 @@ class TilerTest < Test::Unit::TestCase
     # Now check that tile geometry contains sane data (without changed coordinates).
     geom_string = @conn.query('SELECT ST_AsText(geom) FROM changeset_tiles').to_a.reduce('') {|total, row| total + row['st_astext']}
 
-#    assert_equal(false, geom_string.include?('999999'))
- #   assert_equal(false, geom_string.include?('5180885999359'))
+    assert_equal(false, geom_string.include?('999999'))
+    assert_equal(false, geom_string.include?('5180885999359'))
 
     for point in points
       assert_equal(true, geom_string.include?(point))
