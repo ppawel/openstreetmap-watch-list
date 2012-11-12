@@ -12,7 +12,8 @@ class Tiler
   def initialize(conn)
     @conn = conn
     @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry);')
-    @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (x int, y int, zoom int, tile_geom geometry);')
+    @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (tstamp timestamp without time zone,
+      x int, y int, zoom int, tile_geom geometry);')
   end
 
   ##
@@ -24,8 +25,8 @@ class Tiler
     process_node_changes(changeset_id, zoom)
     process_way_changes(changeset_id, zoom, options)
 
-    @conn.query("INSERT INTO changeset_tiles (changeset_id, zoom, x, y, geom)
-      SELECT #{changeset_id}, zoom, x, y, ST_Collect(tile_geom)
+    @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
+      SELECT #{changeset_id}, MAX(tstamp), zoom, x, y, ST_Union(tile_geom)
       FROM _tile_changes_tmp tmp
       WHERE NOT ST_IsEmpty(tile_geom)
       GROUP BY zoom, x, y").cmd_tuples
@@ -108,8 +109,8 @@ class Tiler
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
 
-    count = @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom)
-      SELECT bb.zoom, bb.x, bb.y,
+    count = @conn.query("INSERT INTO _tile_changes_tmp (tstamp, zoom, x, y, tile_geom)
+      SELECT cs.tstamp, bb.zoom, bb.x, bb.y,
         CASE
           WHEN current_geom IS NOT NULL AND new_geom IS NOT NULL THEN
             ST_Intersection(ST_Union(current_geom, new_geom), bb.tile_bbox)

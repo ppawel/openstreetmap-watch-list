@@ -21,13 +21,13 @@ CREATE TABLE changesets (
   closed_at timestamp without time zone NOT NULL,
   last_tiled_at timestamp without time zone,
   num_changes integer,
-  tags hstore,
-  geom geometry(GEOMETRY, 4326) -- Aggregated geometry(GEOMETRY, 4326) for this changeset's changes. Suitable for ST_Intersection/ST_Intersects calls.
+  tags hstore
 );
 
 -- Create a table for changeset tiles.
 CREATE TABLE changeset_tiles (
   changeset_id bigint,
+  tstamp timestamp without time zone,
   x int NOT NULL,
   y int NOT NULL,
   zoom int NOT NULL,
