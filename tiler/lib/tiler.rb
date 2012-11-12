@@ -96,7 +96,7 @@ class Tiler
     if tiles.size > 64
       size_before = tiles.size
       reduce_tiles(tiles, changeset_id, change, zoom)
-      @@log.debug "Way #{change['el_id']}: reduced tiles: #{size_before} -> #{tiles.size}"
+      @@log.debug "Change #{change['id']}: Way #{change['el_id']} (#{change['version']}): reduced tiles: #{size_before} -> #{tiles.size}"
     end
 
     for tile in tiles
@@ -122,7 +122,7 @@ class Tiler
       INNER JOIN changes cs ON ST_Intersects(ST_Collect(current_geom, new_geom), bb.tile_bbox)
       WHERE cs.id = #{change['id']}").cmd_tuples
 
-    @@log.debug "Way #{change['el_id']}: created #{count} tile(s)"
+    @@log.debug "Change #{change['id']}: Way #{change['el_id']} (#{change['version']}): created #{count} tile(s)"
   end
 
   def reduce_tiles(tiles, changeset_id, change, zoom)
@@ -155,10 +155,7 @@ class Tiler
   end
 
   def get_way_changes(changeset_id)
-    @conn.query("SELECT
-        id,
-        el_id,
-        Box2D(ST_Collect(current_geom, new_geom)) AS both_bbox
+    @conn.query("SELECT id, el_id, version, Box2D(ST_Collect(current_geom, new_geom)) AS both_bbox
       FROM changes WHERE changeset_id = #{changeset_id} AND el_type = 'W'
       ORDER BY el_id").to_a
   end
