@@ -11,6 +11,7 @@ class Tiler
 
   def initialize(conn)
     @conn = conn
+    @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, tstamp timestamp without time zone);')
     @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry);')
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (tstamp timestamp without time zone,
       x int, y int, zoom int, tile_geom geometry);')
@@ -90,8 +91,20 @@ class Tiler
 
   def process_way_change(changeset_id, change, zoom, options)
     @conn.exec('TRUNCATE _tile_bboxes')
+    @conn.exec('TRUNCATE _way_geom')
+    @conn.query("INSERT INTO _way_geom (geom, tstamp)
+      SELECT
+        CASE
+          WHEN current_geom IS NOT NULL AND new_geom IS NOT NULL THEN
+            ST_LineMerge(ST_Collect(current_geom, new_geom))
+          WHEN current_geom IS NOT NULL THEN current_geom
+          WHEN new_geom IS NOT NULL THEN new_geom
+        END, tstamp
+      FROM changes WHERE id = #{change['id']}")
 
     tiles = bbox_to_tiles(zoom, box2d_to_bbox(change["both_bbox"]))
+
+    @@log.debug "Change #{change['id']}: Way #{change['el_id']} (#{change['version']}): processing #{tiles.size} tile(s)..."
 
     # Does not make sense to reduce small changesets.
     if tiles.size > 64
@@ -110,18 +123,9 @@ class Tiler
     end
 
     count = @conn.query("INSERT INTO _tile_changes_tmp (tstamp, zoom, x, y, tile_geom)
-      SELECT cs.tstamp, bb.zoom, bb.x, bb.y,
-        CASE
-          WHEN current_geom IS NOT NULL AND new_geom IS NOT NULL THEN
-            ST_Intersection(ST_Union(current_geom, new_geom), bb.tile_bbox)
-          WHEN current_geom IS NOT NULL THEN
-            ST_Intersection(current_geom, bb.tile_bbox)
-          WHEN new_geom IS NOT NULL THEN
-            ST_Intersection(new_geom, bb.tile_bbox)
-        END
-      FROM _tile_bboxes bb
-      INNER JOIN changes cs ON ST_Intersects(ST_Collect(current_geom, new_geom), bb.tile_bbox)
-      WHERE cs.id = #{change['id']}").cmd_tuples
+      SELECT tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox)
+      FROM _tile_bboxes bb, _way_geom
+      WHERE ST_Intersects(geom, bb.tile_bbox)").cmd_tuples
 
     @@log.debug "Change #{change['id']}: Way #{change['el_id']} (#{change['version']}): created #{count} tile(s)"
   end
@@ -133,11 +137,8 @@ class Tiler
         lat1, lon1 = tile2latlon(x, y, source_zoom)
         lat2, lon2 = tile2latlon(x + 1, y + 1, source_zoom)
         intersects = @conn.query("
-          SELECT ST_Intersects(
-            ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326),
-            ST_Collect(current_geom, new_geom))
-          FROM changes cs
-          WHERE cs.id = #{change['id']}").getvalue(0, 0) == 't'
+          SELECT ST_Intersects(ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326), geom)
+          FROM _way_geom").getvalue(0, 0) == 't'
         if !intersects
           subtiles = subtiles(tile, source_zoom, zoom)
           tiles.subtract(subtiles)
