@@ -7,10 +7,10 @@ DROP TABLE IF EXISTS changeset_tiles;
 DROP TABLE IF EXISTS changesets;
 DROP TABLE IF EXISTS summary_tiles;
 
-DROP TYPE IF EXISTS element_type;
+DROP TYPE IF EXISTS element_type CASCADE;
 CREATE TYPE element_type AS ENUM ('N', 'W', 'R');
 
-DROP TYPE IF EXISTS action;
+DROP TYPE IF EXISTS action CASCADE;
 CREATE TYPE action AS ENUM ('CREATE', 'MODIFY', 'DELETE');
 
 -- Create a table for changesets.
