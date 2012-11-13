@@ -13,7 +13,7 @@ class Tiler
     @conn = conn
     @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, tstamp timestamp without time zone);')
     @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry);')
-    @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (tstamp timestamp without time zone,
+    @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
       x int, y int, zoom int, tile_geom geometry);')
   end
 
@@ -27,10 +27,18 @@ class Tiler
     process_way_changes(changeset_id, zoom, options)
 
     @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
-      SELECT #{changeset_id}, MAX(tstamp), zoom, x, y, ST_Union(tile_geom)
-      FROM _tile_changes_tmp tmp
-      WHERE NOT ST_IsEmpty(tile_geom)
-      GROUP BY zoom, x, y").cmd_tuples
+      SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Union(geom)
+      FROM (
+        SELECT #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Union(tile_geom) AS geom
+        FROM _tile_changes_tmp tmp
+        WHERE el_type = 'N'
+        GROUP BY zoom, x, y
+          UNION
+        SELECT #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_LineMerge(ST_Collect(tile_geom)) AS geom
+        FROM _tile_changes_tmp tmp
+        WHERE el_type = 'W'
+        GROUP BY zoom, x, y) s
+      GROUP BY s.zoom, s.x, s.y").cmd_tuples
   end
 
   ##
@@ -69,15 +77,15 @@ class Tiler
     for change in get_node_changes(changeset_id)
       if change['current_lat']
         tile = latlon2tile(change['current_lat'].to_f, change['current_lon'].to_f, zoom)
-        @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom) VALUES
-          (#{zoom}, #{tile[0]}, #{tile[1]},
+        @conn.query("INSERT INTO _tile_changes_tmp (el_type, zoom, x, y, tile_geom) VALUES
+          ('N', #{zoom}, #{tile[0]}, #{tile[1]},
           ST_SetSRID(ST_GeomFromText('POINT(#{change['current_lon']} #{change['current_lat']})'), 4326))")
       end
 
       if change['new_lat']
         tile = latlon2tile(change['new_lat'].to_f, change['new_lon'].to_f, zoom)
-        @conn.query("INSERT INTO _tile_changes_tmp (zoom, x, y, tile_geom) VALUES
-          (#{zoom}, #{tile[0]}, #{tile[1]},
+        @conn.query("INSERT INTO _tile_changes_tmp (el_type, zoom, x, y, tile_geom) VALUES
+          ('N', #{zoom}, #{tile[0]}, #{tile[1]},
           ST_SetSRID(ST_GeomFromText('POINT(#{change['new_lon']} #{change['new_lat']})'), 4326))")
       end
     end
@@ -122,8 +130,8 @@ class Tiler
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
 
-    count = @conn.query("INSERT INTO _tile_changes_tmp (tstamp, zoom, x, y, tile_geom)
-      SELECT tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox)
+    count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom)
+      SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox)
       FROM _tile_bboxes bb, _way_geom
       WHERE ST_Intersects(geom, bb.tile_bbox)").cmd_tuples
 
