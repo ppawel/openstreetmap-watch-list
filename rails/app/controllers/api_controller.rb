@@ -1,12 +1,13 @@
 class ApiController < ApplicationController
   def changesets
-    @changesets = find_changesets(params[:x].to_i, params[:y].to_i, params[:zoom].to_i, 20)
+    @x, @y, @zoom = params[:x].to_i, params[:y].to_i, params[:zoom].to_i
+    @changesets = find_changesets(@x, @y, @zoom, 20)
 
     if params[:nogeom] == 'true'
       render :template => 'changeset/changesets_nogeom', :layout => false
     else
       #render :template => 'changeset/changesets', :layout => false
-      render :json => changesets_to_geojson(@changesets), :callback => params[:callback]
+      render :json => changesets_to_geojson(@changesets, @x, @y, @zoom), :callback => params[:callback]
     end
   end
 
@@ -65,12 +66,12 @@ private
           ")[0]
   end
 
-  def changesets_to_geojson(changesets)
+  def changesets_to_geojson(changesets, x, y, zoom)
     geojson = { "type" => "FeatureCollection", "features" => []}
 
     changesets.each do |changeset|
       feature = { "type" => "Feature",
-        "id" => "#{changeset.id}_#{rand(666666)}",
+        "id" => "#{changeset.id}_#{x}_#{y}_#{zoom}}",
         "geometry" => JSON[changeset.geojson],
         "properties" => {
           "changeset_id" => changeset.id,
