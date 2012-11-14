@@ -65,7 +65,6 @@ CREATE TABLE summary_tiles (
 CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
 CREATE INDEX idx_changes_current_geom ON changes USING gist (current_geom);
 CREATE INDEX idx_changes_new_geom ON changes USING gist (new_geom);
-CREATE INDEX idx_changesets_geom ON changesets USING gist (geom);
 CREATE INDEX idx_changesets_created_at ON changesets USING btree (created_at);
 CREATE INDEX idx_changesets_last_tiled_at ON changesets USING btree (last_tiled_at);
 CREATE INDEX idx_changesets_num_changes ON changesets USING btree (num_changes);
