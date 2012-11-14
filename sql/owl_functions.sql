@@ -2,9 +2,23 @@ DROP FUNCTION IF EXISTS OWL_UpdateChangeset(bigint);
 
 CREATE FUNCTION OWL_UpdateChangeset(bigint) RETURNS void AS $$
 DECLARE
-  change_count int;
+  row record;
+  idx int;
+  result int[9];
 BEGIN
-  change_count := (SELECT COUNT(*) FROM changes WHERE changeset_id = $1);
-  UPDATE changesets cs SET num_changes = change_count WHERE cs.id = $1;
+  result := ARRAY[0, 0, 0, 0, 0, 0, 0, 0, 0];
+  FOR row IN
+    SELECT
+      CASE el_type WHEN 'N' THEN 0 WHEN 'W' THEN 1 WHEN 'R' THEN 2 END AS el_type_idx,
+      CASE action WHEN 'CREATE' THEN 0 WHEN 'MODIFY' THEN 1 WHEN 'DELETE' THEN 2 END AS action_idx,
+      COUNT(*) as cnt
+    FROM changes
+    WHERE changeset_id = $1
+    GROUP BY el_type, action
+  LOOP
+    result[row.el_type_idx * 3 + row.action_idx + 1] := row.cnt;
+  END LOOP;
+
+  UPDATE changesets cs SET entity_changes = result WHERE cs.id = $1;
 END;
 $$ LANGUAGE plpgsql;

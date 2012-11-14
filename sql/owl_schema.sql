@@ -20,8 +20,8 @@ CREATE TABLE changesets (
   created_at timestamp without time zone NOT NULL,
   closed_at timestamp without time zone NOT NULL,
   last_tiled_at timestamp without time zone,
-  num_changes integer,
-  tags hstore
+  tags hstore,
+  entity_changes int[9] -- For each element type (N, W, R) holds number of actions (CREATE, MODIFY, DELETE) in this changeset.
 );
 
 -- Create a table for changeset tiles.
@@ -67,5 +67,4 @@ CREATE INDEX idx_changes_current_geom ON changes USING gist (current_geom);
 CREATE INDEX idx_changes_new_geom ON changes USING gist (new_geom);
 CREATE INDEX idx_changesets_created_at ON changesets USING btree (created_at);
 CREATE INDEX idx_changesets_last_tiled_at ON changesets USING btree (last_tiled_at);
-CREATE INDEX idx_changesets_num_changes ON changesets USING btree (num_changes);
 CREATE INDEX idx_changeset_tiles_changeset_id ON changeset_tiles USING btree (changeset_id);

@@ -27,11 +27,11 @@ class ApiController < ApplicationController
 private
   def find_changesets(x, y, zoom, limit)
     Changeset.find_by_sql("
-      SELECT cs.id, cs.created_at, cs.num_changes, cs.user_id, ST_AsGeoJSON(ST_Union(cst.geom::geometry)) AS geojson
+      SELECT cs.id, cs.created_at, cs.entity_changes, cs.user_id, ST_AsGeoJSON(cst.geom) AS geojson
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
       WHERE zoom = #{zoom} AND x = #{x} AND y = #{y}
-      GROUP BY cs.id, cs.created_at, cs.num_changes, cs.user_id
+      GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, cst.geom
       ORDER BY cs.created_at DESC
       LIMIT #{limit}
       ")
@@ -78,7 +78,7 @@ private
           "created_at" => changeset.created_at,
           "user_id" => changeset.user.id,
           "user_name" => changeset.user.name,
-          "num_changes" => changeset.num_changes
+          "entity_changes" => changeset.entity_changes.gsub('{', '').gsub('}', '').split(',').map(&:to_i)
         }
       }
 
