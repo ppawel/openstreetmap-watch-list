@@ -5,6 +5,7 @@ DECLARE
   row record;
   idx int;
   result int[9];
+  result_bbox geometry;
 BEGIN
   result := ARRAY[0, 0, 0, 0, 0, 0, 0, 0, 0];
   FOR row IN
@@ -19,6 +20,9 @@ BEGIN
     result[row.el_type_idx * 3 + row.action_idx + 1] := row.cnt;
   END LOOP;
 
-  UPDATE changesets cs SET entity_changes = result WHERE cs.id = $1;
+  result_bbox := (SELECT ST_Envelope(ST_Collect(ST_Collect(current_geom, new_geom))) FROM changes WHERE changeset_id = $1);
+
+  UPDATE changesets cs SET entity_changes = result, bbox = result_bbox
+  WHERE cs.id = $1;
 END;
 $$ LANGUAGE plpgsql;

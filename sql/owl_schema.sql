@@ -21,7 +21,8 @@ CREATE TABLE changesets (
   closed_at timestamp without time zone NOT NULL,
   last_tiled_at timestamp without time zone,
   tags hstore,
-  entity_changes int[9] -- For each element type (N, W, R) holds number of actions (CREATE, MODIFY, DELETE) in this changeset.
+  entity_changes int[9], -- For each element type (N, W, R) holds number of actions (CREATE, MODIFY, DELETE) in this changeset.
+  bbox geometry -- Bounding box of all changes for this changeset.
 );
 
 -- Create a table for changeset tiles.
