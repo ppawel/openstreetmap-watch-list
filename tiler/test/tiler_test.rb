@@ -1,4 +1,4 @@
-$:.unshift File.absolute_path(File.dirname(__FILE__))
+$:.unshift File.absolute_path(File.dirname(__FILE__)) + '/../lib'
 
 require 'pg'
 require 'test/unit'
@@ -6,6 +6,32 @@ require 'yaml'
 require 'tiler'
 
 class TilerTest < Test::Unit::TestCase
+  def test_13859877
+    count = setup_changeset_test(13859877)
+    assert_equal(37, count)
+  end
+
+  def test_13795865
+    count = setup_changeset_test(13795865)
+    assert_equal(235, count)
+  end
+
+  # Caused ERROR:  GEOSUnaryUnion: TopologyException: found non-noded intersection between LINESTRING (-35.2943
+  # -5.91695, -35.2943 -5.91695) and LINESTRING (-35.2944 -5.91685, -35.2943 -5.91695) at -35.294336083167607
+  # -5.9169522831676078 (PG::Error)
+  def test_13729819
+    count = setup_changeset_test(13729819)
+    assert_equal(235, count)
+  end
+
+  def setup_changeset_test(id)
+    setup_db
+    load_changeset(id)
+    tiler = Tiler::Tiler.new(@conn)
+    tiler.generate(16, id, prepare_options)
+  end
+
+=begin
   def test_basic_tiling
     setup_db
     exec_sql_file('test_data.sql')
@@ -47,7 +73,7 @@ class TilerTest < Test::Unit::TestCase
       assert_equal(true, geom_string.include?(point))
     end
   end
-
+=end
   def prepare_options
     options = {}
     options[:changesets] ||= ['all']
@@ -65,6 +91,22 @@ class TilerTest < Test::Unit::TestCase
   def exec_sql_file(file)
     @conn.transaction do |c|
       @conn.exec(File.open(file).read)
+    end
+  end
+
+  def load_changeset(id)
+    @conn.transaction do |c|
+      @conn.exec("COPY changesets FROM STDIN;")
+      File.open('changeset_' + id.to_s + '.csv').read.each_line do |line|
+        @conn.put_copy_data(line)
+      end
+      @conn.put_copy_end
+
+      @conn.exec("COPY changes FROM STDIN;")
+      File.open('changes_' + id.to_s + '.csv').read.each_line do |line|
+        @conn.put_copy_data(line)
+      end
+      @conn.put_copy_end
     end
   end
 end
