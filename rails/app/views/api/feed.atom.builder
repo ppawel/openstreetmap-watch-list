@@ -5,7 +5,7 @@ atom_feed do |feed|
   @changesets.each do |changeset|
     feed.entry(changeset, :url => "http://www.openstreetmap.org/browse/changeset/#{changeset.id}") do |entry|
       entry.title("Changeset #{changeset.id} by #{changeset.user.name}")
-      entry.content("Changes: #{changeset.num_changes}", :type => 'html')
+      entry.content("Changes: #{changeset.entity_changes}", :type => 'html')
 
       entry.author do |author|
         author.name(changeset.user.name)
