@@ -34,7 +34,7 @@ class Tiler
         WHERE el_type = 'N'
         GROUP BY zoom, x, y
           UNION
-        SELECT #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_LineMerge(ST_Collect(tile_geom)) AS geom
+        SELECT #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Union(tile_geom) AS geom
         FROM _tile_changes_tmp tmp
         WHERE el_type = 'W'
         GROUP BY zoom, x, y) s
@@ -104,7 +104,7 @@ class Tiler
       SELECT
         CASE
           WHEN current_geom IS NOT NULL AND new_geom IS NOT NULL THEN
-            ST_Collect(current_geom, new_geom)
+            ST_Union(current_geom, new_geom)
           WHEN current_geom IS NOT NULL THEN current_geom
           WHEN new_geom IS NOT NULL THEN new_geom
         END, tstamp
@@ -129,9 +129,7 @@ class Tiler
       @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
-if change['id'] == '18571433'
-  puts @conn.query('select st_astext(geom) from _way_geom').to_a
-end
+
     count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom)
       SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox)
       FROM _tile_bboxes bb, _way_geom
