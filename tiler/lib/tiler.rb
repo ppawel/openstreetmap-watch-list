@@ -26,11 +26,22 @@ class Tiler
     process_node_changes(changeset_id, zoom)
     process_way_changes(changeset_id, zoom, options)
 
-    @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
-      SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Collect(tile_geom)
-      FROM _tile_changes_tmp tmp
-      WHERE NOT ST_IsEmpty(tile_geom)
-      GROUP BY zoom, x, y").cmd_tuples
+    # The following is a hack because of http://trac.osgeo.org/geos/ticket/600
+    # First, try ST_Union (which will result in a simpler tile geometry), if that fails, go with ST_Collect.
+    begin
+      @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
+        SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Union(tile_geom)
+        FROM _tile_changes_tmp tmp
+        WHERE NOT ST_IsEmpty(tile_geom)
+        GROUP BY zoom, x, y").cmd_tuples
+    rescue
+      @@log.debug "Failed to create tile geometry with ST_Union, let's do ST_Collect..."
+      @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
+        SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Collect(tile_geom)
+        FROM _tile_changes_tmp tmp
+        WHERE NOT ST_IsEmpty(tile_geom)
+        GROUP BY zoom, x, y").cmd_tuples
+    end
   end
 
   ##
