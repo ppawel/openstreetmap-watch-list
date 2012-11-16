@@ -30,7 +30,7 @@ private
       SELECT cs.id, cs.created_at, cs.entity_changes, cs.user_id, ST_AsGeoJSON(cst.geom) AS geojson
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
-      WHERE zoom = #{zoom} AND x = #{x} AND y = #{y}
+      WHERE x = #{x} AND y = #{y}
       GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, cst.geom
       ORDER BY cs.created_at DESC
       LIMIT #{limit}
@@ -43,9 +43,8 @@ private
       SELECT DISTINCT cs.*
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
-      WHERE zoom = 16
-            AND x >= #{from_x * subtiles_per_tile} AND x < #{(to_x + 1) * subtiles_per_tile}
-            AND y >= #{from_y * subtiles_per_tile} AND y < #{(to_y + 1) * subtiles_per_tile}
+      WHERE x >= #{from_x * subtiles_per_tile} AND x < #{(to_x + 1) * subtiles_per_tile}
+        AND y >= #{from_y * subtiles_per_tile} AND y < #{(to_y + 1) * subtiles_per_tile}
       ORDER BY cs.created_at DESC
       LIMIT #{limit}
       ")
@@ -58,12 +57,13 @@ private
   # On-the-fly variant of find_summary_tile
   def generate_summary_tile(x, y, zoom)
     subtiles_per_tile = 2**16 / 2**zoom
-    SummaryTile.find_by_sql("SELECT COUNT(DISTINCT changeset_id) AS num_changesets
-          FROM changeset_tiles
-          WHERE zoom = 16
-            AND x >= #{x * subtiles_per_tile} AND x < #{(x + 1) * subtiles_per_tile}
-            AND y >= #{y * subtiles_per_tile} AND y < #{(y + 1) * subtiles_per_tile}
-          ")[0]
+    SummaryTile.find_by_sql("WITH agg AS (
+      SELECT DISTINCT changeset_id
+      FROM changeset_tiles
+      WHERE x >= #{x * subtiles_per_tile} AND x < #{(x + 1) * subtiles_per_tile}
+        AND y >= #{y * subtiles_per_tile} AND y < #{(y + 1) * subtiles_per_tile})
+      SELECT COUNT(*) AS num_changesets FROM agg
+      ")[0]
   end
 
   def changesets_to_geojson(changesets, x, y, zoom)
