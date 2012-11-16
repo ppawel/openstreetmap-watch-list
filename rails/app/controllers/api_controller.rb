@@ -40,14 +40,13 @@ private
   def find_changesets_by_range(zoom, from_x, from_y, to_x, to_y, limit)
     subtiles_per_tile = 2**16 / 2**zoom
     Changeset.find_by_sql("WITH cs_ids AS (
-      SELECT changeset_id
+      SELECT DISTINCT changeset_id, MAX(tstamp) AS max_tstamp
       FROM changeset_tiles
       WHERE x >= #{from_x * subtiles_per_tile} AND x < #{(to_x + 1) * subtiles_per_tile}
         AND y >= #{from_y * subtiles_per_tile} AND y < #{(to_y + 1) * subtiles_per_tile}
-        GROUP BY changeset_id, tstamp
-      ORDER BY tstamp DESC
-      LIMIT #{limit}
-      ) SELECT cs.* FROM changesets cs INNER JOIN cs_ids ON (cs.id = cs_ids.changeset_id)")
+      GROUP BY changeset_id
+      ORDER BY max_tstamp DESC
+      ) SELECT cs.* FROM changesets cs INNER JOIN cs_ids ON (cs.id = cs_ids.changeset_id) ORDER BY cs.created_at DESC LIMIT 30")
   end
 
   def find_summary_tile(x, y, zoom)
