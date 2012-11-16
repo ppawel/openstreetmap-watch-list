@@ -60,6 +60,7 @@ CREATE TABLE summary_tiles (
   y int NOT NULL,
   zoom int NOT NULL,
   num_changesets int,
+  latest_changeset_id int,
   PRIMARY KEY (x, y, zoom)
 );
 

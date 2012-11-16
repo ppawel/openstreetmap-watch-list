@@ -13,8 +13,9 @@ class ApiController < ApplicationController
 
   def summary
     #@tile = find_summary_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
-    @tile = generate_summary_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
-    render :json => @tile, :callback => params[:callback]
+    @summary = generate_summary_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i) ||
+      {'num_changesets' => 0, 'latest_changeset' => nil}
+    render :json => @summary.as_json(:except => "bbox"), :callback => params[:callback]
   end
 
   def feed
@@ -27,14 +28,13 @@ class ApiController < ApplicationController
 private
   def find_changesets(x, y, zoom, limit)
     Changeset.find_by_sql("
-      SELECT cs.id, cs.created_at, cs.entity_changes, cs.user_id, ST_AsGeoJSON(cst.geom) AS geojson
+      SELECT cs.*, ST_AsGeoJSON(cst.geom) AS geojson
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
       WHERE x = #{x} AND y = #{y}
       GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, cst.geom
       ORDER BY cs.created_at DESC
-      LIMIT #{limit}
-      ")
+      LIMIT #{limit}")
   end
 
   def find_changesets_by_range(zoom, from_x, from_y, to_x, to_y, limit)
@@ -56,13 +56,22 @@ private
   # On-the-fly variant of find_summary_tile
   def generate_summary_tile(x, y, zoom)
     subtiles_per_tile = 2**16 / 2**zoom
-    SummaryTile.find_by_sql("WITH agg AS (
-      SELECT DISTINCT changeset_id
-      FROM changeset_tiles
-      WHERE x >= #{x * subtiles_per_tile} AND x < #{(x + 1) * subtiles_per_tile}
-        AND y >= #{y * subtiles_per_tile} AND y < #{(y + 1) * subtiles_per_tile})
-      SELECT COUNT(*) AS num_changesets FROM agg
-      ")[0]
+    rows = ActiveRecord::Base.connection.execute("WITH agg AS (
+        SELECT changeset_id, MAX(tstamp) AS max_tstamp
+        FROM changeset_tiles
+        WHERE x >= #{x * subtiles_per_tile} AND x < #{(x + 1) * subtiles_per_tile}
+          AND y >= #{y * subtiles_per_tile} AND y < #{(y + 1) * subtiles_per_tile}
+        GROUP BY changeset_id
+      ) SELECT * FROM
+      (SELECT COUNT(*) AS num_changesets FROM agg) a,
+      (SELECT * FROM changesets WHERE id =
+        (SELECT changeset_id FROM agg ORDER BY max_tstamp DESC NULLS LAST LIMIT 1)) b").to_a
+    return if rows.empty?
+    row = rows[0]
+    summary_tile = SummaryTile.new({'num_changesets' => row['num_changesets']})
+    row.delete('num_changesets')
+    summary_tile.latest_changeset = Changeset.new(row)
+    summary_tile
   end
 
   def changesets_to_geojson(changesets, x, y, zoom)
@@ -72,15 +81,8 @@ private
       feature = { "type" => "Feature",
         "id" => "#{changeset.id}_#{x}_#{y}_#{zoom}}",
         "geometry" => JSON[changeset.geojson],
-        "properties" => {
-          "changeset_id" => changeset.id,
-          "created_at" => changeset.created_at,
-          "user_id" => changeset.user.id,
-          "user_name" => changeset.user.name,
-          "entity_changes" => changeset.entity_changes.gsub('{', '').gsub('}', '').split(',').map(&:to_i)
-        }
+        "properties" => changeset.as_json(:except => 'bbox')
       }
-
       geojson['features'] << feature
     end
 
