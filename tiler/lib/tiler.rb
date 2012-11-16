@@ -50,12 +50,14 @@ class Tiler
   #
   def get_changeset_ids(options)
     if options[:changesets] == ['all']
-      sql = "(SELECT id FROM changesets ORDER BY created_at DESC)"
+      sql = "WITH list AS (SELECT id FROM changesets"
 
       unless options[:retile]
         # We are NOT retiling so skip changesets that have been already tiled.
         sql += " EXCEPT SELECT changeset_id FROM changeset_tiles GROUP BY changeset_id"
       end
+
+      sql += ") SELECT * FROM list ORDER BY id DESC"
 
       @conn.query(sql).collect {|row| row['id'].to_i}
     else
