@@ -50,7 +50,8 @@ class Tiler
   #
   def get_changeset_ids(options)
     if options[:changesets] == ['all']
-      sql = "WITH list AS (SELECT id FROM changesets"
+      sql = "WITH list AS (SELECT id FROM changesets WHERE
+        (SELECT SUM(unnest) FROM (SELECT unnest(entity_changes[1:6])) s) > 0"
 
       unless options[:retile]
         # We are NOT retiling so skip changesets that have been already tiled.
