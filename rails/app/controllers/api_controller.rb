@@ -12,9 +12,10 @@ class ApiController < ApplicationController
   end
 
   def summary
-    #@tile = find_summary_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i)
-    @summary = generate_summary_tile(params[:x].to_i, params[:y].to_i, params[:zoom].to_i) ||
-      {'num_changesets' => 0, 'latest_changeset' => nil}
+    x, y, zoom = params[:x].to_i, params[:y].to_i, params[:zoom].to_i
+    @summary = Rails.cache.fetch("summary/#{zoom}/#{x}/#{y}", :expires_in => (30 - zoom).minutes) do
+      generate_summary_tile(x, y, zoom) || {'num_changesets' => 0, 'latest_changeset' => nil}
+    end
     render :json => @summary.as_json(:except => "bbox"), :callback => params[:callback]
   end
 
