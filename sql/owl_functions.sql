@@ -26,3 +26,22 @@ BEGIN
   WHERE cs.id = $1;
 END;
 $$ LANGUAGE plpgsql;
+
+DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
+
+CREATE FUNCTION OWL_AggregateChangeset(bigint, int, int) RETURNS void AS $$
+DECLARE
+  subtiles_per_tile bigint;
+
+BEGIN
+  subtiles_per_tile := POW(2, $2) / POW(2, $3);
+
+  DELETE FROM changeset_tiles WHERE changeset_id = $1 AND zoom = $3;
+
+  INSERT INTO changeset_tiles (changeset_id, tstamp, x, y, zoom)
+  SELECT $1, MAX(tstamp), x/subtiles_per_tile, y/subtiles_per_tile, $3
+  FROM changeset_tiles
+  WHERE changeset_id = $1 AND zoom = $2
+  GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
+END;
+$$ LANGUAGE plpgsql;
