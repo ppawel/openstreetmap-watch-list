@@ -8,7 +8,6 @@ class ApiController < ApplicationController
   def changesets_tile_json
     @x, @y, @zoom = get_xyz(params)
     @changesets = find_changesets(@x, @y, @zoom, get_limit(params), 'atom')
-    puts @changesets.inspect
     render :json => JSON[@changesets], :callback => params[:callback]
   end
 
@@ -33,7 +32,7 @@ class ApiController < ApplicationController
 private
   def find_changesets(x, y, zoom, limit, format)
     Changeset.find_by_sql("
-      SELECT cs.*, #{format == 'geojson' ? 'ST_AsGeoJSON(cst.geom) AS geojson' : ''}, cst.geom::box2d::text AS tile_bbox
+      SELECT cs.* #{format == 'geojson' ? ', ST_AsGeoJSON(cst.geom) AS geojson' : ''}, cst.geom::box2d::text AS tile_bbox
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
       WHERE x = #{x} AND y = #{y} AND zoom = #{zoom}
@@ -65,28 +64,26 @@ private
         GROUP BY changeset_id
       ) SELECT * FROM
       (SELECT COUNT(*) AS num_changesets FROM agg) a,
-      (SELECT *, NULL AS tile_bbox FROM changesets WHERE id =
-        (SELECT changeset_id FROM agg ORDER BY max_tstamp DESC NULLS LAST LIMIT 1)) b").to_a
+      (SELECT changeset_id FROM agg ORDER BY max_tstamp DESC NULLS LAST LIMIT 1) b").to_a
     return if rows.empty?
     row = rows[0]
     summary_tile = SummaryTile.new({'num_changesets' => row['num_changesets']})
     row.delete('num_changesets')
-    summary_tile.latest_changeset = Changeset.new(row)
+    summary_tile.latest_changeset =
+        Changeset.find_by_sql("SELECT *, NULL AS tile_bbox FROM changesets WHERE id = #{row['changeset_id']}")[0]
     summary_tile
   end
 
   def changesets_to_geojson(changesets, x, y, zoom)
     geojson = { "type" => "FeatureCollection", "features" => []}
-
     changesets.each do |changeset|
       feature = { "type" => "Feature",
         "id" => "#{changeset.id}_#{x}_#{y}_#{zoom}}",
-        "geometry" => JSON[changeset.geojson],
+        "geometry" => changeset.geojson ? JSON[changeset.geojson] : nil,
         "properties" => changeset.as_json(:except => 'bbox')
       }
       geojson['features'] << feature
     end
-
     geojson
   end
 end

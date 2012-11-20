@@ -8,8 +8,8 @@ class Changeset < ActiveRecord::Base
   attr_accessible :tags
   attr_accessible :entity_changes
   attr_accessible :bbox
+  attr_accessible :geojson
   attr_accessible :tile_bbox
-  attr_accessor :tile_bbox
 
   def entity_changes_as_list
     entity_changes.gsub('{', '').gsub('}', '').split(',').map(&:to_i)
