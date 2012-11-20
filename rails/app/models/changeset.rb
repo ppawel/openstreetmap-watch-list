@@ -21,7 +21,8 @@ class Changeset < ActiveRecord::Base
       "user_id" => user.id,
       "user_name" => user.name,
       "entity_changes" => entity_changes_as_list,
-      "tags" => tags
+      "tags" => tags,
+      "bbox" => bbox
     }
   end
 end

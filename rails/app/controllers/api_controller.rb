@@ -1,35 +1,38 @@
+##
+# Implements OWL API operations.
+# See: http://wiki.openstreetmap.org/wiki/OWL_(OpenStreetMap_Watch_List)/API
+#
 class ApiController < ApplicationController
-  def changesets
-    @x, @y, @zoom = params[:x].to_i, params[:y].to_i, params[:zoom].to_i
-    @changesets = find_changesets(@x, @y, @zoom, 20)
+  include ApiHelper
 
-    if params[:nogeom] == 'true'
-      render :template => 'changeset/changesets_nogeom', :layout => false
-    else
-      #render :template => 'changeset/changesets', :layout => false
-      render :json => changesets_to_geojson(@changesets, @x, @y, @zoom), :callback => params[:callback]
-    end
+  def changesets_tile_json
+    @x, @y, @zoom = get_xyz(params)
+    @changesets = find_changesets(@x, @y, @zoom, get_limit(params), 'atom')
+    render :json => JSON[@changesets], :callback => params[:callback]
+  end
+
+  def changesets_tile_geojson
+    @x, @y, @zoom = get_xyz(params)
+    @changesets = find_changesets(@x, @y, @zoom, get_limit(params), 'geojson')
+    render :json => changesets_to_geojson(@changesets, @x, @y, @zoom), :callback => params[:callback]
+  end
+
+  def changesets_tile_atom
+    @x, @y, @zoom = get_xyz(params)
+    @changesets = find_changesets(@x, @y, @zoom, get_limit(params), 'json')
+    render :template => 'api/changesets'
   end
 
   def summary
-    x, y, zoom = params[:x].to_i, params[:y].to_i, params[:zoom].to_i
-    #@summary = Rails.cache.fetch("summary/#{zoom}/#{x}/#{y}", :expires_in => (30 - zoom).minutes) do
-    @summary = generate_summary_tile(x, y, zoom) || {'num_changesets' => 0, 'latest_changeset' => nil}
-    #end
+    @x, @y, @zoom = get_xyz(params)
+    @summary = generate_summary_tile(@x, @y, @zoom) || {'num_changesets' => 0, 'latest_changeset' => nil}
     render :json => @summary.as_json(:except => "bbox"), :callback => params[:callback]
   end
 
-  def feed
-    zoom = params[:zoom].to_i
-    from_x, from_y = params[:from].split('/').map(&:to_i)
-    to_x, to_y = params[:to].split('/').map(&:to_i)
-    @changesets = find_changesets_by_range(zoom, from_x, from_y, to_x, to_y, 30)
-  end
-
 private
-  def find_changesets(x, y, zoom, limit)
+  def find_changesets(x, y, zoom, limit, format)
     Changeset.find_by_sql("
-      SELECT cs.*, ST_AsGeoJSON(cst.geom) AS geojson
+      SELECT cs.*, #{format == 'geojson' ? 'ST_AsGeoJSON(cst.geom) AS geojson' : 'ST_AsText(cst.geom) AS bbox'}
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
       WHERE x = #{x} AND y = #{y} AND zoom = #{zoom}
