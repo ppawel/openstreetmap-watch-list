@@ -31,7 +31,7 @@ class ApiController < ApplicationController
 
 private
   def find_changesets(x, y, zoom, limit, format)
-    Changeset.find_by_sql("
+    rows = Changeset.find_by_sql("
       SELECT cs.* #{format == 'geojson' ? ', ST_AsGeoJSON(cst.geom) AS geojson' : ''}, cst.geom::box2d::text AS tile_bbox
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
@@ -39,16 +39,20 @@ private
       GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, cst.geom
       ORDER BY cs.created_at DESC
       LIMIT #{limit}")
+    ActiveRecord::Associations::Preloader.new(rows, [:user]).run
+    rows
   end
 
   def find_changesets_by_range(zoom, from_x, from_y, to_x, to_y, limit)
-    Changeset.find_by_sql("WITH cs_ids AS (
+    rows = Changeset.find_by_sql("WITH cs_ids AS (
       SELECT DISTINCT changeset_id, MAX(tstamp) AS max_tstamp
       FROM changeset_tiles
       WHERE x >= #{from_x} AND x <= #{to_x} AND y >= #{from_y} AND y <= #{to_y} AND zoom = #{zoom}
       GROUP BY changeset_id
       ORDER BY max_tstamp DESC
       ) SELECT cs.* FROM changesets cs INNER JOIN cs_ids ON (cs.id = cs_ids.changeset_id) ORDER BY cs.created_at DESC LIMIT 30")
+    ActiveRecord::Associations::Preloader.new(rows, [:user]).run
+    rows
   end
 
   def find_summary_tile(x, y, zoom)
