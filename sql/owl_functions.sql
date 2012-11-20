@@ -39,7 +39,7 @@ BEGIN
   DELETE FROM changeset_tiles WHERE changeset_id = $1 AND zoom = $3;
 
   INSERT INTO changeset_tiles (changeset_id, tstamp, x, y, zoom, geom)
-  SELECT $1, MAX(tstamp), x/subtiles_per_tile, y/subtiles_per_tile, $3, ST_Envelope(ST_Collect(geom))
+  SELECT $1, MAX(tstamp), x/subtiles_per_tile, y/subtiles_per_tile, $3, ST_SetSRID(ST_Extent(geom), 4326)
   FROM changeset_tiles
   WHERE changeset_id = $1 AND zoom = $2
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
