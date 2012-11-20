@@ -8,6 +8,8 @@ class Changeset < ActiveRecord::Base
   attr_accessible :tags
   attr_accessible :entity_changes
   attr_accessible :bbox
+  attr_accessible :tile_bbox
+  attr_accessor :tile_bbox
 
   def entity_changes_as_list
     entity_changes.gsub('{', '').gsub('}', '').split(',').map(&:to_i)
@@ -22,7 +24,15 @@ class Changeset < ActiveRecord::Base
       "user_name" => user.name,
       "entity_changes" => entity_changes_as_list,
       "tags" => tags,
-      "bbox" => bbox
+      "tile_bbox" => tile_bbox ? box2d_to_bbox(tile_bbox) : nil
     }
+  end
+
+  ##
+  # Converts PostGIS' BOX2D string representation to a list.
+  # bbox is [xmin, ymin, xmax, ymax]
+  #
+  def box2d_to_bbox(box2d)
+    box2d.gsub(',', ' ').gsub('BOX(', '').gsub(')', '').split(' ').map(&:to_f)
   end
 end
