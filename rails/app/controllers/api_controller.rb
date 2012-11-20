@@ -13,9 +13,9 @@ class ApiController < ApplicationController
 
   def summary
     x, y, zoom = params[:x].to_i, params[:y].to_i, params[:zoom].to_i
-    @summary = Rails.cache.fetch("summary/#{zoom}/#{x}/#{y}", :expires_in => (30 - zoom).minutes) do
-      generate_summary_tile(x, y, zoom) || {'num_changesets' => 0, 'latest_changeset' => nil}
-    end
+    #@summary = Rails.cache.fetch("summary/#{zoom}/#{x}/#{y}", :expires_in => (30 - zoom).minutes) do
+    @summary = generate_summary_tile(x, y, zoom) || {'num_changesets' => 0, 'latest_changeset' => nil}
+    #end
     render :json => @summary.as_json(:except => "bbox"), :callback => params[:callback]
   end
 
@@ -32,19 +32,17 @@ private
       SELECT cs.*, ST_AsGeoJSON(cst.geom) AS geojson
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
-      WHERE x = #{x} AND y = #{y}
+      WHERE x = #{x} AND y = #{y} AND zoom = #{zoom}
       GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, cst.geom
       ORDER BY cs.created_at DESC
       LIMIT #{limit}")
   end
 
   def find_changesets_by_range(zoom, from_x, from_y, to_x, to_y, limit)
-    subtiles_per_tile = 2**16 / 2**zoom
     Changeset.find_by_sql("WITH cs_ids AS (
       SELECT DISTINCT changeset_id, MAX(tstamp) AS max_tstamp
       FROM changeset_tiles
-      WHERE x >= #{from_x * subtiles_per_tile} AND x < #{(to_x + 1) * subtiles_per_tile}
-        AND y >= #{from_y * subtiles_per_tile} AND y < #{(to_y + 1) * subtiles_per_tile}
+      WHERE x >= #{from_x} AND x <= #{to_x} AND y >= #{from_y} AND y <= #{to_y} AND zoom = #{zoom}
       GROUP BY changeset_id
       ORDER BY max_tstamp DESC
       ) SELECT cs.* FROM changesets cs INNER JOIN cs_ids ON (cs.id = cs_ids.changeset_id) ORDER BY cs.created_at DESC LIMIT 30")
@@ -56,12 +54,10 @@ private
 
   # On-the-fly variant of find_summary_tile
   def generate_summary_tile(x, y, zoom)
-    subtiles_per_tile = 2**16 / 2**zoom
     rows = ActiveRecord::Base.connection.execute("WITH agg AS (
         SELECT changeset_id, MAX(tstamp) AS max_tstamp
         FROM changeset_tiles
-        WHERE x >= #{x * subtiles_per_tile} AND x < #{(x + 1) * subtiles_per_tile}
-          AND y >= #{y * subtiles_per_tile} AND y < #{(y + 1) * subtiles_per_tile}
+        WHERE x = #{x} AND y = #{y} AND zoom = #{zoom}
         GROUP BY changeset_id
       ) SELECT * FROM
       (SELECT COUNT(*) AS num_changesets FROM agg) a,
