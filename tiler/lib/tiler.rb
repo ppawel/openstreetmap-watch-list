@@ -21,27 +21,18 @@ class Tiler
   # Generates tiles for given zoom and changeset.
   #
   def generate(zoom, changeset_id, options = {})
-    @conn.exec('TRUNCATE _tile_changes_tmp')
-
-    process_node_changes(changeset_id, zoom)
-    process_way_changes(changeset_id, zoom, options)
-
-    # The following is a hack because of http://trac.osgeo.org/geos/ticket/600
-    # First, try ST_Union (which will result in a simpler tile geometry), if that fails, go with ST_Collect.
+    tile_count = -1
     begin
-      @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
-        SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Union(tile_geom)
-        FROM _tile_changes_tmp tmp
-        WHERE NOT ST_IsEmpty(tile_geom)
-        GROUP BY zoom, x, y").cmd_tuples
+      @conn.transaction do |c|
+        tile_count = do_generate(zoom, changeset_id, options)
+      end
     rescue
-      @@log.debug "Failed to create tile geometry with ST_Union, let's do ST_Collect..."
-      @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
-        SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Collect(tile_geom)
-        FROM _tile_changes_tmp tmp
-        WHERE NOT ST_IsEmpty(tile_geom)
-        GROUP BY zoom, x, y").cmd_tuples
+      @@log.debug "Trying workaround..."
+      @conn.transaction do |c|
+        tile_count = do_generate(zoom, changeset_id, options.merge(:geos_bug_workaround => true))
+      end
     end
+    tile_count
   end
 
   ##
@@ -78,6 +69,31 @@ class Tiler
   end
 
   protected
+
+  def do_generate(zoom, changeset_id, options = {})
+    clear_tiles(changeset_id, zoom) if options[:retile]
+
+    @conn.exec('TRUNCATE _tile_changes_tmp')
+
+    process_node_changes(changeset_id, zoom)
+    process_way_changes(changeset_id, zoom, options)
+
+    # The following is a hack because of http://trac.osgeo.org/geos/ticket/600
+    # First, try ST_Union (which will result in a simpler tile geometry), if that fails, go with ST_Collect.
+    if !options[:geos_bug_workaround]
+      @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
+        SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Union(tile_geom)
+        FROM _tile_changes_tmp tmp
+        WHERE NOT ST_IsEmpty(tile_geom)
+        GROUP BY zoom, x, y").cmd_tuples
+    else
+      @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
+        SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Collect(tile_geom)
+        FROM _tile_changes_tmp tmp
+        WHERE NOT ST_IsEmpty(tile_geom)
+        GROUP BY zoom, x, y").cmd_tuples
+    end
+  end
 
   def process_node_changes(changeset_id, zoom)
     for change in get_node_changes(changeset_id)

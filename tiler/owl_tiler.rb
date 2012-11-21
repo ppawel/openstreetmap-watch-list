@@ -33,12 +33,9 @@ changeset_ids.each do |changeset_id|
   count += 1
   before = Time.now
 
-  @conn.transaction do |c|
-    puts "Generating tiles for changeset #{changeset_id}... (#{count} of #{changeset_ids.size})"
-    tiler.clear_tiles(changeset_id, zoom) if options[:retile]
-    tile_count = tiler.generate(zoom, changeset_id, options)
-    puts "Done, tile count: #{tile_count}"
-  end
+  puts "Generating tiles for changeset #{changeset_id}... (#{count} of #{changeset_ids.size})"
+  tile_count = tiler.generate(zoom, changeset_id, options)
+  puts "Done, tile count: #{tile_count}"
 
   puts "Changeset #{changeset_id} took #{Time.now - before}s (#{count} of #{changeset_ids.size})"
 end
