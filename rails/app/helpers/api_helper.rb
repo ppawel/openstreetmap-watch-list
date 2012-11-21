@@ -3,6 +3,10 @@ module ApiHelper
     return params[:x].to_i, params[:y].to_i, params[:zoom].to_i
   end
 
+  def get_range(params)
+    return params[:zoom].to_i, params[:x1].to_i, params[:y1].to_i, params[:x2].to_i, params[:y2].to_i
+  end
+
   def get_limit(params)
     return (params[:limit] || 20).to_i
   end

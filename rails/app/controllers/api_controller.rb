@@ -6,20 +6,32 @@ class ApiController < ApplicationController
   include ApiHelper
 
   def changesets_tile_json
-    @x, @y, @zoom = get_xyz(params)
-    @changesets = find_changesets(@x, @y, @zoom, get_limit(params), 'atom')
+    @changesets = find_changesets_by_tile('json')
     render :json => JSON[@changesets], :callback => params[:callback]
   end
 
   def changesets_tile_geojson
-    @x, @y, @zoom = get_xyz(params)
-    @changesets = find_changesets(@x, @y, @zoom, get_limit(params), 'geojson')
+    @changesets = find_changesets_by_tile('geojson')
     render :json => changesets_to_geojson(@changesets, @x, @y, @zoom), :callback => params[:callback]
   end
 
   def changesets_tile_atom
-    @x, @y, @zoom = get_xyz(params)
-    @changesets = find_changesets(@x, @y, @zoom, get_limit(params), 'json')
+    @changesets = find_changesets_by_tile('atom')
+    render :template => 'api/changesets'
+  end
+
+  def changesets_tilerange_json
+    @changesets = find_changesets_by_range('json')
+    render :json => JSON[@changesets], :callback => params[:callback]
+  end
+
+  def changesets_tilerange_geojson
+    @changesets = find_changesets_by_range('geojson')
+    render :json => changesets_to_geojson(@changesets, @x, @y, @zoom), :callback => params[:callback]
+  end
+
+  def changesets_tilerange_atom
+    @changesets = find_changesets_by_range('atom')
     render :template => 'api/changesets'
   end
 
@@ -30,24 +42,26 @@ class ApiController < ApplicationController
   end
 
 private
-  def find_changesets(x, y, zoom, limit, format)
+  def find_changesets_by_tile(format)
+    @x, @y, @zoom = get_xyz(params)
     rows = Changeset.find_by_sql("
       SELECT cs.* #{format == 'geojson' ? ', ST_AsGeoJSON(cst.geom) AS geojson' : ''}, cst.geom::box2d::text AS tile_bbox
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
-      WHERE x = #{x} AND y = #{y} AND zoom = #{zoom}
+      WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
       GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, cst.geom
       ORDER BY cs.created_at DESC
-      LIMIT #{limit}")
+      LIMIT #{get_limit(params)}")
     ActiveRecord::Associations::Preloader.new(rows, [:user]).run
     rows
   end
 
-  def find_changesets_by_range(zoom, from_x, from_y, to_x, to_y, limit)
+  def find_changesets_by_range(format)
+    @zoom, @x1, @y1, @x2, @y2 = get_range(params)
     rows = Changeset.find_by_sql("WITH cs_ids AS (
       SELECT DISTINCT changeset_id, MAX(tstamp) AS max_tstamp
       FROM changeset_tiles
-      WHERE x >= #{from_x} AND x <= #{to_x} AND y >= #{from_y} AND y <= #{to_y} AND zoom = #{zoom}
+      WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
       GROUP BY changeset_id
       ORDER BY max_tstamp DESC
       ) SELECT cs.* FROM changesets cs INNER JOIN cs_ids ON (cs.id = cs_ids.changeset_id) ORDER BY cs.created_at DESC LIMIT 30")
