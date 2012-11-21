@@ -99,6 +99,7 @@ class TilerTest < Test::Unit::TestCase
     @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
       :user => $config['username'], :password => $config['password'])
     exec_sql_file('../../sql/owl_schema.sql')
+    exec_sql_file('../../sql/owl_functions.sql')
   end
 
   def exec_sql_file(file)
