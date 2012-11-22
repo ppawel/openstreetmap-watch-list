@@ -49,6 +49,7 @@ private
       FROM changeset_tiles cst
       INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
       WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
+      #{get_timelimit_sql(params)}
       GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, cst.geom
       ORDER BY cs.created_at DESC
       LIMIT #{get_limit(params)}")
@@ -62,6 +63,7 @@ private
       SELECT DISTINCT changeset_id, MAX(tstamp) AS max_tstamp
       FROM changeset_tiles
       WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
+      #{get_timelimit_sql(params)}
       GROUP BY changeset_id
       ORDER BY max_tstamp DESC
       ) SELECT cs.* FROM changesets cs INNER JOIN cs_ids ON (cs.id = cs_ids.changeset_id) ORDER BY cs.created_at DESC LIMIT 30")
@@ -79,6 +81,7 @@ private
         SELECT changeset_id, MAX(tstamp) AS max_tstamp
         FROM changeset_tiles
         WHERE x = #{x} AND y = #{y} AND zoom = #{zoom}
+        #{get_timelimit_sql(params)}
         GROUP BY changeset_id
       ) SELECT * FROM
       (SELECT COUNT(*) AS num_changesets FROM agg) a,

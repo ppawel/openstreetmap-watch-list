@@ -10,4 +10,8 @@ module ApiHelper
   def get_limit(params)
     return (params[:limit] || 20).to_i
   end
+
+  def get_timelimit_sql(params)
+    return (params[:timelimit] and params[:timelimit].to_i > 0) ? " AND tstamp >= (NOW() - interval '#{params[:timelimit].to_i} hour')" : ''
+  end
 end
