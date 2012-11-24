@@ -15,5 +15,6 @@ OwlViewer::Application.routes.draw do
   match 'changesets/:zoom/:x1/:y1/:x2/:y2.geojson' => 'api#changesets_tilerange_geojson', :constraints => @range_constrains, :format => 'json'
   match 'changesets/:zoom/:x1/:y1/:x2/:y2.json' => 'api#changesets_tilerange_json', :constraints => @range_constrains, :format => 'json'
 
-  match 'summary/:zoom/:x/:y' => 'api#summary', :constraints => @xyz_constrains
+  match 'summary/:zoom/:x/:y' => 'api#summary_tile', :constraints => @xyz_constrains
+  match 'summary/:zoom/:x1/:y1/:x2/:y2' => 'api#summary_tilerange', :constraints => @range_constrains, :format => 'json'
 end

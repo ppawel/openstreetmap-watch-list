@@ -15,7 +15,7 @@ class Changeset < ActiveRecord::Base
     entity_changes.gsub('{', '').gsub('}', '').split(',').map(&:to_i)
   end
 
-  def as_json(options)
+  def as_json(options = {})
     {
       "id" => id,
       "created_at" => created_at,
@@ -24,6 +24,7 @@ class Changeset < ActiveRecord::Base
       "user_name" => user.name,
       "entity_changes" => entity_changes_as_list,
       "tags" => tags,
+      "bbox" => bbox ? box2d_to_bbox(total_bbox) : nil,
       "tile_bbox" => tile_bbox ? box2d_to_bbox(tile_bbox) : nil
     }
   end
