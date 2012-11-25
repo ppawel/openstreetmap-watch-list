@@ -69,10 +69,17 @@ private
       SELECT changeset_id, MAX(tstamp) AS max_tstamp, ST_Extent(geom) AS tilerange_bbox
       FROM changeset_tiles
       WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
-      #{get_timelimit_sql(params)}
-      GROUP BY changeset_id
+        AND changeset_id IN (
+            SELECT changeset_id
+            FROM changeset_tiles
+            WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
+            #{get_timelimit_sql(params)}
+            GROUP BY changeset_id
+            ORDER BY MAX(tstamp) DESC NULLS LAST
+            #{get_limit_sql(params)})
+      GROUP BY x, y, changeset_id
       ORDER BY max_tstamp DESC NULLS LAST
-      #{get_limit_sql(params)})
+      )
         SELECT
           cs.*,
           cs.bbox::box2d::text AS total_bbox,
