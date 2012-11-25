@@ -57,8 +57,8 @@ private
       WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
       #{get_timelimit_sql(params)}
       GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, cst.geom
-      ORDER BY cs.created_at DESC")
-
+      ORDER BY cs.created_at DESC
+      #{get_limit_sql(params)}")
     ActiveRecord::Associations::Preloader.new(rows, [:user]).run
     rows
   end
@@ -72,8 +72,10 @@ private
       #{get_timelimit_sql(params)}
       GROUP BY changeset_id
       ORDER BY max_tstamp DESC
-      ) SELECT cs.*, cs.bbox::box2d::text AS total_bbox
-        FROM changesets cs INNER JOIN cs_ids ON (cs.id = cs_ids.changeset_id) ORDER BY cs.created_at DESC LIMIT 30")
+      ) SELECT cs.*, cs.bbox::box2d::text AS total_bbox, NULL AS tile_bbox
+        FROM changesets cs INNER JOIN cs_ids ON (cs.id = cs_ids.changeset_id)
+        ORDER BY cs.created_at DESC
+        #{get_limit_sql(params)}")
     ActiveRecord::Associations::Preloader.new(rows, [:user]).run
     rows
   end
@@ -114,7 +116,7 @@ private
         WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
         #{get_timelimit_sql(params)}
         GROUP BY x, y").to_a
-    return rows.to_a
+    rows.to_a
   end
 
   def changesets_to_geojson(changesets, x, y, zoom)
