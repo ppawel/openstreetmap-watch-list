@@ -41,15 +41,15 @@ class Tiler
   #
   def get_changeset_ids(options)
     if options[:changesets] == ['all']
-      sql = "WITH list AS (SELECT id FROM changesets WHERE
-        (SELECT SUM(unnest) FROM (SELECT unnest(entity_changes[1:6])) s) > 0"
+      # Select changesets with geometry (bbox not null).
+      sql = "SELECT id FROM changesets cs WHERE bbox IS NOT NULL"
 
       unless options[:retile]
         # We are NOT retiling so skip changesets that have been already tiled.
-        sql += " EXCEPT SELECT changeset_id FROM changeset_tiles GROUP BY changeset_id"
+        sql += " AND NOT EXISTS (SELECT 1 FROM changeset_tiles WHERE changeset_id = cs.id)"
       end
 
-      sql += ") SELECT * FROM list ORDER BY id DESC"
+      sql += " ORDER BY id LIMIT 1000"
 
       @conn.query(sql).collect {|row| row['id'].to_i}
     else
