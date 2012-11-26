@@ -16,7 +16,8 @@ class Changeset < ActiveRecord::Base
   end
 
   def as_json(options = {})
-    {
+    boxes = box2d_to_bbox(tile_bbox)
+    result = {
       "id" => id,
       "created_at" => created_at,
       "closed_at" => closed_at,
@@ -24,9 +25,14 @@ class Changeset < ActiveRecord::Base
       "user_name" => user.name,
       "entity_changes" => entity_changes_as_list,
       "tags" => tags,
-      "bbox" => bbox ? box2d_to_bbox(total_bbox) : nil,
-      "tile_bbox" => tile_bbox ? box2d_to_bbox(tile_bbox) : nil
+      "bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil
     }
+    if boxes.size > 1
+      result['tile_bboxes'] = boxes
+    elsif boxes.size == 1
+      result['tile_bbox'] = boxes[0]
+    end
+    result
   end
 
   ##
@@ -34,6 +40,11 @@ class Changeset < ActiveRecord::Base
   # bbox is [xmin, ymin, xmax, ymax]
   #
   def box2d_to_bbox(box2d)
-    box2d.gsub(',', ' ').gsub('BOX(', '').gsub(')', '').split(' ').map(&:to_f)
+    return [] if !box2d
+    result = []
+    box2d.scan(/BOX\(([\d\.]+) ([\d\.]+),([\d\.]+) ([\d\.]+)\)/).each do |m|
+      result << [$1, $2, $3, $4].map(&:to_f)
+    end
+    result
   end
 end

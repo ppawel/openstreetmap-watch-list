@@ -65,27 +65,20 @@ private
 
   def find_changesets_by_range(format)
     @zoom, @x1, @y1, @x2, @y2 = get_range(params)
-    rows = Changeset.find_by_sql("WITH cs_ids AS (
-      SELECT changeset_id, MAX(tstamp) AS max_tstamp, ST_Extent(geom) AS tilerange_bbox
-      FROM changeset_tiles
+    rows = Changeset.find_by_sql("
+      SELECT
+        changeset_id,
+        MAX(tstamp) AS max_tstamp,
+        array_agg(geom::box2d::text) AS tile_bbox,
+        cs.*,
+        cs.bbox AS total_bbox
+      FROM changeset_tiles cst
+      INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
       WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
-        AND changeset_id IN (
-            SELECT changeset_id
-            FROM changeset_tiles
-            WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
-            #{get_timelimit_sql(params)}
-            GROUP BY changeset_id
-            ORDER BY MAX(tstamp) DESC NULLS LAST
-            #{get_limit_sql(params)})
-      GROUP BY x, y, changeset_id
-      ORDER BY max_tstamp DESC NULLS LAST
-      )
-        SELECT
-          cs.*,
-          cs.bbox::box2d::text AS total_bbox,
-          cs_ids.tilerange_bbox::box2d::text AS tile_bbox
-        FROM changesets cs INNER JOIN cs_ids ON (cs.id = cs_ids.changeset_id)
-        ORDER BY cs.created_at DESC")
+      #{get_timelimit_sql(params)}
+      GROUP BY changeset_id,cs.id
+      ORDER BY cs.created_at DESC
+      #{get_limit_sql(params)}")
     ActiveRecord::Associations::Preloader.new(rows, [:user]).run
     rows
   end
