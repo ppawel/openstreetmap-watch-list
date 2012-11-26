@@ -69,7 +69,7 @@ private
       SELECT
         changeset_id,
         MAX(tstamp) AS max_tstamp,
-        array_agg(geom::box2d::text) AS tile_bbox,
+        array_agg(geom::box2d::text) AS tile_bboxes,
         cs.*,
         cs.bbox AS total_bbox
       FROM changeset_tiles cst

@@ -10,13 +10,13 @@ class Changeset < ActiveRecord::Base
   attr_accessible :bbox
   attr_accessible :geojson
   attr_accessible :tile_bbox
+  attr_accessible :tile_bboxes
 
   def entity_changes_as_list
     entity_changes.gsub('{', '').gsub('}', '').split(',').map(&:to_i)
   end
 
   def as_json(options = {})
-    boxes = box2d_to_bbox(tile_bbox)
     result = {
       "id" => id,
       "created_at" => created_at,
@@ -25,12 +25,15 @@ class Changeset < ActiveRecord::Base
       "user_name" => user.name,
       "entity_changes" => entity_changes_as_list,
       "tags" => tags,
-      "bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil
+      "bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
     }
-    if boxes.size > 1
-      result['tile_bboxes'] = boxes
-    elsif boxes.size == 1
+    if has_attribute?('tile_bbox')
+      boxes = box2d_to_bbox(tile_bbox)
       result['tile_bbox'] = boxes[0]
+    end
+    if has_attribute?('tile_bboxes')
+      boxes = box2d_to_bbox(tile_bboxes)
+      result['tile_bboxes'] = boxes
     end
     result
   end
