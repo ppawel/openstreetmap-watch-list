@@ -65,19 +65,19 @@ private
 
   def find_changesets_by_range(format)
     @zoom, @x1, @y1, @x2, @y2 = get_range(params)
-    rows = Changeset.find_by_sql("
-      SELECT
-        changeset_id,
-        MAX(tstamp) AS max_tstamp,
-        array_agg(cst.geom::box2d::text) AS tile_bboxes,
-        cs.*,
-        cs.bbox AS total_bbox
-      FROM changeset_tiles cst
-      INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
-      WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
-      #{get_timelimit_sql(params)}
-      GROUP BY changeset_id, cs.id
-      ORDER BY cs.created_at DESC
+    rows = Changeset.find_by_sql("SELECT * FROM (
+        SELECT
+          changeset_id,
+          MAX(tstamp) AS max_tstamp,
+          array_agg(cst.geom::box2d::text) AS tile_bboxes,
+          cs.*,
+          cs.bbox AS total_bbox
+        FROM changeset_tiles cst
+        INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
+        WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
+        #{get_timelimit_sql(params)}
+        GROUP BY changeset_id, cs.id) x
+      ORDER BY created_at DESC
       #{get_limit_sql(params)}")
     ActiveRecord::Associations::Preloader.new(rows, [:user]).run
     rows
