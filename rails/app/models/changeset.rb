@@ -24,7 +24,7 @@ class Changeset < ActiveRecord::Base
       "user_id" => user.id,
       "user_name" => user.name,
       "entity_changes" => entity_changes_as_list,
-      "tags" => tags,
+      "tags" => eval("{#{tags}}"),
       "bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
     }
     if has_attribute?('tile_bbox')
