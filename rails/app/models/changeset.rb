@@ -46,7 +46,7 @@ class Changeset < ActiveRecord::Base
     return [] if !box2d
     result = []
     box2d.scan(/BOX\(([\d\.]+) ([\d\.]+),([\d\.]+) ([\d\.]+)\)/).each do |m|
-      result << [$1, $2, $3, $4].map(&:to_f)
+      result << m.map(&:to_f)
     end
     result.uniq
   end
