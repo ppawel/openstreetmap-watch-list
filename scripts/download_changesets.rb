@@ -54,10 +54,9 @@ for id in (current_state['sequence'].to_i + 1..remote_state['sequence'].to_i)
           changeset_id = changeset_el['id'].to_i
           print "Processing changeset #{changeset_id}... "
           count = update_changeset(changeset_el)
-          print count
-          puts
+          puts "#{count}, open = #{changeset_el['open']}, has_bbox = #{!changeset_el['min_lat'].nil?}"
 
-          if count == 0 and changeset_el['open'] == 'false' and changeset_el['minlat']
+          if count == 0 and changeset_el['open'] == 'false' and changeset_el['min_lat']
             puts ' Not in the database, stopping...'
             raise
           end
