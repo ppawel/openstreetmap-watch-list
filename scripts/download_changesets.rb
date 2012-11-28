@@ -66,7 +66,8 @@ for id in (current_state['sequence'].to_i + 1..remote_state['sequence'].to_i)
 
     current_state['sequence'] = id
     save_state(current_state)
-  rescue
+  rescue Exception, e
+    puts e
     exit
   end
 end
