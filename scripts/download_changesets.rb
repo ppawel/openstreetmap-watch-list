@@ -44,6 +44,7 @@ for id in (current_state['sequence'].to_i + 1..remote_state['sequence'].to_i)
   begin
     @conn.transaction do |c|
       open("http://planet.openstreetmap.org/replication/changesets/#{file_id[0..2]}/#{file_id[3..5]}/#{file_id[6..8]}.osm.gz") do |f|
+        next if f.size == 0
         gz = Zlib::GzipReader.new(f)
         text = gz.read
         puts text
@@ -66,8 +67,8 @@ for id in (current_state['sequence'].to_i + 1..remote_state['sequence'].to_i)
 
     current_state['sequence'] = id
     save_state(current_state)
-  rescue Exception => e
-    puts e
+  rescue
+    puts $!.inspect, $@
     exit
   end
 end
