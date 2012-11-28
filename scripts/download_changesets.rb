@@ -56,7 +56,7 @@ for id in (current_state['sequence'].to_i + 1..remote_state['sequence'].to_i)
           print count
           puts
 
-          if count == 0 and changeset_el['open'] == 'false'
+          if count == 0 and changeset_el['open'] == 'false' and changeset_el['minlat']
             puts ' Not in the database, stopping...'
             raise
           end
