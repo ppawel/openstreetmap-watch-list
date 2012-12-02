@@ -107,15 +107,15 @@ class Tiler
     for change in get_node_changes(changeset_id)
       if change['current_lat']
         tile = latlon2tile(change['current_lat'].to_f, change['current_lon'].to_f, zoom)
-        @conn.query("INSERT INTO _tile_changes_tmp (el_type, zoom, x, y, tile_geom) VALUES
-          ('N', #{zoom}, #{tile[0]}, #{tile[1]},
+        @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom) VALUES
+          ('N', '#{change['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
           ST_SetSRID(ST_GeomFromText('POINT(#{change['current_lon']} #{change['current_lat']})'), 4326))")
       end
 
       if change['new_lat']
         tile = latlon2tile(change['new_lat'].to_f, change['new_lon'].to_f, zoom)
-        @conn.query("INSERT INTO _tile_changes_tmp (el_type, zoom, x, y, tile_geom) VALUES
-          ('N', #{zoom}, #{tile[0]}, #{tile[1]},
+        @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom) VALUES
+          ('N', '#{change['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
           ST_SetSRID(ST_GeomFromText('POINT(#{change['new_lon']} #{change['new_lat']})'), 4326))")
       end
     end
@@ -190,7 +190,8 @@ class Tiler
         ST_X(current_geom) AS current_lon,
         ST_Y(current_geom) AS current_lat,
         ST_X(new_geom) AS new_lon,
-        ST_Y(new_geom) AS new_lat
+        ST_Y(new_geom) AS new_lat,
+        tstamp
       FROM changes WHERE changeset_id = #{changeset_id} AND el_type = 'N'").to_a
   end
 
