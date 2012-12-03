@@ -1,11 +1,11 @@
 -- Database creation script for the OWL schema.
--- This script only contains the OWL-specific part, to get the full schema, see INSTALL.md!
 
--- Drop all tables if they exist.
-DROP TABLE IF EXISTS changes;
+DROP TABLE IF EXISTS nodes;
+DROP TABLE IF EXISTS ways;
 DROP TABLE IF EXISTS changeset_tiles;
 DROP TABLE IF EXISTS changesets;
-DROP TABLE IF EXISTS summary_tiles;
+DROP TABLE IF EXISTS relation_members;
+DROP TABLE IF EXISTS relations;
 
 DROP TYPE IF EXISTS element_type CASCADE;
 CREATE TYPE element_type AS ENUM ('N', 'W', 'R');
@@ -15,7 +15,7 @@ CREATE TYPE action AS ENUM ('CREATE', 'MODIFY', 'DELETE');
 
 -- Create a table for changesets.
 CREATE TABLE changesets (
-  id bigserial PRIMARY KEY,
+  id bigint NOT NULL,
   user_id bigint NOT NULL,
   created_at timestamp without time zone NOT NULL,
   closed_at timestamp without time zone NOT NULL,
@@ -32,41 +32,48 @@ CREATE TABLE changeset_tiles (
   x int NOT NULL,
   y int NOT NULL,
   zoom int NOT NULL,
-  geom geometry(GEOMETRY, 4326),
-  PRIMARY KEY (changeset_id, x, y, zoom)
+  geom geometry(GEOMETRY, 4326)
 );
 
--- Create a table for changes.
-CREATE TABLE changes (
-  id bigserial PRIMARY KEY,
-  el_type element_type NOT NULL,
-  el_id bigint NOT NULL,
-  version int NOT NULL,
-  changeset_id bigint NOT NULL,
-  tstamp timestamp without time zone NOT NULL,
-  action action NOT NULL,
-  changed_tags boolean NOT NULL,
-  changed_geom boolean NOT NULL,
-  changed_members boolean NOT NULL, -- Always false if el_type = NODE.
-  current_tags hstore, -- If action is DELETE or MODIFY, contains tags of element existing in the database (if it exists); otherwise NULL.
-  new_tags hstore, -- If action is CREATE or MODIFY, contains new tags of the element; otherwise NULL.
-  current_geom geometry(GEOMETRY, 4326), -- If action is DELETE or MODIFY, contains tags of element existing in the database (if it exists); otherwise NULL.
-  new_geom geometry(GEOMETRY, 4326) -- If action is CREATE or MODIFY, contains new geometry(GEOMETRY, 4326) of the element; otherwise NULL.
+-- Create a table for nodes - only holds nodes that are not in any way.
+CREATE TABLE nodes (
+    id bigint NOT NULL,
+    version int NOT NULL,
+    user_id int NOT NULL,
+    tstamp timestamp without time zone NOT NULL,
+    changeset_id bigint NOT NULL,
+    tags hstore,
+    geom geometry(POINT, 4326)
 );
 
--- Create a table for summary tiles.
-CREATE TABLE summary_tiles (
-  x int NOT NULL,
-  y int NOT NULL,
-  zoom int NOT NULL,
-  num_changesets int,
-  latest_changeset_id int,
-  PRIMARY KEY (x, y, zoom)
+-- Create a table for ways.
+CREATE TABLE ways (
+    id bigint NOT NULL,
+    version int NOT NULL,
+    user_id int NOT NULL,
+    tstamp timestamp without time zone NOT NULL,
+    changeset_id bigint NOT NULL,
+    tags hstore,
+    node_ids bigint[],
+    node_tags hstore[],
+    linestring geometry(LINESTRING, 4326)
 );
 
-CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
-CREATE INDEX idx_changes_current_geom ON changes USING gist (current_geom);
-CREATE INDEX idx_changes_new_geom ON changes USING gist (new_geom);
-CREATE INDEX idx_changesets_created_at ON changesets USING btree (created_at);
-CREATE INDEX idx_changesets_last_tiled_at ON changesets USING btree (last_tiled_at);
-CREATE INDEX idx_changeset_tiles_changeset_id ON changeset_tiles USING btree (changeset_id);
+-- Create a table for relations.
+CREATE TABLE relations (
+    id bigint NOT NULL,
+    version int NOT NULL,
+    user_id int NOT NULL,
+    tstamp timestamp without time zone NOT NULL,
+    changeset_id bigint NOT NULL,
+    tags hstore
+);
+
+-- Create a table for representing relation member relationships.
+CREATE TABLE relation_members (
+    relation_id bigint NOT NULL,
+    member_id bigint NOT NULL,
+    member_type character(1) NOT NULL,
+    member_role text NOT NULL,
+    sequence_id int NOT NULL
+);
