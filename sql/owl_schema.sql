@@ -2,10 +2,11 @@
 
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS ways;
-DROP TABLE IF EXISTS changeset_tiles;
+DROP TABLE IF EXISTS tiles;
 DROP TABLE IF EXISTS changesets;
 DROP TABLE IF EXISTS relation_members;
 DROP TABLE IF EXISTS relations;
+DROP TABLE IF EXISTS users;
 
 DROP TYPE IF EXISTS element_type CASCADE;
 CREATE TYPE element_type AS ENUM ('N', 'W', 'R');
@@ -25,8 +26,8 @@ CREATE TABLE changesets (
   bbox geometry -- Bounding box of all changes for this changeset.
 );
 
--- Create a table for changeset tiles.
-CREATE TABLE changeset_tiles (
+-- Create a table for OWL tiles.
+CREATE TABLE tiles (
   changeset_id bigint,
   tstamp timestamp without time zone,
   x int NOT NULL,
@@ -35,7 +36,7 @@ CREATE TABLE changeset_tiles (
   geom geometry(GEOMETRY, 4326)
 );
 
--- Create a table for nodes - only holds nodes that are not in any way.
+-- Create a table for nodes.
 CREATE TABLE nodes (
     id bigint NOT NULL,
     version int NOT NULL,
@@ -54,8 +55,7 @@ CREATE TABLE ways (
     tstamp timestamp without time zone NOT NULL,
     changeset_id bigint NOT NULL,
     tags hstore,
-    node_ids bigint[],
-    node_tags hstore[],
+    nodes bigint[],
     linestring geometry(LINESTRING, 4326)
 );
 
@@ -76,4 +76,10 @@ CREATE TABLE relation_members (
     member_type character(1) NOT NULL,
     member_role text NOT NULL,
     sequence_id int NOT NULL
+);
+
+-- Create a table for users.
+CREATE TABLE users (
+    id int NOT NULL,
+    name text NOT NULL
 );
