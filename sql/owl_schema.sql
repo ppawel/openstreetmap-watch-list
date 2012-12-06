@@ -19,9 +19,8 @@ CREATE TABLE changesets (
   id bigint NOT NULL,
   user_id bigint NOT NULL,
   created_at timestamp without time zone NOT NULL,
-  closed_at timestamp without time zone NOT NULL,
-  last_tiled_at timestamp without time zone,
-  tags hstore,
+  closed_at timestamp without time zone, -- If NULL, changeset is still open for business.
+  tags hstore NOT NULL,
   entity_changes int[9], -- For each element type (N, W, R) holds number of actions (CREATE, MODIFY, DELETE) in this changeset.
   bbox geometry -- Bounding box of all changes for this changeset.
 );
@@ -72,6 +71,7 @@ CREATE TABLE relations (
 -- Create a table for representing relation member relationships.
 CREATE TABLE relation_members (
     relation_id bigint NOT NULL,
+    relation_version bigint NOT NULL,
     member_id bigint NOT NULL,
     member_type character(1) NOT NULL,
     member_role text NOT NULL,
