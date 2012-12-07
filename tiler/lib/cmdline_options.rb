@@ -25,6 +25,13 @@ def self.parse_cmdline_options
     end
 
     opts.separator('')
+
+    opts.on("--file f", "File to read changeset ids from; each line in this file should contain a single id") do |c|
+      options[:file] = c
+    end
+
+    opts.separator('')
+
     opts.on("--retile", "Remove existing tiles and regenerate tiles from scratch (optional, default is false)") do |o|
       options[:retile] = o
     end

@@ -14,6 +14,14 @@ require 'tiler'
 
 $config = YAML.load_file('../rails/config/database.yml')['development']
 
+def get_changeset_ids(tiler, options)
+  if options[:file]
+    return File.open(options[:file]).each_line.collect {|line| line.to_i}
+  else
+    return tiler.get_changeset_ids(options)
+  end
+end
+
 options = Tiler::parse_cmdline_options
 
 puts options.inspect
@@ -23,7 +31,7 @@ puts options.inspect
 
 tiler = Tiler::Tiler.new(@conn)
 
-changeset_ids = tiler.get_changeset_ids(options)
+changeset_ids = get_changeset_ids(tiler, options)
 zoom = options[:zoom_level]
 count = 0
 

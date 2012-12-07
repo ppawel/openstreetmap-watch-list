@@ -11,16 +11,23 @@ class Tiler
 
   def initialize(conn)
     @conn = conn
+    @conn.exec('DROP TABLE IF EXISTS _way_geom')
+    @conn.exec('DROP TABLE IF EXISTS _tile_bboxes')
+    @conn.exec('DROP TABLE IF EXISTS _tile_changes_tmp')
     @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, tstamp timestamp without time zone);')
     @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry);')
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
       x int, y int, zoom int, tile_geom geometry);')
+    @conn.exec('CREATE INDEX _idx_way_geom ON _way_geom USING gist (geom)')
+    @conn.exec('CREATE INDEX _idx_bboxes ON _tile_bboxes USING gist (tile_bbox)')
   end
 
   ##
   # Generates tiles for given zoom and changeset.
   #
   def generate(zoom, changeset_id, options = {})
+    setup_changeset_data(changeset_id)
+
     tile_count = -1
     begin
       @conn.transaction do |c|
@@ -32,6 +39,7 @@ class Tiler
         tile_count = do_generate(zoom, changeset_id, options.merge(:geos_bug_workaround => true))
       end
     end
+    clear_changeset_data
     tile_count
   end
 
@@ -74,6 +82,8 @@ class Tiler
     clear_tiles(changeset_id, zoom) if options[:retile]
 
     @conn.exec('TRUNCATE _tile_changes_tmp')
+    @conn.exec('TRUNCATE _way_geom')
+    @conn.exec('TRUNCATE _tile_bboxes')
 
     process_node_changes(changeset_id, zoom)
     process_way_changes(changeset_id, zoom, options)
@@ -95,10 +105,10 @@ class Tiler
     end
 
     # Now generate tiles at lower zoom levels.
-    (3..16).reverse_each do |i|
-      @@log.debug "Aggregating tiles for level #{i - 1}..."
-      @conn.query("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
-    end
+    #(3..16).reverse_each do |i|
+    #  @@log.debug "Aggregating tiles for level #{i - 1}..."
+    #  @conn.query("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
+    #end
 
     count
   end
@@ -133,12 +143,12 @@ class Tiler
     @conn.query("INSERT INTO _way_geom (geom, tstamp)
       SELECT
         CASE
-          WHEN current_geom IS NOT NULL AND new_geom IS NOT NULL THEN
-            ST_Union(current_geom, new_geom)
-          WHEN current_geom IS NOT NULL THEN current_geom
-          WHEN new_geom IS NOT NULL THEN new_geom
+          WHEN prev_geom IS NOT NULL AND geom IS NOT NULL THEN
+            prev_geom
+          WHEN prev_geom IS NOT NULL THEN prev_geom
+          WHEN geom IS NOT NULL THEN geom
         END, tstamp
-      FROM changes WHERE id = #{change['id']}")
+      FROM _changeset_data WHERE id = #{change['el_id']} AND version = #{change['version']}")
 
     tiles = bbox_to_tiles(zoom, box2d_to_bbox(change["both_bbox"]))
 
@@ -159,6 +169,8 @@ class Tiler
       @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
+
+    @@log.debug "Change #{change['id']}: Way #{change['el_id']} (#{change['version']}): created bboxes..."
 
     count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom)
       SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox)
@@ -187,18 +199,26 @@ class Tiler
 
   def get_node_changes(changeset_id)
     @conn.query("SELECT
-        ST_X(current_geom) AS current_lon,
-        ST_Y(current_geom) AS current_lat,
-        ST_X(new_geom) AS new_lon,
-        ST_Y(new_geom) AS new_lat,
+        ST_X(prev_geom) AS current_lon,
+        ST_Y(prev_geom) AS current_lat,
+        ST_X(geom) AS new_lon,
+        ST_Y(geom) AS new_lat,
         tstamp
-      FROM changes WHERE changeset_id = #{changeset_id} AND el_type = 'N'").to_a
+      FROM _changeset_data WHERE type = 'N'").to_a
   end
 
   def get_way_changes(changeset_id)
-    @conn.query("SELECT id, el_id, version, Box2D(ST_Collect(current_geom, new_geom)) AS both_bbox
-      FROM changes WHERE changeset_id = #{changeset_id} AND el_type = 'W'
-      ORDER BY el_id").to_a
+    @conn.query("SELECT id AS el_id, version, Box2D(ST_Collect(prev_geom, geom)) AS both_bbox
+      FROM _changeset_data WHERE type = 'W'
+      ORDER BY id").to_a
+  end
+
+  def setup_changeset_data(changeset_id)
+    @conn.query("CREATE TEMPORARY TABLE _changeset_data AS SELECT * FROM OWL_GetChangesetData(#{changeset_id})").to_a
+  end
+
+  def clear_changeset_data
+    @conn.query("DROP TABLE IF EXISTS _changeset_data")
   end
 end
 
