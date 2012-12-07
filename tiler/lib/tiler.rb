@@ -54,7 +54,7 @@ class Tiler
 
       unless options[:retile]
         # We are NOT retiling so skip changesets that have been already tiled.
-        sql += " AND NOT EXISTS (SELECT 1 FROM changeset_tiles WHERE changeset_id = cs.id)"
+        sql += " AND NOT EXISTS (SELECT 1 FROM tiles WHERE changeset_id = cs.id)"
       end
 
       sql += " ORDER BY id LIMIT 1000"
@@ -71,7 +71,7 @@ class Tiler
   # duplicate primary key error during insert.
   #
   def clear_tiles(changeset_id, zoom)
-    count = @conn.query("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
+    count = @conn.query("DELETE FROM tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
     @@log.debug "Removed existing tiles: #{count}"
     count
   end
@@ -91,13 +91,13 @@ class Tiler
     # The following is a hack because of http://trac.osgeo.org/geos/ticket/600
     # First, try ST_Union (which will result in a simpler tile geometry), if that fails, go with ST_Collect.
     if !options[:geos_bug_workaround]
-      count = @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
+      count = @conn.query("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, geom)
         SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Union(tile_geom)
         FROM _tile_changes_tmp tmp
         WHERE NOT ST_IsEmpty(tile_geom)
         GROUP BY zoom, x, y").cmd_tuples
     else
-      count = @conn.query("INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, geom)
+      count = @conn.query("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, geom)
         SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Collect(tile_geom)
         FROM _tile_changes_tmp tmp
         WHERE NOT ST_IsEmpty(tile_geom)
