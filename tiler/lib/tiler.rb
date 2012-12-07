@@ -85,8 +85,8 @@ class Tiler
     @conn.exec('TRUNCATE _way_geom')
     @conn.exec('TRUNCATE _tile_bboxes')
 
-    process_node_changes(changeset_id, zoom)
-    process_way_changes(changeset_id, zoom, options)
+    process_nodes(changeset_id, zoom)
+    process_ways(changeset_id, zoom, options)
 
     # The following is a hack because of http://trac.osgeo.org/geos/ticket/600
     # First, try ST_Union (which will result in a simpler tile geometry), if that fails, go with ST_Collect.
@@ -113,71 +113,70 @@ class Tiler
     count
   end
 
-  def process_node_changes(changeset_id, zoom)
-    for change in get_node_changes(changeset_id)
-      if change['current_lat']
-        tile = latlon2tile(change['current_lat'].to_f, change['current_lon'].to_f, zoom)
+  def process_nodes(changeset_id, zoom)
+    for node in get_nodes(changeset_id)
+      if node['current_lat']
+        tile = latlon2tile(node['current_lat'].to_f, node['current_lon'].to_f, zoom)
         @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom) VALUES
-          ('N', '#{change['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-          ST_SetSRID(ST_GeomFromText('POINT(#{change['current_lon']} #{change['current_lat']})'), 4326))")
+          ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
+          ST_SetSRID(ST_GeomFromText('POINT(#{node['current_lon']} #{node['current_lat']})'), 4326))")
       end
 
-      if change['new_lat']
-        tile = latlon2tile(change['new_lat'].to_f, change['new_lon'].to_f, zoom)
+      if node['new_lat']
+        tile = latlon2tile(node['new_lat'].to_f, node['new_lon'].to_f, zoom)
         @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom) VALUES
-          ('N', '#{change['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-          ST_SetSRID(ST_GeomFromText('POINT(#{change['new_lon']} #{change['new_lat']})'), 4326))")
+          ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
+          ST_SetSRID(ST_GeomFromText('POINT(#{node['new_lon']} #{node['new_lat']})'), 4326))")
       end
     end
   end
 
-  def process_way_changes(changeset_id, zoom, options)
-    for change in get_way_changes(changeset_id)
-      process_way_change(changeset_id, change, zoom, options) unless change['both_bbox'].nil?
+  def process_ways(changeset_id, zoom, options)
+    for way in get_ways(changeset_id)
+      next if way['both_bbox'].nil?
+
+      @conn.exec('TRUNCATE _tile_bboxes')
+      @conn.exec('TRUNCATE _way_geom')
+
+      @conn.query("INSERT INTO _way_geom (geom, tstamp)
+        SELECT
+          CASE
+            WHEN prev_geom IS NOT NULL AND geom IS NOT NULL THEN
+              ST_Collect(geom, prev_geom)
+            WHEN prev_geom IS NOT NULL THEN prev_geom
+            WHEN geom IS NOT NULL THEN geom
+          END, tstamp
+        FROM _changeset_data WHERE id = #{way['id']} AND version = #{way['version']}")
+
+      tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
+
+      @@log.debug "Way #{way['id']} (#{way['version']}): processing #{tiles.size} tile(s)..."
+
+      # Does not make sense to reduce small changesets.
+      if tiles.size > 64
+        size_before = tiles.size
+        reduce_tiles(tiles, changeset_id, change, zoom)
+        @@log.debug "Way #{way['id']} (#{way['version']}): reduced tiles: #{size_before} -> #{tiles.size}"
+      end
+
+      for tile in tiles
+        x, y = tile[0], tile[1]
+        lat1, lon1 = tile2latlon(x, y, zoom)
+        lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
+
+        @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
+          ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
+      end
+
+      @@log.debug "Way #{way['id']} (#{way['version']}): created bboxes..."
+
+      count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom)
+        SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox)
+        FROM _tile_bboxes bb, _way_geom
+        WHERE ST_Intersects(geom, bb.tile_bbox)").cmd_tuples
+
+      @@log.debug "Way #{way['id']} (#{way['version']}): created #{count} tile(s)"
     end
-  end
-
-  def process_way_change(changeset_id, change, zoom, options)
-    @conn.exec('TRUNCATE _tile_bboxes')
-    @conn.exec('TRUNCATE _way_geom')
-    @conn.query("INSERT INTO _way_geom (geom, tstamp)
-      SELECT
-        CASE
-          WHEN prev_geom IS NOT NULL AND geom IS NOT NULL THEN
-            prev_geom
-          WHEN prev_geom IS NOT NULL THEN prev_geom
-          WHEN geom IS NOT NULL THEN geom
-        END, tstamp
-      FROM _changeset_data WHERE id = #{change['el_id']} AND version = #{change['version']}")
-
-    tiles = bbox_to_tiles(zoom, box2d_to_bbox(change["both_bbox"]))
-
-    @@log.debug "Change #{change['id']}: Way #{change['el_id']} (#{change['version']}): processing #{tiles.size} tile(s)..."
-
-    # Does not make sense to reduce small changesets.
-    if tiles.size > 64
-      size_before = tiles.size
-      reduce_tiles(tiles, changeset_id, change, zoom)
-      @@log.debug "Change #{change['id']}: Way #{change['el_id']} (#{change['version']}): reduced tiles: #{size_before} -> #{tiles.size}"
-    end
-
-    for tile in tiles
-      x, y = tile[0], tile[1]
-      lat1, lon1 = tile2latlon(x, y, zoom)
-      lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
-
-      @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
-        ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
-    end
-
-    @@log.debug "Change #{change['id']}: Way #{change['el_id']} (#{change['version']}): created bboxes..."
-
-    count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom)
-      SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox)
-      FROM _tile_bboxes bb, _way_geom
-      WHERE ST_Intersects(geom, bb.tile_bbox)").cmd_tuples
-
-    @@log.debug "Change #{change['id']}: Way #{change['el_id']} (#{change['version']}): created #{count} tile(s)"
   end
 
   def reduce_tiles(tiles, changeset_id, change, zoom)
@@ -197,8 +196,8 @@ class Tiler
     end
   end
 
-  def get_node_changes(changeset_id)
-    @conn.query("SELECT
+  def get_nodes(changeset_id)
+    @conn.query("SELECT id,
         ST_X(prev_geom) AS current_lon,
         ST_Y(prev_geom) AS current_lat,
         ST_X(geom) AS new_lon,
@@ -207,8 +206,8 @@ class Tiler
       FROM _changeset_data WHERE type = 'N'").to_a
   end
 
-  def get_way_changes(changeset_id)
-    @conn.query("SELECT id AS el_id, version, Box2D(ST_Collect(prev_geom, geom)) AS both_bbox
+  def get_ways(changeset_id)
+    @conn.query("SELECT id, version, Box2D(ST_Collect(prev_geom, geom)) AS both_bbox
       FROM _changeset_data WHERE type = 'W'
       ORDER BY id").to_a
   end
