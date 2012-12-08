@@ -6,13 +6,23 @@ require 'yaml'
 require 'tiler'
 
 class TilerTest < Test::Unit::TestCase
-  # Changes in Zagreb and Budapest place nodes.
+  # Tag changes in Zagreb and Budapest place nodes.
   def test_12917265
     count = setup_changeset_test(12917265)
     changes = get_changes
     tiles = get_tiles
-    puts tiles.inspect
+    #puts changes.inspect
     assert_equal(2, tiles.size)
+    assert_equal(2, changes.size)
+  end
+
+
+  def test_13294164
+    count = setup_changeset_test(13294164)
+    changes = get_changes
+    tiles = get_tiles
+    puts changes.inspect
+    #assert_equal(2, tiles.size)
     assert_equal(2, changes.size)
   end
 

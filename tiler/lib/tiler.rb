@@ -126,6 +126,8 @@ rescue
 
   def process_nodes(changeset_id, zoom)
     for node in get_nodes(changeset_id)
+      create_node_change(changeset_id, node)
+
       if node['lat']
         tile = latlon2tile(node['lat'].to_f, node['lon'].to_f, zoom)
         @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
@@ -184,6 +186,15 @@ rescue
     end
   end
 
+  def create_node_change(changeset_id, node)
+    origin = 'NODE_MOVED' if node['geom_changed']
+    origin = 'NODE_TAGS_CHANGED' if node['tags_changed']
+    @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
+      origin, origin_el_type, origin_el_id, origin_el_version, origin_el_action) VALUES (
+      '#{node['tstamp']}', 'N', #{node['id']}, #{node['version']},
+      '#{origin}', 'N', #{node['id']}, #{node['version']}, 'MODIFY')")
+  end
+
   def reduce_tiles(tiles, changeset_id, change, zoom)
     for source_zoom in [4, 6, 8, 10, 11, 12, 13, 14]
       for tile in bbox_to_tiles(source_zoom, box2d_to_bbox(change["both_bbox"]))
@@ -199,12 +210,13 @@ rescue
   end
 
   def get_nodes(changeset_id)
-    @conn.query("SELECT id,
+    @conn.query("SELECT id, tstamp, version,
         ST_X(prev_geom) AS prev_lon,
         ST_Y(prev_geom) AS prev_lat,
         ST_X(geom) AS lon,
         ST_Y(geom) AS lat,
-        tstamp
+        NOT ST_Equals(geom, prev_geom) AS geom_changed,
+        tags != prev_tags AS tags_changed
       FROM _changeset_data WHERE type = 'N'").to_a
   end
 

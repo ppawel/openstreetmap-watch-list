@@ -31,7 +31,7 @@ CREATE TABLE changesets (
 
 -- Create a table for changes.
 CREATE TABLE changes (
-  id bigint NOT NULL,
+  id bigserial NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   el_type element_type NOT NULL,
   el_id bigint NOT NULL,
