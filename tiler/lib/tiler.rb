@@ -25,9 +25,11 @@ class Tiler
       tstamp timestamp without time zone,
       tags hstore,
       geom geometry,
+      nodes bigint[],
       prev_version int,
       prev_tags hstore,
-      prev_geom geometry)')
+      prev_geom geometry,
+      prev_nodes bigint[])')
     @conn.exec('CREATE INDEX _idx_way_geom ON _way_geom USING gist (geom)')
     @conn.exec('CREATE INDEX _idx_bboxes ON _tile_bboxes USING gist (tile_bbox)')
   end
@@ -148,6 +150,8 @@ rescue
     for way in get_ways(changeset_id)
       next if way['both_bbox'].nil?
 
+      create_way_change(changeset_id, way)
+
       @conn.exec('TRUNCATE _tile_bboxes')
       @conn.exec('TRUNCATE _way_geom')
 
@@ -195,6 +199,15 @@ rescue
       '#{origin}', 'N', #{node['id']}, #{node['version']}, 'MODIFY')")
   end
 
+  def create_way_change(changeset_id, way)
+    origin = 'WAY_NODES_CHANGED' if way['nodes_changed']
+    origin = 'WAY_TAGS_CHANGED' if way['tags_changed']
+    @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
+      origin, origin_el_type, origin_el_id, origin_el_version, origin_el_action) VALUES (
+      '#{way['tstamp']}', 'W', #{way['id']}, #{way['version']},
+      '#{origin}', 'N', #{way['id']}, #{way['version']}, 'MODIFY')")
+  end
+
   def reduce_tiles(tiles, changeset_id, change, zoom)
     for source_zoom in [4, 6, 8, 10, 11, 12, 13, 14]
       for tile in bbox_to_tiles(source_zoom, box2d_to_bbox(change["both_bbox"]))
@@ -221,7 +234,9 @@ rescue
   end
 
   def get_ways(changeset_id)
-    @conn.query("SELECT id, version, Box2D(ST_Collect(prev_geom, geom)) AS both_bbox
+    @conn.query("SELECT id, tstamp, version, Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
+        nodes != prev_nodes AS nodes_changed,
+        tags != prev_tags AS tags_changed
       FROM _changeset_data WHERE type = 'W'
       ORDER BY id").to_a
   end
