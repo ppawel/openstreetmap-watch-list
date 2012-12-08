@@ -6,9 +6,14 @@ require 'yaml'
 require 'tiler'
 
 class TilerTest < Test::Unit::TestCase
+  # Changes in Zagreb and Budapest place nodes.
   def test_12917265
     count = setup_changeset_test(12917265)
-    assert_equal(37, count)
+    changes = get_changes
+    tiles = get_tiles
+    puts tiles.inspect
+    assert_equal(2, tiles.size)
+    assert_equal(2, changes.size)
   end
 
   def setup_changeset_test(id)
@@ -44,5 +49,13 @@ class TilerTest < Test::Unit::TestCase
       @conn.put_copy_data(line)
     end
     @conn.put_copy_end
+  end
+
+  def get_changes
+    @conn.exec("SELECT * FROM changes").to_a
+  end
+
+  def get_tiles
+    @conn.exec("SELECT * FROM tiles").to_a
   end
 end

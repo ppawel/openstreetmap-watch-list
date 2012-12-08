@@ -127,14 +127,14 @@ rescue
   def process_nodes(changeset_id, zoom)
     for node in get_nodes(changeset_id)
       if node['lat']
-        tile = latlon2tile(node['current_lat'].to_f, node['current_lon'].to_f, zoom)
+        tile = latlon2tile(node['lat'].to_f, node['lon'].to_f, zoom)
         @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
           ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
           ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326), NULL)")
       end
 
       if node['prev_lat']
-        tile = latlon2tile(node['new_lat'].to_f, node['new_lon'].to_f, zoom)
+        tile = latlon2tile(node['prev_lat'].to_f, node['prev_lon'].to_f, zoom)
         @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
           ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
           NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326))")
