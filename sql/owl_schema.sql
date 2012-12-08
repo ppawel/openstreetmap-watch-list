@@ -27,12 +27,13 @@ CREATE TABLE changesets (
 
 -- Create a table for OWL tiles.
 CREATE TABLE tiles (
-  changeset_id bigint,
+  changeset_id bigint NOT NULL,
   tstamp timestamp without time zone,
   x int NOT NULL,
   y int NOT NULL,
   zoom int NOT NULL,
-  geom geometry(GEOMETRY, 4326)
+  changes bigint[] NOT NULL,
+  geom geometry(GEOMETRY, 4326) NOT NULL
 );
 
 -- Create a table for nodes.
@@ -42,8 +43,8 @@ CREATE TABLE nodes (
     user_id int NOT NULL,
     tstamp timestamp without time zone NOT NULL,
     changeset_id bigint NOT NULL,
-    tags hstore,
-    geom geometry(POINT, 4326)
+    tags hstore NOT NULL,
+    geom geometry(POINT, 4326) NOT NULL
 );
 
 -- Create a table for ways.
@@ -53,9 +54,9 @@ CREATE TABLE ways (
     user_id int NOT NULL,
     tstamp timestamp without time zone NOT NULL,
     changeset_id bigint NOT NULL,
-    tags hstore,
-    nodes bigint[],
-    linestring geometry(LINESTRING, 4326)
+    tags hstore NOT NULL,
+    nodes bigint[] NOT NULL,
+    linestring geometry(LINESTRING, 4326) NOT NULL
 );
 
 -- Create a table for relations.
@@ -65,7 +66,7 @@ CREATE TABLE relations (
     user_id int NOT NULL,
     tstamp timestamp without time zone NOT NULL,
     changeset_id bigint NOT NULL,
-    tags hstore
+    tags hstore NOT NULL
 );
 
 -- Create a table for representing relation member relationships.

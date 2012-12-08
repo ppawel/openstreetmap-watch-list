@@ -16,6 +16,7 @@ CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
 		prev_version int,
 		prev_tags hstore,
 		prev_geom geometry) AS $$
+
   WITH affected_nodes AS (
   SELECT
     'N'::text AS type,
@@ -31,7 +32,8 @@ CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
   WHERE n.changeset_id = $1
   )
-
+SELECT DISTINCT ON (type, id, version) * FROM
+(
   SELECT
     'W' AS type,
     w.id,
@@ -44,13 +46,13 @@ CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
     (SELECT ST_MakeLine(geom) FROM (SELECT geom FROM nodes wn WHERE wn.id IN (SELECT unnest(prev.nodes)) AND wn.tstamp < prev.tstamp ORDER BY wn.version DESC) x)
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
-  WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE (an.tags IS NULL AND an.prev_tags IS NULL) OR an.tags = an.prev_tags)
+  WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags)
 
   UNION ALL
 
   SELECT *
   FROM affected_nodes
-  WHERE (tags IS NOT NULL OR prev_tags IS NOT NULL) AND tags != prev_tags
+  WHERE tags != prev_tags
 
   UNION ALL
 
@@ -67,6 +69,7 @@ CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.changeset_id = $1
+) x
 $$ LANGUAGE sql;
 
 CREATE FUNCTION OWL_UpdateChangeset(bigint) RETURNS void AS $$
