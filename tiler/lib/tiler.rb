@@ -11,13 +11,13 @@ class Tiler
 
   def initialize(conn)
     @conn = conn
-    @conn.exec('DROP TABLE IF EXISTS _way_geom')
-    @conn.exec('DROP TABLE IF EXISTS _tile_bboxes')
-    @conn.exec('DROP TABLE IF EXISTS _tile_changes_tmp')
-    @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, tstamp timestamp without time zone);')
-    @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry);')
+    #@conn.exec('DROP TABLE IF EXISTS _way_geom')
+    #@conn.exec('DROP TABLE IF EXISTS _tile_bboxes')
+    #@conn.exec('DROP TABLE IF EXISTS _tile_changes_tmp')
+    @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, prev_geom geometry, tstamp timestamp without time zone)')
+    @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry)')
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
-      x int, y int, zoom int, tile_geom geometry);')
+      x int, y int, zoom int, geom geometry, prev_geom geometry)')
     @conn.exec('CREATE TEMPORARY TABLE _changeset_data (
       type char(2),
       id bigint,
@@ -39,16 +39,19 @@ class Tiler
     setup_changeset_data(changeset_id)
 
     tile_count = -1
-    begin
+    #begin
       @conn.transaction do |c|
         tile_count = do_generate(zoom, changeset_id, options)
       end
-    rescue
+=begin
+rescue
+      puts $!
       @@log.debug "Trying workaround..."
       @conn.transaction do |c|
         tile_count = do_generate(zoom, changeset_id, options.merge(:geos_bug_workaround => true))
       end
     end
+=end
     clear_changeset_data
     tile_count
   end
@@ -101,16 +104,14 @@ class Tiler
     # The following is a hack because of http://trac.osgeo.org/geos/ticket/600
     # First, try ST_Union (which will result in a simpler tile geometry), if that fails, go with ST_Collect.
     if !options[:geos_bug_workaround]
-      count = @conn.query("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, geom)
-        SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Union(tile_geom)
+      count = @conn.query("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
+        SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ARRAY[]::bigint[], array_agg(geom), array_agg(prev_geom)--ST_Union(tile_geom)
         FROM _tile_changes_tmp tmp
-        WHERE NOT ST_IsEmpty(tile_geom)
         GROUP BY zoom, x, y").cmd_tuples
     else
       count = @conn.query("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, geom)
         SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Collect(tile_geom)
         FROM _tile_changes_tmp tmp
-        WHERE NOT ST_IsEmpty(tile_geom)
         GROUP BY zoom, x, y").cmd_tuples
     end
 
@@ -125,18 +126,18 @@ class Tiler
 
   def process_nodes(changeset_id, zoom)
     for node in get_nodes(changeset_id)
-      if node['current_lat']
+      if node['lat']
         tile = latlon2tile(node['current_lat'].to_f, node['current_lon'].to_f, zoom)
-        @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom) VALUES
+        @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
           ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-          ST_SetSRID(ST_GeomFromText('POINT(#{node['current_lon']} #{node['current_lat']})'), 4326))")
+          ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326), NULL)")
       end
 
-      if node['new_lat']
+      if node['prev_lat']
         tile = latlon2tile(node['new_lat'].to_f, node['new_lon'].to_f, zoom)
-        @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom) VALUES
+        @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
           ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-          ST_SetSRID(ST_GeomFromText('POINT(#{node['new_lon']} #{node['new_lat']})'), 4326))")
+          NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326))")
       end
     end
   end
@@ -148,14 +149,8 @@ class Tiler
       @conn.exec('TRUNCATE _tile_bboxes')
       @conn.exec('TRUNCATE _way_geom')
 
-      @conn.query("INSERT INTO _way_geom (geom, tstamp)
-        SELECT
-          CASE
-            WHEN prev_geom IS NOT NULL AND geom IS NOT NULL THEN
-              ST_Collect(geom, prev_geom)
-            WHEN prev_geom IS NOT NULL THEN prev_geom
-            WHEN geom IS NOT NULL THEN geom
-          END, tstamp
+      @conn.query("INSERT INTO _way_geom (geom, prev_geom, tstamp)
+        SELECT geom, prev_geom, tstamp
         FROM _changeset_data WHERE id = #{way['id']} AND version = #{way['version']}")
 
       tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
@@ -180,10 +175,10 @@ class Tiler
 
       @@log.debug "Way #{way['id']} (#{way['version']}): created bboxes..."
 
-      count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, tile_geom)
-        SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox)
+      count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom)
+        SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox), ST_Intersection(prev_geom, bb.tile_bbox)
         FROM _tile_bboxes bb, _way_geom
-        WHERE ST_Intersects(geom, bb.tile_bbox)").cmd_tuples
+        WHERE ST_Intersects(geom, bb.tile_bbox) OR ST_Intersects(prev_geom, bb.tile_bbox)").cmd_tuples
 
       @@log.debug "Way #{way['id']} (#{way['version']}): created #{count} tile(s)"
     end
@@ -205,10 +200,10 @@ class Tiler
 
   def get_nodes(changeset_id)
     @conn.query("SELECT id,
-        ST_X(prev_geom) AS current_lon,
-        ST_Y(prev_geom) AS current_lat,
-        ST_X(geom) AS new_lon,
-        ST_Y(geom) AS new_lat,
+        ST_X(prev_geom) AS prev_lon,
+        ST_Y(prev_geom) AS prev_lat,
+        ST_X(geom) AS lon,
+        ST_Y(geom) AS lat,
         tstamp
       FROM _changeset_data WHERE type = 'N'").to_a
   end
