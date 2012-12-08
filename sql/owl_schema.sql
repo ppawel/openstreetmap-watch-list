@@ -2,6 +2,7 @@
 
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS ways;
+DROP TABLE IF EXISTS changes;
 DROP TABLE IF EXISTS tiles;
 DROP TABLE IF EXISTS changesets;
 DROP TABLE IF EXISTS relation_members;
@@ -14,6 +15,9 @@ CREATE TYPE element_type AS ENUM ('N', 'W', 'R');
 DROP TYPE IF EXISTS action CASCADE;
 CREATE TYPE action AS ENUM ('CREATE', 'MODIFY', 'DELETE');
 
+DROP TYPE IF EXISTS change_origin CASCADE;
+CREATE TYPE change_origin AS ENUM ('NODE_MOVED', 'NODE_TAGS_CHANGED', 'WAY_TAGS_CHANGED', 'WAY_NODES_CHANGED');
+
 -- Create a table for changesets.
 CREATE TABLE changesets (
   id bigint NOT NULL,
@@ -25,62 +29,77 @@ CREATE TABLE changesets (
   bbox geometry -- Bounding box of all changes for this changeset.
 );
 
+-- Create a table for changes.
+CREATE TABLE changes (
+  id bigint NOT NULL,
+  tstamp timestamp without time zone NOT NULL,
+  el_type element_type NOT NULL,
+  el_id bigint NOT NULL,
+  el_version int NOT NULL,
+  origin change_origin NOT NULL,
+  origin_el_type element_type NOT NULL,
+  origin_el_id bigint NOT NULL,
+  origin_el_version int NOT NULL,
+  origin_el_action action NOT NULL
+);
+
 -- Create a table for OWL tiles.
 CREATE TABLE tiles (
   changeset_id bigint NOT NULL,
-  tstamp timestamp without time zone,
+  tstamp timestamp without time zone NOT NULL,
   x int NOT NULL,
   y int NOT NULL,
   zoom int NOT NULL,
   changes bigint[] NOT NULL,
-  geom geometry(GEOMETRY, 4326) NOT NULL
+  geom geometry(GEOMETRY, 4326)[] NOT NULL,
+  prev_geom geometry(GEOMETRY, 4326)[] NOT NULL
 );
 
 -- Create a table for nodes.
 CREATE TABLE nodes (
-    id bigint NOT NULL,
-    version int NOT NULL,
-    user_id int NOT NULL,
-    tstamp timestamp without time zone NOT NULL,
-    changeset_id bigint NOT NULL,
-    tags hstore NOT NULL,
-    geom geometry(POINT, 4326) NOT NULL
+  id bigint NOT NULL,
+  version int NOT NULL,
+  user_id int NOT NULL,
+  tstamp timestamp without time zone NOT NULL,
+  changeset_id bigint NOT NULL,
+  tags hstore NOT NULL,
+  geom geometry(POINT, 4326) NOT NULL
 );
 
 -- Create a table for ways.
 CREATE TABLE ways (
-    id bigint NOT NULL,
-    version int NOT NULL,
-    user_id int NOT NULL,
-    tstamp timestamp without time zone NOT NULL,
-    changeset_id bigint NOT NULL,
-    tags hstore NOT NULL,
-    nodes bigint[] NOT NULL,
-    linestring geometry(LINESTRING, 4326) NOT NULL
+  id bigint NOT NULL,
+  version int NOT NULL,
+  user_id int NOT NULL,
+  tstamp timestamp without time zone NOT NULL,
+  changeset_id bigint NOT NULL,
+  tags hstore NOT NULL,
+  nodes bigint[] NOT NULL,
+  linestring geometry(LINESTRING, 4326) NOT NULL
 );
 
 -- Create a table for relations.
 CREATE TABLE relations (
-    id bigint NOT NULL,
-    version int NOT NULL,
-    user_id int NOT NULL,
-    tstamp timestamp without time zone NOT NULL,
-    changeset_id bigint NOT NULL,
-    tags hstore NOT NULL
+  id bigint NOT NULL,
+  version int NOT NULL,
+  user_id int NOT NULL,
+  tstamp timestamp without time zone NOT NULL,
+  changeset_id bigint NOT NULL,
+  tags hstore NOT NULL
 );
 
 -- Create a table for representing relation member relationships.
 CREATE TABLE relation_members (
-    relation_id bigint NOT NULL,
-    relation_version bigint NOT NULL,
-    member_id bigint NOT NULL,
-    member_type character(1) NOT NULL,
-    member_role text NOT NULL,
-    sequence_id int NOT NULL
+  relation_id bigint NOT NULL,
+  relation_version bigint NOT NULL,
+  member_id bigint NOT NULL,
+  member_type character(1) NOT NULL,
+  member_role text NOT NULL,
+  sequence_id int NOT NULL
 );
 
 -- Create a table for users.
 CREATE TABLE users (
-    id int NOT NULL,
-    name text NOT NULL
+  id int NOT NULL,
+  name text NOT NULL
 );
