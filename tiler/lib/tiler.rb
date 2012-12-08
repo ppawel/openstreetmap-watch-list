@@ -152,10 +152,10 @@ class Tiler
 
       @@log.debug "Way #{way['id']} (#{way['version']}): processing #{tiles.size} tile(s)..."
 
-      # Does not make sense to reduce small changesets.
-      if tiles.size > 64
+      # Does not make sense to try to reduce small ways.
+      if tiles.size > 16
         size_before = tiles.size
-        reduce_tiles(tiles, changeset_id, change, zoom)
+        reduce_tiles(tiles, changeset_id, way, zoom)
         @@log.debug "Way #{way['id']} (#{way['version']}): reduced tiles: #{size_before} -> #{tiles.size}"
       end
 
@@ -188,10 +188,7 @@ class Tiler
         intersects = @conn.query("
           SELECT ST_Intersects(ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326), geom)
           FROM _way_geom").getvalue(0, 0) == 't'
-        if !intersects
-          subtiles = subtiles(tile, source_zoom, zoom)
-          tiles.subtract(subtiles)
-        end
+        tiles.subtract(subtiles(tile, source_zoom, zoom)) if !intersects
       end
     end
   end
