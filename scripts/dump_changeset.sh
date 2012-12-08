@@ -8,5 +8,4 @@ if [ "$CHANGESET_ID" = "" ]; then
   exit 1
 fi
 
-psql $PSQL_OPTIONS -c "\copy (SELECT * FROM changesets WHERE id = $CHANGESET_ID) TO 'changeset_$CHANGESET_ID.csv'"
-psql $PSQL_OPTIONS -c "\copy (SELECT * FROM changes WHERE changeset_id = $CHANGESET_ID) TO 'changes_$CHANGESET_ID.csv'"
+psql $PSQL_OPTIONS -c "\copy (SELECT * FROM OWL_GetChangesetData($CHANGESET_ID)) TO '$CHANGESET_ID.csv'"

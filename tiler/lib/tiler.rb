@@ -18,6 +18,16 @@ class Tiler
     @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry);')
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
       x int, y int, zoom int, tile_geom geometry);')
+    @conn.exec('CREATE TEMPORARY TABLE _changeset_data (
+      type char(2),
+      id bigint,
+      version int,
+      tstamp timestamp without time zone,
+      tags hstore,
+      geom geometry,
+      prev_version int,
+      prev_tags hstore,
+      prev_geom geometry)')
     @conn.exec('CREATE INDEX _idx_way_geom ON _way_geom USING gist (geom)')
     @conn.exec('CREATE INDEX _idx_bboxes ON _tile_bboxes USING gist (tile_bbox)')
   end
@@ -210,11 +220,11 @@ class Tiler
   end
 
   def setup_changeset_data(changeset_id)
-    @conn.query("CREATE TEMPORARY TABLE _changeset_data AS SELECT * FROM OWL_GetChangesetData(#{changeset_id})").to_a
+    @conn.query("INSERT INTO _changeset_data SELECT * FROM OWL_GetChangesetData(#{changeset_id})").to_a
   end
 
   def clear_changeset_data
-    @conn.query("DROP TABLE IF EXISTS _changeset_data")
+    @conn.query("TRUNCATE _changeset_data")
   end
 end
 
