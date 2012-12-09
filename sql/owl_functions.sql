@@ -35,7 +35,7 @@ CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
     NULL::bigint[] AS prev_nodes,
     NULL::bigint[] AS changeset_nodes
   FROM nodes n
-  LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
+  INNER JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
   WHERE n.changeset_id = $1
   )
 SELECT DISTINCT ON (type, id, version) * FROM
@@ -57,13 +57,19 @@ SELECT DISTINCT ON (type, id, version) * FROM
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags)
 
-  UNION ALL
+  UNION
 
   SELECT *
   FROM affected_nodes
   WHERE tags != prev_tags
 
-  UNION ALL
+  UNION
+
+  SELECT *
+  FROM affected_nodes
+  WHERE tags != ''::hstore OR prev_tags != ''::hstore
+
+  UNION
 
   SELECT
     'W' AS type,

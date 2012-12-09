@@ -18,9 +18,12 @@ class TilerTest < Test::Unit::TestCase
   def test_13294164
     count = setup_changeset_test(13294164)
     tiles = get_tiles
-    changes = find_changes('type' => 'W')
-    puts changes
+    changes = find_changes('el_type' => 'W')
     assert_equal(9, changes.size)
+
+    # traffic_signals changed position - should be a change for that.
+    changes = find_changes('el_type' => 'N')
+    assert_equal(1, changes.size)
   end
 
   ##
@@ -75,7 +78,7 @@ class TilerTest < Test::Unit::TestCase
     for change in get_changes
       match = true
       for k, v in filters
-        match = match and (change[k].to_s == v.to_s)
+        match = (match and (change[k].to_s == v.to_s))
       end
       a << change if match
     end
