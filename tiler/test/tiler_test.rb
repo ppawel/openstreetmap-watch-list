@@ -9,22 +9,23 @@ class TilerTest < Test::Unit::TestCase
   # Tag changes in Zagreb and Budapest place nodes.
   def test_12917265
     count = setup_changeset_test(12917265)
-    changes = get_changes
     tiles = get_tiles
-    #puts changes.inspect
     assert_equal(2, tiles.size)
+    changes = find_changes('origin' => 'NODE_TAGS_CHANGED')
     assert_equal(2, changes.size)
   end
-
 
   def test_13294164
     count = setup_changeset_test(13294164)
-    changes = get_changes
     tiles = get_tiles
-    puts changes.inspect
-    #assert_equal(2, tiles.size)
-    assert_equal(2, changes.size)
+    changes = find_changes('type' => 'W')
+    puts changes
+    assert_equal(9, changes.size)
   end
+
+  ##
+  # Utility methods
+  #
 
   def setup_changeset_test(id)
     setup_db
@@ -67,5 +68,17 @@ class TilerTest < Test::Unit::TestCase
 
   def get_tiles
     @conn.exec("SELECT * FROM tiles").to_a
+  end
+
+  def find_changes(filters)
+    a = []
+    for change in get_changes
+      match = true
+      for k, v in filters
+        match = match and (change[k].to_s == v.to_s)
+      end
+      a << change if match
+    end
+    a
   end
 end
