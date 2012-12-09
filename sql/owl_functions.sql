@@ -7,7 +7,7 @@ DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
 --
 CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
 	TABLE(
-		type char(2),
+		type varchar(2),
 		id bigint,
 		version int,
 		tstamp timestamp without time zone,

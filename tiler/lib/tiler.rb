@@ -19,7 +19,7 @@ class Tiler
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
       x int, y int, zoom int, geom geometry, prev_geom geometry)')
     @conn.exec('CREATE TEMPORARY TABLE _changeset_data (
-      type char(2),
+      type varchar(2),
       id bigint,
       version int,
       tstamp timestamp without time zone,
@@ -100,8 +100,14 @@ rescue
     @conn.exec('TRUNCATE _way_geom')
     @conn.exec('TRUNCATE _tile_bboxes')
 
-    process_nodes(changeset_id, zoom)
-    process_ways(changeset_id, zoom, options)
+    while row = next_changeset_row do
+      if row['type'] == 'N'
+        process_node(changeset_id, row, zoom)
+      elsif row['type'] == 'W'
+        process_way(changeset_id, row, zoom, options)
+      end
+      remove_changeset_row(row)
+    end
 
     # The following is a hack because of http://trac.osgeo.org/geos/ticket/600
     # First, try ST_Union (which will result in a simpler tile geometry), if that fails, go with ST_Collect.
@@ -126,71 +132,71 @@ rescue
     count
   end
 
-  def process_nodes(changeset_id, zoom)
-    for node in get_nodes(changeset_id)
-      create_node_change(changeset_id, node)
+  def process_node(changeset_id, node, zoom)
+    create_node_change(changeset_id, node, zoom)
+    create_node_tiles(changeset_id, node, zoom)
+  end
 
-      if node['lat']
-        tile = latlon2tile(node['lat'].to_f, node['lon'].to_f, zoom)
-        @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
-          ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-          ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326), NULL)")
-      end
+  def create_node_tiles(changeset_id, node, zoom)
+    if node['lat']
+      tile = latlon2tile(node['lat'].to_f, node['lon'].to_f, zoom)
+      @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
+        ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
+        ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326), NULL)")
+    end
 
-      if node['prev_lat']
-        tile = latlon2tile(node['prev_lat'].to_f, node['prev_lon'].to_f, zoom)
-        @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
-          ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-          NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326))")
-      end
+    if node['prev_lat']
+      tile = latlon2tile(node['prev_lat'].to_f, node['prev_lon'].to_f, zoom)
+      @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
+        ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
+        NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326))")
     end
   end
 
-  def process_ways(changeset_id, zoom, options)
-    for way in get_ways(changeset_id)
-      next if way['both_bbox'].nil?
-
-      create_way_change(changeset_id, way)
-
-      @conn.exec('TRUNCATE _tile_bboxes')
-      @conn.exec('TRUNCATE _way_geom')
-
-      @conn.query("INSERT INTO _way_geom (geom, prev_geom, tstamp)
-        SELECT geom, prev_geom, tstamp
-        FROM _changeset_data WHERE id = #{way['id']} AND version = #{way['version']}")
-
-      tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
-
-      @@log.debug "Way #{way['id']} (#{way['version']}): processing #{tiles.size} tile(s)..."
-
-      # Does not make sense to try to reduce small ways.
-      if tiles.size > 16
-        size_before = tiles.size
-        reduce_tiles(tiles, changeset_id, way, zoom)
-        @@log.debug "Way #{way['id']} (#{way['version']}): reduced tiles: #{size_before} -> #{tiles.size}"
-      end
-
-      for tile in tiles
-        x, y = tile[0], tile[1]
-        lat1, lon1 = tile2latlon(x, y, zoom)
-        lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
-
-        @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
-          ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
-      end
-
-      @@log.debug "Way #{way['id']} (#{way['version']}): created bboxes..."
-
-      count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom)
-        SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox), ST_Intersection(prev_geom, bb.tile_bbox)
-        FROM _tile_bboxes bb, _way_geom
-        WHERE ST_Intersects(geom, bb.tile_bbox) OR ST_Intersects(prev_geom, bb.tile_bbox)").cmd_tuples
-
-      @@log.debug "Way #{way['id']} (#{way['version']}): created #{count} tile(s)"
-    end
+  def process_way(changeset_id, way, zoom, options)
+    create_way_change(changeset_id, way)
+    create_way_tiles(changeset_id, way, zoom, options)
   end
 
-  def create_node_change(changeset_id, node)
+  def create_way_tiles(changeset_id, way, zoom, options)
+    @conn.exec('TRUNCATE _tile_bboxes')
+    @conn.exec('TRUNCATE _way_geom')
+
+    @conn.query("INSERT INTO _way_geom (geom, prev_geom, tstamp)
+      SELECT geom, prev_geom, tstamp
+      FROM _changeset_data WHERE id = #{way['id']} AND version = #{way['version']}")
+
+    tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
+
+    @@log.debug "Way #{way['id']} (#{way['version']}): processing #{tiles.size} tile(s)..."
+
+    # Does not make sense to try to reduce small ways.
+    if tiles.size > 16
+      size_before = tiles.size
+      reduce_tiles(tiles, changeset_id, way, zoom)
+      @@log.debug "Way #{way['id']} (#{way['version']}): reduced tiles: #{size_before} -> #{tiles.size}"
+    end
+
+    for tile in tiles
+      x, y = tile[0], tile[1]
+      lat1, lon1 = tile2latlon(x, y, zoom)
+      lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
+
+      @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
+        ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
+    end
+
+    @@log.debug "Way #{way['id']} (#{way['version']}): created bboxes..."
+
+    count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom)
+      SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox), ST_Intersection(prev_geom, bb.tile_bbox)
+      FROM _tile_bboxes bb, _way_geom
+      WHERE ST_Intersects(geom, bb.tile_bbox) OR ST_Intersects(prev_geom, bb.tile_bbox)").cmd_tuples
+
+    @@log.debug "Way #{way['id']} (#{way['version']}): created #{count} tile(s)"
+  end
+
+  def create_node_change(changeset_id, node, zoom)
     origin = 'NODE_MOVED' if node['geom_changed']
     origin = 'NODE_TAGS_CHANGED' if node['tags_changed']
     @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
@@ -222,23 +228,25 @@ rescue
     end
   end
 
-  def get_nodes(changeset_id)
-    @conn.query("SELECT id, tstamp, version,
-        ST_X(prev_geom) AS prev_lon,
-        ST_Y(prev_geom) AS prev_lat,
-        ST_X(geom) AS lon,
-        ST_Y(geom) AS lat,
+  def next_changeset_row
+    result = @conn.query("SELECT type, id, tstamp, version,
+        CASE WHEN type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
+        CASE WHEN type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
+        CASE WHEN type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
+        CASE WHEN type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
+        Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
         NOT ST_Equals(geom, prev_geom) AS geom_changed,
-        tags != prev_tags AS tags_changed
-      FROM _changeset_data WHERE type = 'N'").to_a
+        tags != prev_tags AS tags_changed,
+        nodes != prev_nodes AS nodes_changed
+      FROM _changeset_data
+      ORDER BY type, id, version")
+    return nil if result.ntuples == 0
+    return result.to_a[0]
   end
 
-  def get_ways(changeset_id)
-    @conn.query("SELECT id, tstamp, version, Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
-        nodes != prev_nodes AS nodes_changed,
-        tags != prev_tags AS tags_changed
-      FROM _changeset_data WHERE type = 'W'
-      ORDER BY id").to_a
+  def remove_changeset_row(row)
+    @conn.query("DELETE FROM _changeset_data
+      WHERE type = '#{row['type']}' AND id = #{row['id']} AND version = #{row['version']}")
   end
 
   def setup_changeset_data(changeset_id)
