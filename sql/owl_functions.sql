@@ -35,8 +35,8 @@ CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
     NULL::bigint[] AS prev_nodes,
     NULL::bigint[] AS changeset_nodes
   FROM nodes n
-  INNER JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
-  WHERE n.changeset_id = $1
+  LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
+  WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1)
   )
 SELECT DISTINCT ON (type, id, version) * FROM
 (

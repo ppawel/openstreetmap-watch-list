@@ -29,9 +29,19 @@ class TilerTest < Test::Unit::TestCase
   def test_9769694
     count = setup_changeset_test(9769694)
     tiles = get_tiles
-    puts get_changes.inspect
     changes = find_changes('el_id' => '27833730', 'el_version' => '14')
     assert_equal(1, changes.size)
+  end
+
+  def test_11193918
+    count = setup_changeset_test(11193918)
+    tiles = get_tiles
+    changes = find_changes('el_type' => 'N')
+    assert_equal(2, changes.size)
+    changes = find_changes('el_id' => '1703304298')
+    assert_equal(1, changes.size)
+    changes = find_changes('el_type' => 'W')
+    assert_equal(5, changes.size)
   end
 
   ##
