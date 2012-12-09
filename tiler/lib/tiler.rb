@@ -29,7 +29,8 @@ class Tiler
       prev_version int,
       prev_tags hstore,
       prev_geom geometry,
-      prev_nodes bigint[])')
+      prev_nodes bigint[],
+      changeset_nodes bigint[])')
     @conn.exec('CREATE INDEX _idx_way_geom ON _way_geom USING gist (geom)')
     @conn.exec('CREATE INDEX _idx_bboxes ON _tile_bboxes USING gist (tile_bbox)')
   end
@@ -102,6 +103,11 @@ rescue
 
     while row = next_changeset_row do
       if row['type'] == 'N'
+        ways = get_affected_ways(row)
+        for way in ways
+          process_way(changeset_id, way, zoom, options)
+          remove_changeset_row(way)
+        end
         process_node(changeset_id, row, zoom)
       elsif row['type'] == 'W'
         process_way(changeset_id, row, zoom, options)
@@ -247,6 +253,21 @@ rescue
   def remove_changeset_row(row)
     @conn.query("DELETE FROM _changeset_data
       WHERE type = '#{row['type']}' AND id = #{row['id']} AND version = #{row['version']}")
+  end
+
+  def get_affected_ways(node)
+    @conn.query("SELECT type, id, tstamp, version,
+        NULL AS prev_lon,
+        NULL AS prev_lat,
+        NULL AS lon,
+        NULL AS lat,
+        Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
+        NOT ST_Equals(geom, prev_geom) AS geom_changed,
+        tags != prev_tags AS tags_changed,
+        nodes != prev_nodes AS nodes_changed
+      FROM _changeset_data
+      WHERE changeset_nodes @> ARRAY[#{node['id']}::bigint]
+      ORDER BY type, id, version").to_a
   end
 
   def setup_changeset_data(changeset_id)

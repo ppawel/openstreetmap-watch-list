@@ -17,7 +17,8 @@ CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
 		prev_version int,
 		prev_tags hstore,
 		prev_geom geometry,
-		prev_nodes bigint[]) AS $$
+		prev_nodes bigint[],
+		changeset_nodes bigint[]) AS $$
 
   WITH affected_nodes AS (
   SELECT
@@ -31,7 +32,8 @@ CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
     prev.version AS prev_version,
     prev.tags AS prev_tags,
     prev.geom AS prev_geom,
-    NULL::bigint[] AS prev_nodes
+    NULL::bigint[] AS prev_nodes,
+    NULL::bigint[] AS changeset_nodes
   FROM nodes n
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
   WHERE n.changeset_id = $1
@@ -49,7 +51,8 @@ SELECT DISTINCT ON (type, id, version) * FROM
     prev.version AS prev_version,
     prev.tags AS prev_tags,
     (SELECT ST_MakeLine(geom) FROM (SELECT geom FROM nodes wn WHERE wn.id IN (SELECT unnest(prev.nodes)) AND wn.tstamp < prev.tstamp ORDER BY wn.version DESC) x),
-    prev.nodes AS prev_nodes
+    prev.nodes AS prev_nodes,
+    (SELECT array_agg(id) FROM (SELECT id FROM affected_nodes an WHERE an.tags = an.prev_tags INTERSECT SELECT unnest(w.nodes)) x) AS changeset_nodes
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags)
@@ -73,7 +76,8 @@ SELECT DISTINCT ON (type, id, version) * FROM
     prev.version AS prev_version,
     prev.tags AS prev_tags,
     (SELECT ST_MakeLine(geom) FROM (SELECT geom FROM nodes wn WHERE wn.id IN (SELECT unnest(prev.nodes)) AND wn.tstamp < prev.tstamp ORDER BY wn.version DESC) x),
-    prev.nodes AS prev_nodes
+    prev.nodes AS prev_nodes,
+    NULL::bigint[] AS changeset_nodes
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.changeset_id = $1
