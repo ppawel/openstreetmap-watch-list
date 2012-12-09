@@ -86,8 +86,8 @@ SELECT DISTINCT ON (type, id, version) * FROM
     prev.nodes AS prev_nodes,
     NULL::bigint[] AS changeset_nodes
   FROM ways w
-  INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
-  WHERE w.changeset_id = $1
+  LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
+  WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1)
 ) x
 $$ LANGUAGE sql;
 

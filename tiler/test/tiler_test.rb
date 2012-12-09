@@ -44,6 +44,17 @@ class TilerTest < Test::Unit::TestCase
     assert_equal(5, changes.size)
   end
 
+=begin
+  def test_13477045
+    count = setup_changeset_test(13477045)
+    tiles = get_tiles
+    changes = find_changes('el_type' => 'N')
+    assert_equal(0, changes.size)
+    changes = find_changes('el_type' => 'W')
+    assert_equal(25, changes.size)
+  end
+=end
+
   ##
   # Utility methods
   #

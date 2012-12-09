@@ -203,9 +203,9 @@ rescue
   end
 
   def create_node_change(changeset_id, node, zoom)
-    origin = 'NODE_CREATED' if node['version'].to_i == 1
     origin = 'NODE_MOVED' if node['geom_changed']
     origin = 'NODE_TAGS_CHANGED' if node['tags_changed']
+    origin = 'NODE_CREATED' if node['version'].to_i == 1
     @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
       origin, origin_el_type, origin_el_id, origin_el_version, origin_el_action) VALUES (
       '#{node['tstamp']}', 'N', #{node['id']}, #{node['version']},
@@ -213,9 +213,9 @@ rescue
   end
 
   def create_way_change(changeset_id, way)
-    origin = 'WAY_CREATED' if way['version'].to_i == 1
     origin = 'WAY_NODES_CHANGED' if way['nodes_changed']
     origin = 'WAY_TAGS_CHANGED' if way['tags_changed']
+    origin = 'WAY_CREATED' if way['version'].to_i == 1
     @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
       origin, origin_el_type, origin_el_id, origin_el_version, origin_el_action) VALUES (
       '#{way['tstamp']}', 'W', #{way['id']}, #{way['version']},
