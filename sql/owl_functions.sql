@@ -55,7 +55,8 @@ SELECT DISTINCT ON (type, id, version) * FROM
     (SELECT array_agg(id) FROM (SELECT id FROM affected_nodes an WHERE an.tags = an.prev_tags INTERSECT SELECT unnest(w.nodes)) x) AS changeset_nodes
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
-  WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags)
+  WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags) AND
+	w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes)
 
   UNION
 
