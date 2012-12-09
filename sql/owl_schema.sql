@@ -74,8 +74,7 @@ CREATE TABLE ways (
   tstamp timestamp without time zone NOT NULL,
   changeset_id bigint NOT NULL,
   tags hstore NOT NULL,
-  nodes bigint[] NOT NULL,
-  linestring geometry(LINESTRING, 4326) NOT NULL
+  nodes bigint[] NOT NULL
 );
 
 -- Create a table for relations.
