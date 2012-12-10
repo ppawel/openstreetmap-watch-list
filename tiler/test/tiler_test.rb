@@ -22,8 +22,9 @@ class TilerTest < Test::Unit::TestCase
     assert_equal(10, changes.size)
 
     # traffic_signals changed position - should be a change for that.
-    changes = find_changes('el_type' => 'N')
+    changes = find_changes('el_type' => 'N', 'el_id' => '244942711')
     assert_equal(1, changes.size)
+    assert_equal('NODE_MOVED', changes[0]['origin'])
   end
 
   def test_9769694
