@@ -46,11 +46,12 @@ class Tiler
       @conn.transaction do |c|
         tile_count = do_generate(zoom, changeset_id, options)
       end
-    rescue
+    rescue Exception => e
+      raise e
       puts $!
       @@log.debug "Trying workaround..."
       @conn.transaction do |c|
-        tile_count = do_generate(zoom, changeset_id, options.merge(:geos_bug_workaround => true))
+        #tile_count = do_generate(zoom, changeset_id, options.merge(:geos_bug_workaround => true))
       end
     end
 
@@ -139,9 +140,9 @@ class Tiler
 
   def process_node(changeset_id, node, zoom)
     @@log.debug "Node #{node['id']} (#{node['version']})"
-    create_node_change(changeset_id, node, zoom)
-    @@log.debug "  Created changes"
-    create_node_tiles(changeset_id, node, zoom)
+    changed = create_node_change(changeset_id, node, zoom)
+    @@log.debug "  Created changes? changed = #{changed}"
+    create_node_tiles(changeset_id, node, zoom) if changed
   end
 
   def create_node_tiles(changeset_id, node, zoom)
@@ -162,9 +163,9 @@ class Tiler
 
   def process_way(changeset_id, way, zoom, options)
     @@log.debug "Way #{way['id']} (#{way['version']})"
-    create_way_change(changeset_id, way)
-    @@log.debug "  Created changes"
-    create_way_tiles(changeset_id, way, zoom, options)
+    changed = create_way_change(changeset_id, way)
+    @@log.debug "  Created changes? changed = #{changed}"
+    create_way_tiles(changeset_id, way, zoom, options) if changed
   end
 
   def create_way_tiles(changeset_id, way, zoom, options)
@@ -206,21 +207,24 @@ class Tiler
     origin = 'NODE_MOVED' if node['geom_changed'] == 't'
     origin = 'NODE_TAGS_CHANGED' if node['tags_changed'] == 't'
     origin = 'NODE_CREATED' if node['version'].to_i == 1
-    puts node.inspect
+    return false if !origin # Nothing's changed!
     @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
       origin, origin_el_type, origin_el_id, origin_el_version, origin_el_action) VALUES (
       '#{node['tstamp']}', 'N', #{node['id']}, #{node['version']},
       '#{origin}', 'N', #{node['id']}, #{node['version']}, 'MODIFY')")
+    true
   end
 
   def create_way_change(changeset_id, way)
     origin = 'WAY_NODES_CHANGED' if way['nodes_changed'] == 't'
     origin = 'WAY_TAGS_CHANGED' if way['tags_changed'] == 't'
     origin = 'WAY_CREATED' if way['version'].to_i == 1
+    return false if !origin # Nothing's changed!
     @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
       origin, origin_el_type, origin_el_id, origin_el_version, origin_el_action) VALUES (
       '#{way['tstamp']}', 'W', #{way['id']}, #{way['version']},
       '#{origin}', 'N', #{way['id']}, #{way['version']}, 'MODIFY')")
+    true
   end
 
   def reduce_tiles(tiles, changeset_id, change, zoom)

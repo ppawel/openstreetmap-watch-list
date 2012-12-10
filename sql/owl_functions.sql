@@ -68,13 +68,14 @@ SELECT DISTINCT ON (type, id, version) * FROM
     w.nodes,
     prev.version AS prev_version,
     prev.tags AS prev_tags,
-    OWL_MakeLine(prev.nodes, prev.tstamp),
+    OWL_MakeLine(prev.nodes, prev.tstamp) AS prev_geom,
     prev.nodes AS prev_nodes,
     (SELECT array_agg(id) FROM (SELECT id FROM affected_nodes an WHERE an.tags = an.prev_tags INTERSECT SELECT unnest(w.nodes)) x) AS changeset_nodes
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags) AND
-    w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes) AND w.changeset_id != $1
+    w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes) AND w.changeset_id != $1 AND
+    OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL)
 
   UNION
 
@@ -105,7 +106,8 @@ SELECT DISTINCT ON (type, id, version) * FROM
     NULL::bigint[] AS changeset_nodes
   FROM ways w
   LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
-  WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1)
+  WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1) AND
+    OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL)
 ) x
 $$ LANGUAGE sql;
 
