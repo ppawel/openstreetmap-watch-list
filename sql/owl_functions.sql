@@ -6,19 +6,19 @@ DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
 -- OWL_GetChangesetData
 --
 CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
-	TABLE(
-		type varchar(2),
-		id bigint,
-		version int,
-		tstamp timestamp without time zone,
-		tags hstore,
-		geom geometry,
-		nodes bigint[],
-		prev_version int,
-		prev_tags hstore,
-		prev_geom geometry,
-		prev_nodes bigint[],
-		changeset_nodes bigint[]) AS $$
+  TABLE(
+    type varchar(2),
+    id bigint,
+    version int,
+    tstamp timestamp without time zone,
+    tags hstore,
+    geom geometry,
+    nodes bigint[],
+    prev_version int,
+    prev_tags hstore,
+    prev_geom geometry,
+    prev_nodes bigint[],
+    changeset_nodes bigint[]) AS $$
 
   WITH affected_nodes AS (
   SELECT
@@ -56,7 +56,7 @@ SELECT DISTINCT ON (type, id, version) * FROM
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags) AND
-	w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes)
+  w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes)
 
   UNION
 
