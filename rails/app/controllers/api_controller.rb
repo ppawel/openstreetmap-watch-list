@@ -49,14 +49,13 @@ private
   def find_changesets_by_tile(format)
     @x, @y, @zoom = get_xyz(params)
     rows = Changeset.find_by_sql("
-      SELECT cs.* #{format == 'geojson' ? ', ST_AsGeoJSON(cst.geom) AS geojson' : ''},
-        cst.geom::box2d::text AS tile_bbox,
-        cs.bbox::box2d::text AS total_bbox
-      FROM changeset_tiles cst
-      INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
+      SELECT cs.* #{format == 'geojson' ? ', ST_AsGeoJSON(t.geom) AS geojson' : ''}
+        #{format != 'atom' ? ', (SELECT ST_Extent(x.geom) FROM (SELECT unnest(t.geom)::box2d AS geom) x)::text AS tile_bbox, cs.bbox::box2d::text AS total_bbox' : ''}
+      FROM tiles t
+      INNER JOIN changesets cs ON (cs.id = t.changeset_id)
       WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
       #{get_timelimit_sql(params)}
-      GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, cst.geom
+      GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, t.geom
       ORDER BY cs.created_at DESC
       #{get_limit_sql(params)}")
     ActiveRecord::Associations::Preloader.new(rows, [:user]).run
@@ -69,15 +68,15 @@ private
         SELECT
           changeset_id,
           MAX(tstamp) AS max_tstamp,
-          array_agg(cst.geom::box2d::text) AS tile_bboxes,
+          array_agg((SELECT ST_Extent(x.geom) FROM (SELECT unnest(t.geom)::box2d AS geom) x)::text) AS tile_bboxes,
           cs.*,
           cs.bbox AS total_bbox
-        FROM changeset_tiles cst
-        INNER JOIN changesets cs ON (cs.id = cst.changeset_id)
+        FROM tiles t
+        INNER JOIN changesets cs ON (cs.id = t.changeset_id)
         WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
           AND changeset_id IN (
             SELECT DISTINCT changeset_id
-            FROM changeset_tiles
+            FROM tiles
             WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
             #{get_timelimit_sql(params)}
             ORDER BY changeset_id DESC
@@ -98,7 +97,7 @@ private
     @x, @y, @zoom = get_xyz(params)
     rows = ActiveRecord::Base.connection.execute("WITH agg AS (
         SELECT changeset_id, MAX(tstamp) AS max_tstamp
-        FROM changeset_tiles
+        FROM tiles
         WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
         #{get_timelimit_sql(params)}
         GROUP BY changeset_id
@@ -120,7 +119,7 @@ private
     @zoom, @x1, @y1, @x2, @y2 = get_range(params)
     rows = ActiveRecord::Base.connection.execute("
         SELECT x, y, COUNT(*) AS num_changesets, MAX(tstamp) AS max_tstamp, MAX(changeset_id) AS changeset_id
-        FROM changeset_tiles
+        FROM tiles
         INNER JOIN changesets cs ON (cs.id = changeset_id)
         WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
         #{get_timelimit_sql(params)}
