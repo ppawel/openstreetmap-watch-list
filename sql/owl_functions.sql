@@ -1,6 +1,24 @@
-﻿DROP FUNCTION IF EXISTS OWL_GetChangesetData(int);
+﻿DROP FUNCTION IF EXISTS OWL_MakeLine(bigint[], timestamp without time zone);
+DROP FUNCTION IF EXISTS OWL_GetChangesetData(int);
 DROP FUNCTION IF EXISTS OWL_UpdateChangeset(bigint);
 DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
+
+--
+-- OWL_MakeLine
+--
+-- Creates a linestring from given list of node ids. If timestamp is given,
+-- the node versions used are filtered by this timestamp (are no newer than).
+-- This is useful for creating way geometry for historic versions.
+--
+CREATE FUNCTION OWL_MakeLine(bigint[], timestamp without time zone) RETURNS geometry(LINESTRING, 4326) AS $$
+  SELECT ST_MakeLine(geom)
+  FROM
+    (SELECT unnest($1) AS node_id) x
+    INNER JOIN nodes n ON (n.id = x.node_id)
+  WHERE
+    ($2 IS NULL AND n.version = (SELECT MAX(version) FROM nodes WHERE id = n.id)) OR
+    ($2 IS NOT NULL AND n.version = (SELECT version FROM nodes WHERE id = n.id AND tstamp <= $2 ORDER BY tstamp DESC LIMIT 1));
+$$ LANGUAGE sql;
 
 --
 -- OWL_GetChangesetData
@@ -46,17 +64,17 @@ SELECT DISTINCT ON (type, id, version) * FROM
     w.version,
     w.tstamp,
     w.tags,
-    (SELECT ST_MakeLine(geom) FROM (SELECT geom FROM nodes wn WHERE wn.id IN (SELECT unnest(w.nodes)) ORDER BY wn.version DESC) x),
+    OWL_MakeLine(w.nodes, NULL),
     w.nodes,
     prev.version AS prev_version,
     prev.tags AS prev_tags,
-    (SELECT ST_MakeLine(geom) FROM (SELECT geom FROM nodes wn WHERE wn.id IN (SELECT unnest(prev.nodes)) AND wn.tstamp < prev.tstamp ORDER BY wn.version DESC) x),
+    OWL_MakeLine(prev.nodes, prev.tstamp),
     prev.nodes AS prev_nodes,
     (SELECT array_agg(id) FROM (SELECT id FROM affected_nodes an WHERE an.tags = an.prev_tags INTERSECT SELECT unnest(w.nodes)) x) AS changeset_nodes
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags) AND
-  w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes)
+    w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes) AND w.changeset_id != $1
 
   UNION
 
@@ -78,11 +96,11 @@ SELECT DISTINCT ON (type, id, version) * FROM
     w.version,
     w.tstamp,
     w.tags,
-    (SELECT ST_MakeLine(geom) FROM (SELECT geom FROM nodes wn WHERE wn.id IN (SELECT unnest(w.nodes)) ORDER BY wn.version DESC) x),
+    OWL_MakeLine(w.nodes, NULL),
     w.nodes,
     prev.version AS prev_version,
     prev.tags AS prev_tags,
-    (SELECT ST_MakeLine(geom) FROM (SELECT geom FROM nodes wn WHERE wn.id IN (SELECT unnest(prev.nodes)) AND wn.tstamp < prev.tstamp ORDER BY wn.version DESC) x),
+    OWL_MakeLine(prev.nodes, prev.tstamp),
     prev.nodes AS prev_nodes,
     NULL::bigint[] AS changeset_nodes
   FROM ways w

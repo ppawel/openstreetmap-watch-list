@@ -19,7 +19,7 @@ class TilerTest < Test::Unit::TestCase
     count = setup_changeset_test(13294164)
     tiles = get_tiles
     changes = find_changes('el_type' => 'W')
-    assert_equal(9, changes.size)
+    assert_equal(10, changes.size)
 
     # traffic_signals changed position - should be a change for that.
     changes = find_changes('el_type' => 'N')
@@ -41,10 +41,9 @@ class TilerTest < Test::Unit::TestCase
     changes = find_changes('el_id' => '1703304298')
     assert_equal(1, changes.size)
     changes = find_changes('el_type' => 'W')
-    assert_equal(5, changes.size)
+    assert_equal(7, changes.size)
   end
 
-=begin
   def test_13477045
     count = setup_changeset_test(13477045)
     tiles = get_tiles
@@ -53,7 +52,6 @@ class TilerTest < Test::Unit::TestCase
     changes = find_changes('el_type' => 'W')
     assert_equal(25, changes.size)
   end
-=end
 
   ##
   # Utility methods
@@ -62,6 +60,7 @@ class TilerTest < Test::Unit::TestCase
   def setup_changeset_test(id)
     setup_db
     load_changeset(id)
+    verify_changeset_data
     @tiler.generate(16, id, prepare_options)
   end
 
@@ -92,6 +91,17 @@ class TilerTest < Test::Unit::TestCase
       @conn.put_copy_data(line)
     end
     @conn.put_copy_end
+  end
+
+  def verify_changeset_data
+    data = @conn.exec("SELECT id, version,
+        ST_NumPoints(geom) AS num_points_geom, array_length(nodes, 1) AS num_points_arr,
+        ST_NumPoints(prev_geom) AS prev_num_points_geom, array_length(prev_nodes, 1) AS prev_num_points_arr
+      FROM _changeset_data WHERE type = 'W'").to_a
+    for row in data
+      assert_equal(row['num_points_arr'].to_i, row['num_points_geom'].to_i, "Wrong linestring for row: #{row.inspect}")
+      #assert_equal(row['prev_num_points_arr'].to_i, row['prev_num_points_geom'].to_i, "Wrong prev linestring for row: #{row.inspect}")
+    end
   end
 
   def get_changes
