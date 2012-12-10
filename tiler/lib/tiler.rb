@@ -42,19 +42,18 @@ class Tiler
     setup_changeset_data(changeset_id)
 
     tile_count = -1
-    #begin
+    begin
       @conn.transaction do |c|
         tile_count = do_generate(zoom, changeset_id, options)
       end
-=begin
-rescue
+    rescue
       puts $!
       @@log.debug "Trying workaround..."
       @conn.transaction do |c|
         tile_count = do_generate(zoom, changeset_id, options.merge(:geos_bug_workaround => true))
       end
     end
-=end
+
     clear_changeset_data
     tile_count
   end
@@ -139,7 +138,9 @@ rescue
   end
 
   def process_node(changeset_id, node, zoom)
+    @@log.debug "Node #{node['id']} (#{node['version']})"
     create_node_change(changeset_id, node, zoom)
+    @@log.debug "  Created changes"
     create_node_tiles(changeset_id, node, zoom)
   end
 
@@ -160,7 +161,9 @@ rescue
   end
 
   def process_way(changeset_id, way, zoom, options)
+    @@log.debug "Way #{way['id']} (#{way['version']})"
     create_way_change(changeset_id, way)
+    @@log.debug "  Created changes"
     create_way_tiles(changeset_id, way, zoom, options)
   end
 
@@ -174,32 +177,29 @@ rescue
 
     tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
 
-    @@log.debug "Way #{way['id']} (#{way['version']}): processing #{tiles.size} tile(s)..."
+    @@log.debug "  Processing #{tiles.size} tile(s)..."
 
     # Does not make sense to try to reduce small ways.
     if tiles.size > 16
       size_before = tiles.size
       reduce_tiles(tiles, changeset_id, way, zoom)
-      @@log.debug "Way #{way['id']} (#{way['version']}): reduced tiles: #{size_before} -> #{tiles.size}"
+      @@log.debug "  Reduced tiles: #{size_before} -> #{tiles.size}"
     end
 
     for tile in tiles
       x, y = tile[0], tile[1]
       lat1, lon1 = tile2latlon(x, y, zoom)
       lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
-
       @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
-
-    @@log.debug "Way #{way['id']} (#{way['version']}): created bboxes..."
 
     count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom)
       SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox), ST_Intersection(prev_geom, bb.tile_bbox)
       FROM _tile_bboxes bb, _way_geom
       WHERE ST_Intersects(geom, bb.tile_bbox) OR ST_Intersects(prev_geom, bb.tile_bbox)").cmd_tuples
 
-    @@log.debug "Way #{way['id']} (#{way['version']}): created #{count} tile(s)"
+    @@log.debug "  Created #{count} tile(s)"
   end
 
   def create_node_change(changeset_id, node, zoom)
@@ -243,7 +243,7 @@ rescue
         CASE WHEN type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
         CASE WHEN type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
         Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
-        NOT ST_Equals(geom, prev_geom) AS geom_changed,
+        NOT geom = prev_geom AS geom_changed,
         tags != prev_tags AS tags_changed,
         nodes != prev_nodes AS nodes_changed
       FROM _changeset_data
@@ -264,7 +264,7 @@ rescue
         NULL AS lon,
         NULL AS lat,
         Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
-        NOT ST_Equals(geom, prev_geom) AS geom_changed,
+        NOT geom = prev_geom AS geom_changed,
         tags != prev_tags AS tags_changed,
         nodes != prev_nodes AS nodes_changed
       FROM _changeset_data
