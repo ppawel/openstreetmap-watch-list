@@ -17,7 +17,7 @@ class Tiler
     @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, prev_geom geometry, tstamp timestamp without time zone)')
     @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry)')
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
-      x int, y int, zoom int, geom geometry, prev_geom geometry)')
+      x int, y int, zoom int, geom geometry, prev_geom geometry, change_id bigint NOT NULL)')
     @conn.exec('CREATE TEMPORARY TABLE _changeset_data (
       type varchar(2),
       id bigint,
@@ -40,21 +40,10 @@ class Tiler
   #
   def generate(zoom, changeset_id, options = {})
     setup_changeset_data(changeset_id)
-
     tile_count = -1
-    begin
-      @conn.transaction do |c|
-        tile_count = do_generate(zoom, changeset_id, options)
-      end
-    rescue Exception => e
-      raise e
-      puts $!
-      @@log.debug "Trying workaround..."
-      @conn.transaction do |c|
-        #tile_count = do_generate(zoom, changeset_id, options.merge(:geos_bug_workaround => true))
-      end
+    @conn.transaction do |c|
+      tile_count = do_generate(zoom, changeset_id, options)
     end
-
     clear_changeset_data
     tile_count
   end
@@ -115,19 +104,11 @@ class Tiler
       remove_changeset_row(row)
     end
 
-    # The following is a hack because of http://trac.osgeo.org/geos/ticket/600
-    # First, try ST_Union (which will result in a simpler tile geometry), if that fails, go with ST_Collect.
-    if !options[:geos_bug_workaround]
-      count = @conn.query("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
-        SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ARRAY[]::bigint[], array_agg(geom), array_agg(prev_geom)--ST_Union(tile_geom)
-        FROM _tile_changes_tmp tmp
-        GROUP BY zoom, x, y").cmd_tuples
-    else
-      count = @conn.query("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, geom)
-        SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y, ST_Collect(tile_geom)
-        FROM _tile_changes_tmp tmp
-        GROUP BY zoom, x, y").cmd_tuples
-    end
+    count = @conn.query("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
+      SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y,
+        array_agg(change_id), array_agg(geom), array_agg(prev_geom)
+      FROM _tile_changes_tmp tmp
+      GROUP BY zoom, x, y").cmd_tuples
 
     # Now generate tiles at lower zoom levels.
     #(3..16).reverse_each do |i|
@@ -140,35 +121,35 @@ class Tiler
 
   def process_node(changeset_id, node, zoom)
     @@log.debug "Node #{node['id']} (#{node['version']})"
-    changed = create_node_change(changeset_id, node, zoom)
-    @@log.debug "  Created changes? changed = #{changed}"
-    create_node_tiles(changeset_id, node, zoom) if changed
+    change_id = create_node_change(changeset_id, node, zoom)
+    @@log.debug "  change_id = #{change_id}"
+    create_node_tiles(changeset_id, node, change_id, zoom) unless change_id.nil?
   end
 
-  def create_node_tiles(changeset_id, node, zoom)
+  def create_node_tiles(changeset_id, node, change_id, zoom)
     if node['lat']
       tile = latlon2tile(node['lat'].to_f, node['lon'].to_f, zoom)
-      @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
+      @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
         ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-        ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326), NULL)")
+        ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326), NULL, #{change_id})")
     end
 
     if node['prev_lat']
       tile = latlon2tile(node['prev_lat'].to_f, node['prev_lon'].to_f, zoom)
-      @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom) VALUES
+      @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
         ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-        NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326))")
+        NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326), #{change_id})")
     end
   end
 
   def process_way(changeset_id, way, zoom, options)
     @@log.debug "Way #{way['id']} (#{way['version']})"
-    changed = create_way_change(changeset_id, way)
-    @@log.debug "  Created changes? changed = #{changed}"
-    create_way_tiles(changeset_id, way, zoom, options) if changed
+    change_id = create_way_change(changeset_id, way)
+    @@log.debug "  change_id = #{change_id}"
+    create_way_tiles(changeset_id, way, change_id, zoom, options) unless change_id.nil?
   end
 
-  def create_way_tiles(changeset_id, way, zoom, options)
+  def create_way_tiles(changeset_id, way, change_id, zoom, options)
     @conn.exec('TRUNCATE _tile_bboxes')
     @conn.exec('TRUNCATE _way_geom')
 
@@ -195,8 +176,9 @@ class Tiler
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
 
-    count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom)
-      SELECT 'W', tstamp, bb.zoom, bb.x, bb.y, ST_Intersection(geom, bb.tile_bbox), ST_Intersection(prev_geom, bb.tile_bbox)
+    count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id)
+      SELECT 'W', tstamp, bb.zoom, bb.x, bb.y,
+        ST_Intersection(geom, bb.tile_bbox), ST_Intersection(prev_geom, bb.tile_bbox), #{change_id}
       FROM _tile_bboxes bb, _way_geom
       WHERE ST_Intersects(geom, bb.tile_bbox) OR ST_Intersects(prev_geom, bb.tile_bbox)").cmd_tuples
 
@@ -207,24 +189,24 @@ class Tiler
     origin = 'NODE_MOVED' if node['geom_changed'] == 't'
     origin = 'NODE_TAGS_CHANGED' if node['tags_changed'] == 't'
     origin = 'NODE_CREATED' if node['version'].to_i == 1
-    return false if !origin # Nothing's changed!
+    return nil if !origin # Nothing's changed!
     @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
       origin, origin_el_type, origin_el_id, origin_el_version, origin_el_action) VALUES (
       '#{node['tstamp']}', 'N', #{node['id']}, #{node['version']},
       '#{origin}', 'N', #{node['id']}, #{node['version']}, 'MODIFY')")
-    true
+    return @conn.query("SELECT currval('changes_id_seq')").getvalue(0, 0).to_i
   end
 
   def create_way_change(changeset_id, way)
     origin = 'WAY_NODES_CHANGED' if way['nodes_changed'] == 't'
     origin = 'WAY_TAGS_CHANGED' if way['tags_changed'] == 't'
     origin = 'WAY_CREATED' if way['version'].to_i == 1
-    return false if !origin # Nothing's changed!
+    return nil if !origin # Nothing's changed!
     @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
       origin, origin_el_type, origin_el_id, origin_el_version, origin_el_action) VALUES (
       '#{way['tstamp']}', 'W', #{way['id']}, #{way['version']},
       '#{origin}', 'N', #{way['id']}, #{way['version']}, 'MODIFY')")
-    true
+    return @conn.query("SELECT currval('changes_id_seq')").getvalue(0, 0).to_i
   end
 
   def reduce_tiles(tiles, changeset_id, change, zoom)

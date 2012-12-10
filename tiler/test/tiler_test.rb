@@ -110,7 +110,22 @@ class TilerTest < Test::Unit::TestCase
   end
 
   def get_tiles
-    @conn.exec("SELECT * FROM tiles").to_a
+    result = @conn.exec("SELECT *,
+        array_length(geom, 1) AS geom_arr_len,
+        array_length(prev_geom, 1) AS prev_geom_arr_len,
+        array_length(changes, 1) AS change_arr_len
+      FROM tiles").to_a
+    verify_tiles(result)
+    result
+  end
+
+  # Performs basic sanity checks on given tiles.
+  def verify_tiles(tiles)
+    for tile in tiles
+      # Every change should have an associated geom and prev_geom entry.
+      assert_equal(tile['change_arr_len'].to_i, tile['geom_arr_len'].to_i)
+      assert_equal(tile['change_arr_len'].to_i, tile['prev_geom_arr_len'].to_i)
+    end
   end
 
   def find_changes(filters)
