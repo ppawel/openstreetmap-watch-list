@@ -11,9 +11,6 @@ class Tiler
 
   def initialize(conn)
     @conn = conn
-    #@conn.exec('DROP TABLE IF EXISTS _way_geom')
-    #@conn.exec('DROP TABLE IF EXISTS _tile_bboxes')
-    #@conn.exec('DROP TABLE IF EXISTS _tile_changes_tmp')
     @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, prev_geom geometry, tstamp timestamp without time zone)')
     @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry)')
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
