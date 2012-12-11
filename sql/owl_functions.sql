@@ -111,6 +111,9 @@ SELECT DISTINCT ON (type, id, version) * FROM
 ) x
 $$ LANGUAGE sql;
 
+--
+-- OWL_UpdateChangeset
+--
 CREATE FUNCTION OWL_UpdateChangeset(bigint) RETURNS void AS $$
 DECLARE
   row record;
@@ -138,6 +141,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+--
+-- OWL_AggregateChangeset
+--
 CREATE FUNCTION OWL_AggregateChangeset(bigint, int, int) RETURNS void AS $$
 DECLARE
   subtiles_per_tile bigint;
@@ -145,11 +151,12 @@ DECLARE
 BEGIN
   subtiles_per_tile := POW(2, $2) / POW(2, $3);
 
-  DELETE FROM changeset_tiles WHERE changeset_id = $1 AND zoom = $3;
+  DELETE FROM tiles WHERE changeset_id = $1 AND zoom = $3;
 
-  INSERT INTO changeset_tiles (changeset_id, tstamp, x, y, zoom, geom)
-  SELECT $1, MAX(tstamp), x/subtiles_per_tile, y/subtiles_per_tile, $3, ST_SetSRID(ST_Extent(geom), 4326)
-  FROM changeset_tiles
+  INSERT INTO tiles (changeset_id, tstamp, x, y, zoom, geom, prev_geom, changes)
+  SELECT $1, MAX(tstamp), x/subtiles_per_tile, y/subtiles_per_tile, $3,
+	ARRAY[]::geometry[], ARRAY[]::geometry[], ARRAY[]::bigint[]--ARRAY[((SELECT ST_Extent(unnest(geom))))::geometry]
+  FROM tiles
   WHERE changeset_id = $1 AND zoom = $2
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
 END;

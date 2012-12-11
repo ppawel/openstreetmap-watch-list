@@ -107,11 +107,12 @@ class Tiler
       FROM _tile_changes_tmp tmp
       GROUP BY zoom, x, y").cmd_tuples
 
+    @@log.debug "Aggregating tiles..."
+
     # Now generate tiles at lower zoom levels.
-    #(3..16).reverse_each do |i|
-    #  @@log.debug "Aggregating tiles for level #{i - 1}..."
-    #  @conn.query("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
-    #end
+    (3..16).reverse_each do |i|
+      @conn.query("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
+    end
 
     count
   end
