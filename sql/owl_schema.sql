@@ -22,10 +22,13 @@ CREATE TYPE change_origin AS ENUM ('NODE_CREATED', 'NODE_MOVED', 'NODE_TAGS_CHAN
 CREATE TABLE changesets (
   id bigint NOT NULL,
   user_id bigint NOT NULL,
+  user_name varchar(255) NOT NULL,
   created_at timestamp without time zone NOT NULL,
   closed_at timestamp without time zone, -- If NULL, changeset is still open for business.
+  open boolean NOT NULL,
   tags hstore NOT NULL,
   entity_changes int[9], -- For each element type (N, W, R) holds number of actions (CREATE, MODIFY, DELETE) in this changeset.
+  num_changes int, -- Comes from the official changeset metadata.
   bbox geometry -- Bounding box of all changes for this changeset.
 );
 
