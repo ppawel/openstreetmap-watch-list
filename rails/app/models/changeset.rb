@@ -1,5 +1,4 @@
 class Changeset < ActiveRecord::Base
-  belongs_to :user
   attr_accessible :id
   attr_accessible :user_id
   attr_accessible :created_at
@@ -21,9 +20,9 @@ class Changeset < ActiveRecord::Base
       "id" => id,
       "created_at" => created_at,
       "closed_at" => closed_at,
-      "user_id" => user.id,
-      "user_name" => user.name,
-      "entity_changes" => entity_changes_as_list,
+      "user_id" => user_id,
+      "user_name" => user_name,
+      "entity_changes" => entity_changes.nil? ? [] : entity_changes_as_list,
       "tags" => eval("{#{tags}}"),
       "bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
     }

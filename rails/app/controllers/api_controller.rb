@@ -48,7 +48,7 @@ class ApiController < ApplicationController
 private
   def find_changesets_by_tile(format)
     @x, @y, @zoom = get_xyz(params)
-    rows = Changeset.find_by_sql("
+    Changeset.find_by_sql("
       SELECT cs.* #{format == 'geojson' ? ', ST_AsGeoJSON(t.geom) AS geojson' : ''}
         #{format != 'atom' ? ', (SELECT ST_Extent(x.geom) FROM (SELECT unnest(t.geom)::box2d AS geom) x)::text AS tile_bbox, cs.bbox::box2d::text AS total_bbox' : ''}
       FROM tiles t
@@ -58,8 +58,6 @@ private
       GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, t.geom
       ORDER BY cs.created_at DESC
       #{get_limit_sql(params)}")
-    ActiveRecord::Associations::Preloader.new(rows, [:user]).run
-    rows
   end
 
   def find_changesets_by_range(format)
@@ -88,11 +86,6 @@ private
     rows
   end
 
-  def find_summary_tile(x, y, zoom)
-    SummaryTile.find(:first, :conditions => {:zoom => zoom, :x => x, :y => y})
-  end
-
-  # On-the-fly variant of find_summary_tile
   def generate_summary_tile
     @x, @y, @zoom = get_xyz(params)
     rows = ActiveRecord::Base.connection.execute("WITH agg AS (
@@ -106,9 +99,8 @@ private
       (SELECT changeset_id FROM agg ORDER BY max_tstamp DESC NULLS LAST LIMIT 1) b").to_a
     return if rows.empty?
     row = rows[0]
-    summary_tile = SummaryTile.new({'num_changesets' => row['num_changesets']})
-    row.delete('num_changesets')
-    summary_tile.latest_changeset =
+    summary_tile = {'num_changesets' => row['num_changesets']}
+    summary_tile['latest_changeset'] =
         Changeset.find_by_sql("SELECT *, NULL AS tile_bbox,
             bbox::box2d::text AS total_bbox
             FROM changesets WHERE id = #{row['changeset_id']}")[0]
