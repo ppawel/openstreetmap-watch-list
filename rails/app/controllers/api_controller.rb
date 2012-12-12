@@ -82,7 +82,6 @@ private
           )
         GROUP BY changeset_id, cs.id
         ORDER BY created_at DESC")
-    ActiveRecord::Associations::Preloader.new(rows, [:user]).run
     rows
   end
 
