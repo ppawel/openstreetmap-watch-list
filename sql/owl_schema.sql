@@ -21,8 +21,8 @@ CREATE TYPE change_origin AS ENUM ('NODE_CREATED', 'NODE_MOVED', 'NODE_TAGS_CHAN
 -- Create a table for changesets.
 CREATE TABLE changesets (
   id bigint NOT NULL,
-  user_id bigint NOT NULL,
-  user_name varchar(255) NOT NULL,
+  user_id bigint,
+  user_name varchar(255),
   created_at timestamp without time zone NOT NULL,
   closed_at timestamp without time zone, -- If NULL, changeset is still open for business.
   open boolean NOT NULL,
