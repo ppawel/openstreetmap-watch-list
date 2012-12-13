@@ -43,6 +43,7 @@ CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
     id bigint,
     version int,
     tstamp timestamp without time zone,
+    visible boolean,
     tags hstore,
     geom geometry,
     nodes bigint[],
@@ -58,6 +59,7 @@ CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
     n.id,
     n.version,
     n.tstamp,
+    n.visible,
     n.tags,
     n.geom,
     NULL::bigint[] AS nodes,
@@ -77,6 +79,7 @@ SELECT DISTINCT ON (type, id, version) * FROM
     w.id,
     w.version,
     w.tstamp,
+    w.visible,
     w.tags,
     OWL_MakeLine(w.nodes, NULL),
     w.nodes,
@@ -101,7 +104,7 @@ SELECT DISTINCT ON (type, id, version) * FROM
 
   SELECT *
   FROM affected_nodes
-  WHERE (tags - 'created_by'::text) != ''::hstore OR (prev_tags - 'created_by'::text) != ''::hstore
+  WHERE (tags - ARRAY['created_by', 'source']) != ''::hstore OR (prev_tags - ARRAY['created_by', 'source']) != ''::hstore
 
   UNION
 
@@ -110,6 +113,7 @@ SELECT DISTINCT ON (type, id, version) * FROM
     w.id,
     w.version,
     w.tstamp,
+    w.visible,
     w.tags,
     OWL_MakeLine(w.nodes, NULL),
     w.nodes,

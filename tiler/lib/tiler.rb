@@ -11,25 +11,7 @@ class Tiler
 
   def initialize(conn)
     @conn = conn
-    @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, prev_geom geometry, tstamp timestamp without time zone)')
-    @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry)')
-    @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
-      x int, y int, zoom int, geom geometry, prev_geom geometry, change_id bigint NOT NULL)')
-    @conn.exec('CREATE TEMPORARY TABLE _changeset_data (
-      type varchar(2),
-      id bigint,
-      version int,
-      tstamp timestamp without time zone,
-      tags hstore,
-      geom geometry,
-      nodes bigint[],
-      prev_version int,
-      prev_tags hstore,
-      prev_geom geometry,
-      prev_nodes bigint[],
-      changeset_nodes bigint[])')
-    @conn.exec('CREATE INDEX _idx_way_geom ON _way_geom USING gist (geom)')
-    @conn.exec('CREATE INDEX _idx_bboxes ON _tile_bboxes USING gist (tile_bbox)')
+    prepare_db
   end
 
   ##
@@ -184,27 +166,65 @@ class Tiler
   end
 
   def create_node_change(changeset_id, node, zoom)
-    origin = 'NODE_MOVED' if node['geom_changed'] == 't'
-    origin = 'NODE_TAGS_CHANGED' if node['tags_changed'] == 't'
-    origin = 'NODE_CREATED' if node['version'].to_i == 1
-    return nil if !origin # Nothing's changed!
-    @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
-      origin, origin_el_type, origin_el_id, origin_el_version, origin_el_action) VALUES (
-      '#{node['tstamp']}', 'N', #{node['id']}, #{node['version']},
-      '#{origin}', 'N', #{node['id']}, #{node['version']}, 'MODIFY')")
-    return @conn.query("SELECT currval('changes_id_seq')").getvalue(0, 0).to_i
+    change = prepare_change(changeset_id, node)
+    insert_change(change)
   end
 
   def create_way_change(changeset_id, way)
-    origin = 'WAY_NODES_CHANGED' if way['nodes_changed'] == 't'
-    origin = 'WAY_TAGS_CHANGED' if way['tags_changed'] == 't'
-    origin = 'WAY_CREATED' if way['version'].to_i == 1
-    return nil if !origin # Nothing's changed!
-    @conn.query("INSERT INTO changes (tstamp, el_type, el_id, el_version,
-      origin, origin_el_type, origin_el_id, origin_el_version, origin_el_action) VALUES (
-      '#{way['tstamp']}', 'W', #{way['id']}, #{way['version']},
-      '#{origin}', 'N', #{way['id']}, #{way['version']}, 'MODIFY')")
-    return @conn.query("SELECT currval('changes_id_seq')").getvalue(0, 0).to_i
+    change = prepare_change(changeset_id, way)
+    insert_change(change)
+  end
+
+  def prepare_change(changeset_id, row)
+    change = {'changeset_id' => changeset_id}
+    change['tstamp'] = row['tstamp']
+    change['el_type'] = row['type']
+    change['el_id'] = row['id']
+    change['el_version'] = row['version']
+    change['el_action'] = determine_action(row)
+    change['geom_changed'] = row['geom_changed']
+    change['tags_changed'] = row['tags'] != row['prev_tags']
+    change['nodes_changed'] = row['nodes'] != row['prev_nodes']
+    change['members_changed'] = row['members_changed']
+    change['tags'] = row['tags']
+    change['prev_tags'] = row['prev_tags'] if row['tags_changed'] == 't'
+    change['nodes'] = row['nodes']
+    change['prev_nodes'] = row['prev_nodes'] if row['nodes_changed'] == 't'
+    change
+  end
+
+  def determine_action(row)
+    puts row.inspect
+    if row['version'].to_i == 1
+      return 'CREATE'
+    elsif row['visible'] == 't'
+      return 'MODIFY'
+    elsif row['visible'] == 'f'
+      return 'DELETE'
+    end
+  end
+
+  def insert_change(change)
+    @conn.exec_prepared('insert_change', [
+      change['changeset_id'],
+      change['tstamp'],
+      change['el_type'],
+      change['el_id'],
+      change['el_version'],
+      change['el_action'],
+      change['geom_changed'],
+      change['tags_changed'],
+      change['nodes_changed'],
+      change['members_changed'],
+      change['tags'],
+      change['prev_tags'],
+      change['nodes'],
+      change['prev_nodes'],
+      change['origin_el_type'],
+      change['origin_el_id'],
+      change['origin_el_version'],
+      change['origin_el_action']])
+    @conn.query("SELECT currval('changes_id_seq')").getvalue(0, 0).to_i
   end
 
   def reduce_tiles(tiles, changeset_id, change, zoom)
@@ -222,47 +242,89 @@ class Tiler
   end
 
   def next_changeset_row
-    result = @conn.query("SELECT type, id, tstamp, version,
-        CASE WHEN type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
-        CASE WHEN type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
-        CASE WHEN type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
-        CASE WHEN type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
-        Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
-        NOT geom = prev_geom AS geom_changed,
-        tags != prev_tags AS tags_changed,
-        nodes != prev_nodes AS nodes_changed
-      FROM _changeset_data
-      ORDER BY type, id, version")
-    return nil if result.ntuples == 0
-    return result.to_a[0]
+    @changeset_data[@changeset_data.keys[0]]
   end
 
   def remove_changeset_row(row)
     @conn.query("DELETE FROM _changeset_data
       WHERE type = '#{row['type']}' AND id = #{row['id']} AND version = #{row['version']}")
+    @changeset_data.delete([row['type'], row['id'], row['version']])
   end
 
   def get_affected_ways(node)
-    @conn.query("SELECT type, id, tstamp, version,
+    @conn.query("SELECT type, id, tstamp, version, visible,
         NULL AS prev_lon,
         NULL AS prev_lat,
         NULL AS lon,
         NULL AS lat,
         Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
-        NOT geom = prev_geom AS geom_changed,
-        tags != prev_tags AS tags_changed,
-        nodes != prev_nodes AS nodes_changed
+        NOT geom = prev_geom OR prev_geom IS NULL AS geom_changed,
+        tags, prev_tags, nodes, prev_nodes
       FROM _changeset_data
       WHERE changeset_nodes @> ARRAY[#{node['id']}::bigint]
       ORDER BY type, id, version").to_a
   end
 
   def setup_changeset_data(changeset_id)
-    @conn.query("INSERT INTO _changeset_data SELECT * FROM OWL_GetChangesetData(#{changeset_id})").to_a
+    @conn.query("INSERT INTO _changeset_data SELECT * FROM OWL_GetChangesetData(#{changeset_id})")
+    @changeset_data = Hash[@conn.query("SELECT type, id, tstamp, version, visible,
+        CASE WHEN type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
+        CASE WHEN type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
+        CASE WHEN type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
+        CASE WHEN type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
+        Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
+        NOT geom = prev_geom OR prev_geom IS NULL AS geom_changed,
+        tags, prev_tags, nodes, prev_nodes
+      FROM _changeset_data
+      ORDER BY type, id, version").to_a.collect do |row|
+      [[row['type'], row['id'], row['version']], row]
+    end]
   end
 
   def clear_changeset_data
     @conn.query("TRUNCATE _changeset_data")
+  end
+
+  def prepare_db
+    @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, prev_geom geometry, tstamp timestamp without time zone)')
+    @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry)')
+    @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
+      x int, y int, zoom int, geom geometry, prev_geom geometry, change_id bigint NOT NULL)')
+    @conn.exec('CREATE TEMPORARY TABLE _changeset_data (
+      type varchar(2),
+      id bigint,
+      version int,
+      tstamp timestamp without time zone,
+      visible boolean,
+      tags hstore,
+      geom geometry,
+      nodes bigint[],
+      prev_version int,
+      prev_tags hstore,
+      prev_geom geometry,
+      prev_nodes bigint[],
+      changeset_nodes bigint[])')
+    @conn.exec('CREATE INDEX _idx_way_geom ON _way_geom USING gist (geom)')
+    @conn.exec('CREATE INDEX _idx_bboxes ON _tile_bboxes USING gist (tile_bbox)')
+    @conn.prepare('insert_change', 'INSERT INTO changes (
+      changeset_id,
+      tstamp,
+      el_type,
+      el_id,
+      el_version,
+      el_action,
+      geom_changed,
+      tags_changed,
+      nodes_changed,
+      members_changed,
+      tags,
+      prev_tags,
+      nodes,
+      prev_nodes,
+      origin_el_type,
+      origin_el_id,
+      origin_el_version,
+      origin_el_action) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)')
   end
 end
 

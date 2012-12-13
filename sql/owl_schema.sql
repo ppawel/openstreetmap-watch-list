@@ -15,9 +15,6 @@ CREATE TYPE element_type AS ENUM ('N', 'W', 'R');
 DROP TYPE IF EXISTS action CASCADE;
 CREATE TYPE action AS ENUM ('CREATE', 'MODIFY', 'DELETE');
 
-DROP TYPE IF EXISTS change_origin CASCADE;
-CREATE TYPE change_origin AS ENUM ('NODE_CREATED', 'NODE_MOVED', 'NODE_TAGS_CHANGED', 'WAY_CREATED', 'WAY_TAGS_CHANGED', 'WAY_NODES_CHANGED');
-
 -- Create a table for changesets.
 CREATE TABLE changesets (
   id bigint NOT NULL,
@@ -35,15 +32,24 @@ CREATE TABLE changesets (
 -- Create a table for changes.
 CREATE TABLE changes (
   id bigserial NOT NULL,
+  changeset_id bigint NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   el_type element_type NOT NULL,
   el_id bigint NOT NULL,
   el_version int NOT NULL,
-  origin change_origin NOT NULL,
-  origin_el_type element_type NOT NULL,
-  origin_el_id bigint NOT NULL,
-  origin_el_version int NOT NULL,
-  origin_el_action action NOT NULL
+  el_action action NOT NULL,
+  geom_changed boolean NOT NULL,
+  tags_changed boolean NOT NULL,
+  nodes_changed boolean,
+  members_changed boolean,
+  tags hstore NOT NULL,
+  prev_tags hstore,
+  nodes bigint[],
+  prev_nodes bigint[],
+  origin_el_type element_type,
+  origin_el_id bigint,
+  origin_el_version int,
+  origin_el_action action
 );
 
 -- Create a table for OWL tiles.
@@ -62,6 +68,7 @@ CREATE TABLE tiles (
 CREATE TABLE nodes (
   id bigint NOT NULL,
   version int NOT NULL,
+  visible boolean NOT NULL,
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   changeset_id bigint NOT NULL,
@@ -73,6 +80,7 @@ CREATE TABLE nodes (
 CREATE TABLE ways (
   id bigint NOT NULL,
   version int NOT NULL,
+  visible boolean NOT NULL,
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   changeset_id bigint NOT NULL,
@@ -84,6 +92,7 @@ CREATE TABLE ways (
 CREATE TABLE relations (
   id bigint NOT NULL,
   version int NOT NULL,
+  visible boolean NOT NULL,
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   changeset_id bigint NOT NULL,
