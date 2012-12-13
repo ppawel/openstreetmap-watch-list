@@ -54,6 +54,15 @@ class TilerTest < Test::Unit::TestCase
     assert_equal(25, changes.size)
   end
 
+  def test_3155
+    count = setup_changeset_test(3155)
+    tiles = get_tiles
+    changes = find_changes('el_type' => 'N')
+    assert_equal(0, changes.size)
+    changes = find_changes('el_type' => 'W')
+    assert_equal(29, changes.size)
+  end
+
   ##
   # Utility methods
   #
@@ -114,7 +123,7 @@ class TilerTest < Test::Unit::TestCase
         array_length(geom, 1) AS geom_arr_len,
         array_length(prev_geom, 1) AS prev_geom_arr_len,
         array_length(changes, 1) AS change_arr_len
-      FROM tiles").to_a
+      FROM tiles WHERE zoom = 16").to_a
     verify_tiles(result)
     result
   end

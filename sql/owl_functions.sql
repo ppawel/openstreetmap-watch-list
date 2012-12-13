@@ -10,15 +10,29 @@ DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
 -- the node versions used are filtered by this timestamp (are no newer than).
 -- This is useful for creating way geometry for historic versions.
 --
+-- Note that it returns NULL when it cannot recreate the geometry, e.g. when
+-- there is not enough historical node versions in the database.
+--
 CREATE FUNCTION OWL_MakeLine(bigint[], timestamp without time zone) RETURNS geometry(LINESTRING, 4326) AS $$
-  SELECT ST_MakeLine(geom)
+DECLARE
+  way_geom geometry(LINESTRING, 4326);
+BEGIN
+  way_geom := (SELECT ST_MakeLine(geom)
   FROM
     (SELECT unnest($1) AS node_id) x
     INNER JOIN nodes n ON (n.id = x.node_id)
   WHERE
     ($2 IS NULL AND n.version = (SELECT MAX(version) FROM nodes WHERE id = n.id)) OR
-    ($2 IS NOT NULL AND n.version = (SELECT version FROM nodes WHERE id = n.id AND tstamp <= $2 ORDER BY tstamp DESC LIMIT 1));
-$$ LANGUAGE sql;
+    ($2 IS NOT NULL AND n.version = (SELECT version FROM nodes WHERE id = n.id AND tstamp <= $2 ORDER BY tstamp DESC LIMIT 1)));
+
+  -- Now check if the linestring has exactly the right number of points.
+  IF ST_NumPoints(way_geom) != array_length($1, 1) THEN
+    way_geom := NULL;
+  END IF;
+
+  RETURN way_geom;
+END;
+$$ LANGUAGE plpgsql;
 
 --
 -- OWL_GetChangesetData
@@ -87,7 +101,7 @@ SELECT DISTINCT ON (type, id, version) * FROM
 
   SELECT *
   FROM affected_nodes
-  WHERE tags != ''::hstore OR prev_tags != ''::hstore
+  WHERE (tags - 'created_by'::text) != ''::hstore OR (prev_tags - 'created_by'::text) != ''::hstore
 
   UNION
 
@@ -155,7 +169,7 @@ BEGIN
 
   INSERT INTO tiles (changeset_id, tstamp, x, y, zoom, geom, prev_geom, changes)
   SELECT $1, MAX(tstamp), x/subtiles_per_tile, y/subtiles_per_tile, $3,
-	ARRAY[]::geometry[], ARRAY[]::geometry[], ARRAY[]::bigint[]--ARRAY[((SELECT ST_Extent(unnest(geom))))::geometry]
+  ARRAY[]::geometry[], ARRAY[]::geometry[], ARRAY[]::bigint[]--ARRAY[((SELECT ST_Extent(unnest(geom))))::geometry]
   FROM tiles
   WHERE changeset_id = $1 AND zoom = $2
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
