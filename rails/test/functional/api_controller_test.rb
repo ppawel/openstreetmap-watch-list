@@ -8,6 +8,7 @@ class ApiControllerTest < ActionController::TestCase
     assert_equal(1, changesets.size)
     json = JSON[@response.body]
     assert_equal(1, json.size)
+    assert(!json[0].include?('geojson'))
     assert(json[0].include?('changes'))
     assert_equal(1, json[0]['changes'].size)
     assert_equal('t', json[0]['changes'][0]['tags_changed'])

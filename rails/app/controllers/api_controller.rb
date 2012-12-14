@@ -50,7 +50,7 @@ private
     @x, @y, @zoom = get_xyz(params)
     rows = ActiveRecord::Base.connection.select_all("
       SELECT cs.*,
-        (SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g) AS geojson,
+        #{format == 'geojson' ? '(SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g) AS geojson,' : ''}
         (SELECT ST_Extent(g) FROM unnest(t.geom) AS g)::text AS tile_bbox,
         cs.bbox::box2d::text AS total_bbox,
         (SELECT array_agg(g) FROM unnest(t.changes) AS g) AS changes
