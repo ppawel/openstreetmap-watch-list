@@ -60,3 +60,11 @@ def subtiles(tile, source_zoom, target_zoom)
   end
   tiles
 end
+
+def pg_parse_array(str)
+  eval(str.gsub('{', '[').gsub('}', ']'))
+end
+
+def pg_parse_geom_array(str)
+  eval(str.gsub('{', '[\'').gsub('}', '\']').gsub(':', '\',\''))
+end

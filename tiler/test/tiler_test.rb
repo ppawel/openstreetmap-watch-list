@@ -15,12 +15,12 @@ class TilerTest < Test::Unit::TestCase
 
   def test_13294164
     setup_changeset_test(13294164)
-    assert_equal(10, find_changes('el_type' => 'W').size)
+    assert_equal(8, find_changes('el_type' => 'W').size)
 
     # traffic_signals changed position - should be a change for that.
     changes = find_changes('el_type' => 'N', 'el_id' => '244942711')
     assert_equal(1, changes.size)
-    assert_equal('NODE_MOVED', changes[0]['origin'])
+    assert_equal('t', changes[0]['geom_changed'])
   end
 
   def test_9769694
@@ -32,7 +32,7 @@ class TilerTest < Test::Unit::TestCase
     setup_changeset_test(11193918)
     assert_equal(2, find_changes('el_type' => 'N').size)
     assert_equal(1, find_changes('el_id' => '1703304298').size)
-    assert_equal(7, find_changes('el_type' => 'W').size)
+    assert_equal(6, find_changes('el_type' => 'W').size)
   end
 
   def test_13477045
@@ -57,6 +57,7 @@ class TilerTest < Test::Unit::TestCase
     verify_changeset_data
     @tiler.generate(16, id, prepare_options)
     @changes = get_changes
+    @changes_h = Hash[@changes.collect {|row| [row['id'].to_i, row]}]
     @tiles = get_tiles
     verify_tiles
   end
@@ -113,12 +114,29 @@ class TilerTest < Test::Unit::TestCase
       FROM tiles WHERE zoom = 16").to_a
   end
 
-  # Performs basic sanity checks on given tiles.
+  # Performs sanity checks on given tiles.
   def verify_tiles
+    # Check if each change has a tile.
+    change_ids = @changes_h.keys.sort.uniq
+    change_ids_from_tiles = @tiles.collect {|tile| pg_parse_array(tile['changes'])}.flatten.sort.uniq
+    assert_equal(change_ids, change_ids_from_tiles)
+
     for tile in @tiles
       # Every change should have an associated geom and prev_geom entry.
       assert_equal(tile['change_arr_len'].to_i, tile['geom_arr_len'].to_i)
       assert_equal(tile['change_arr_len'].to_i, tile['prev_geom_arr_len'].to_i)
+      changes_arr = pg_parse_array(tile['changes'])
+
+      for geom in pg_parse_geom_array(tile['geom'])
+        assert !geom.nil?
+      end
+
+      pg_parse_geom_array(tile['prev_geom']).each_with_index do |geom, index|
+        change = @changes_h[changes_arr[index]]
+        if change['el_version'].to_i != 1 and change['geom_changed'] == 't'
+          assert(geom != 'NULL', "prev_geom should not be null for change: #{change}")
+        end
+      end
     end
   end
 

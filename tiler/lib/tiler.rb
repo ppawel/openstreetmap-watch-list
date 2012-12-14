@@ -107,18 +107,25 @@ class Tiler
   end
 
   def create_node_tiles(changeset_id, node, change_id, zoom)
-    if node['lat']
-      tile = latlon2tile(node['lat'].to_f, node['lon'].to_f, zoom)
+    tile = latlon2tile(node['lat'].to_f, node['lon'].to_f, zoom)
+    prev_tile = nil
+    prev_tile = latlon2tile(node['prev_lat'].to_f, node['prev_lon'].to_f, zoom) if node['prev_lat']
+
+    if tile == prev_tile
+      @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
+        ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
+        ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326),
+        ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326), #{change_id})")
+    else
       @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
         ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
         ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326), NULL, #{change_id})")
-    end
 
-    if node['prev_lat']
-      tile = latlon2tile(node['prev_lat'].to_f, node['prev_lon'].to_f, zoom)
-      @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
-        ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-        NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326), #{change_id})")
+      if prev_tile
+        @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
+          ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
+          NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326), #{change_id})")
+      end
     end
   end
 
