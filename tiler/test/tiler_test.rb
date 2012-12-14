@@ -8,18 +8,14 @@ require 'tiler'
 class TilerTest < Test::Unit::TestCase
   # Tag changes in Zagreb and Budapest place nodes.
   def test_12917265
-    count = setup_changeset_test(12917265)
-    tiles = get_tiles
-    assert_equal(2, tiles.size)
-    changes = find_changes('origin' => 'NODE_TAGS_CHANGED')
-    assert_equal(2, changes.size)
+    setup_changeset_test(12917265)
+    assert_equal(2, @tiles.size)
+    assert_equal(2, find_changes('tags_changed' => 't').size)
   end
 
   def test_13294164
-    count = setup_changeset_test(13294164)
-    tiles = get_tiles
-    changes = find_changes('el_type' => 'W')
-    assert_equal(10, changes.size)
+    setup_changeset_test(13294164)
+    assert_equal(10, find_changes('el_type' => 'W').size)
 
     # traffic_signals changed position - should be a change for that.
     changes = find_changes('el_type' => 'N', 'el_id' => '244942711')
@@ -28,39 +24,27 @@ class TilerTest < Test::Unit::TestCase
   end
 
   def test_9769694
-    count = setup_changeset_test(9769694)
-    tiles = get_tiles
-    changes = find_changes('el_id' => '27833730', 'el_version' => '14')
-    assert_equal(1, changes.size)
+    setup_changeset_test(9769694)
+    assert_equal(1, find_changes('el_id' => '27833730', 'el_version' => '14').size)
   end
 
   def test_11193918
-    count = setup_changeset_test(11193918)
-    tiles = get_tiles
-    changes = find_changes('el_type' => 'N')
-    assert_equal(2, changes.size)
-    changes = find_changes('el_id' => '1703304298')
-    assert_equal(1, changes.size)
-    changes = find_changes('el_type' => 'W')
-    assert_equal(7, changes.size)
+    setup_changeset_test(11193918)
+    assert_equal(2, find_changes('el_type' => 'N').size)
+    assert_equal(1, find_changes('el_id' => '1703304298').size)
+    assert_equal(7, find_changes('el_type' => 'W').size)
   end
 
   def test_13477045
-    count = setup_changeset_test(13477045)
-    tiles = get_tiles
-    changes = find_changes('el_type' => 'N')
-    assert_equal(0, changes.size)
-    changes = find_changes('el_type' => 'W')
-    assert_equal(25, changes.size)
+    setup_changeset_test(13477045)
+    assert_equal(0, find_changes('el_type' => 'N').size)
+    assert_equal(25, find_changes('el_type' => 'W').size)
   end
 
   def test_3155
-    count = setup_changeset_test(3155)
-    tiles = get_tiles
-    changes = find_changes('el_type' => 'N')
-    assert_equal(0, changes.size)
-    changes = find_changes('el_type' => 'W')
-    assert_equal(29, changes.size)
+    setup_changeset_test(3155)
+    assert_equal(0, find_changes('el_type' => 'N').size)
+    assert_equal(29, find_changes('el_type' => 'W').size)
   end
 
   ##
@@ -72,6 +56,9 @@ class TilerTest < Test::Unit::TestCase
     load_changeset(id)
     verify_changeset_data
     @tiler.generate(16, id, prepare_options)
+    @changes = get_changes
+    @tiles = get_tiles
+    verify_tiles
   end
 
   def prepare_options
@@ -119,18 +106,16 @@ class TilerTest < Test::Unit::TestCase
   end
 
   def get_tiles
-    result = @conn.exec("SELECT *,
+    @conn.exec("SELECT *,
         array_length(geom, 1) AS geom_arr_len,
         array_length(prev_geom, 1) AS prev_geom_arr_len,
         array_length(changes, 1) AS change_arr_len
       FROM tiles WHERE zoom = 16").to_a
-    verify_tiles(result)
-    result
   end
 
   # Performs basic sanity checks on given tiles.
-  def verify_tiles(tiles)
-    for tile in tiles
+  def verify_tiles
+    for tile in @tiles
       # Every change should have an associated geom and prev_geom entry.
       assert_equal(tile['change_arr_len'].to_i, tile['geom_arr_len'].to_i)
       assert_equal(tile['change_arr_len'].to_i, tile['prev_geom_arr_len'].to_i)
@@ -139,7 +124,7 @@ class TilerTest < Test::Unit::TestCase
 
   def find_changes(filters)
     a = []
-    for change in get_changes
+    for change in @changes
       match = true
       for k, v in filters
         match = (match and (change[k].to_s == v.to_s))

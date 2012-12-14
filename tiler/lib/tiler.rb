@@ -194,7 +194,6 @@ class Tiler
   end
 
   def determine_action(row)
-    puts row.inspect
     if row['version'].to_i == 1
       return 'CREATE'
     elsif row['visible'] == 't'
