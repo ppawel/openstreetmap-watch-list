@@ -15,6 +15,13 @@ CREATE TYPE element_type AS ENUM ('N', 'W', 'R');
 DROP TYPE IF EXISTS action CASCADE;
 CREATE TYPE action AS ENUM ('CREATE', 'MODIFY', 'DELETE');
 
+DROP AGGREGATE IF EXISTS array_accum(anyarray);
+CREATE AGGREGATE array_accum (anyarray) (
+  sfunc = array_cat,
+  stype = anyarray,
+  initcond = '{}'
+);
+
 -- Create a table for changesets.
 CREATE TABLE changesets (
   id bigint NOT NULL,

@@ -1,27 +1,60 @@
 require 'test_helper'
 
 class ApiControllerTest < ActionController::TestCase
-  test "Retrieving a JSON tile" do
+  test "Retrieving a JSON tile (simple node tags change)" do
+    reset_db
     load_changeset(12917265)
     get(:changesets_tile_json, {:x => 36234, :y => 22917, :zoom => 16})
     changesets = assigns['changesets']
     assert_equal(1, changesets.size)
     json = JSON[@response.body]
     assert_equal(1, json.size)
-    assert(!json[0].include?('geojson'))
-    assert(json[0].include?('changes'))
-    assert_equal(1, json[0]['changes'].size)
-    assert_equal('t', json[0]['changes'][0]['tags_changed'])
-    assert_equal('yes', json[0]['changes'][0]['tags']['capital'])
-    assert_equal('1702297', json[0]['changes'][0]['tags']['population'])
-    assert_equal('1702297', json[0]['changes'][0]['prev_tags']['population'])
-    assert_equal('2', json[0]['changes'][0]['tags']['admin_level'])
-    assert_equal(nil, json[0]['changes'][0]['prev_tags']['admin_level'])
+    verify_12917265(json[0])
+  end
+
+  test "Retrieving a JSON tile (multiple changes on one tile)" do
+    reset_db
+    load_changeset(12917265)
+    load_changeset(12456522)
+    get(:changesets_tile_json, {:x => 36234, :y => 22917, :zoom => 16})
+    changesets = assigns['changesets']
+    assert_equal(2, changesets.size)
+    json = JSON[@response.body]
+    assert_equal(2, json.size)
+    verify_12917265(json[0])
+  end
+
+  test "Retrieving a JSON tile range" do
+    reset_db
+    load_changeset(12917265)
+    load_changeset(12456522)
+    get(:changesets_tilerange_json, {:x1 => 36230, :y1 => 22910, :x2 => 36243, :y2 => 22927, :zoom => 16})
+    changesets = assigns['changesets']
+    assert_equal(2, changesets.size)
+    json = JSON[@response.body]
+    assert_equal(2, json.size)
+    verify_12917265(json[0])
+  end
+
+  def verify_12917265(json)
+    assert(!json.include?('geojson'))
+    assert(json.include?('changes'))
+    assert_equal(1, json['changes'].size)
+    assert_equal('t', json['changes'][0]['tags_changed'])
+    assert_equal('yes', json['changes'][0]['tags']['capital'])
+    assert_equal('1702297', json['changes'][0]['tags']['population'])
+    assert_equal('1702297', json['changes'][0]['prev_tags']['population'])
+    assert_equal('2', json['changes'][0]['tags']['admin_level'])
+    assert_equal(nil, json['changes'][0]['prev_tags']['admin_level'])
   end
 
   def load_changeset(changeset_id)
     system('psql -a -d owl_test -c "\copy changesets from ' + Rails.root.to_s + '/test/data/' + changeset_id.to_s + '-changeset.csv"')
     system('psql -a -d owl_test -c "\copy changes from ' + Rails.root.to_s + '/test/data/' + changeset_id.to_s + '-changes.csv"')
     system('psql -a -d owl_test -c "\copy tiles from ' + Rails.root.to_s + '/test/data/' + changeset_id.to_s + '-tiles.csv"')
+  end
+
+  def reset_db
+    system('psql -a -d owl_test -c "TRUNCATE changes; TRUNCATE changesets; TRUNCATE tiles;"')
   end
 end

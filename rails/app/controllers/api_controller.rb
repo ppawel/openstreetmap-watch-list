@@ -67,32 +67,34 @@ private
 
   def find_changesets_by_range(format)
     @zoom, @x1, @y1, @x2, @y2 = get_range(params)
-    rows = find_by_sql("
-        SELECT
-          changeset_id,
-          MAX(tstamp) AS max_tstamp,
-          array_agg((SELECT ST_Extent(x.geom) FROM (SELECT unnest(t.geom)::box2d AS geom) x)::text) AS tile_bboxes,
-          cs.*,
-          cs.bbox AS total_bbox
-        FROM tiles t
-        INNER JOIN changesets cs ON (cs.id = t.changeset_id)
-        WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
-          AND changeset_id IN (
-            SELECT DISTINCT changeset_id
-            FROM tiles
-            WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
-            #{get_timelimit_sql(params)}
-            ORDER BY changeset_id DESC
-            #{get_limit_sql(params)}
-          )
-        GROUP BY changeset_id, cs.id
-        ORDER BY created_at DESC")
+    rows = ActiveRecord::Base.connection.select_all("
+      SELECT
+        changeset_id,
+        MAX(tstamp) AS max_tstamp,
+        array_agg((SELECT ST_Extent(x.geom) FROM (SELECT unnest(t.geom)::box2d AS geom) x)::text) AS tile_bboxes,
+        cs.*,
+        cs.bbox AS total_bbox,
+        array_accum(t.changes) AS changes
+      FROM tiles t
+      INNER JOIN changesets cs ON (cs.id = t.changeset_id)
+      WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
+        AND changeset_id IN (
+          SELECT DISTINCT changeset_id
+          FROM tiles
+          WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
+          #{get_timelimit_sql(params)}
+          ORDER BY changeset_id DESC
+          #{get_limit_sql(params)}
+        )
+      GROUP BY changeset_id, cs.id
+      ORDER BY created_at DESC")
+    load_changes(rows)
     rows
   end
 
   def generate_summary_tile
     @x, @y, @zoom = get_xyz(params)
-    rows = ActiveRecord::Base.connection.execute("WITH agg AS (
+    rows = ActiveRecord::Base.connection.select_all("WITH agg AS (
         SELECT changeset_id, MAX(tstamp) AS max_tstamp
         FROM tiles
         WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
@@ -100,12 +102,12 @@ private
         GROUP BY changeset_id
       ) SELECT * FROM
       (SELECT COUNT(*) AS num_changesets FROM agg) a,
-      (SELECT changeset_id FROM agg ORDER BY max_tstamp DESC NULLS LAST LIMIT 1) b").to_a
+      (SELECT changeset_id FROM agg ORDER BY max_tstamp DESC NULLS LAST LIMIT 1) b")
     return if rows.empty?
     row = rows[0]
     summary_tile = {'num_changesets' => row['num_changesets']}
     summary_tile['latest_changeset'] =
-        find_by_sql("SELECT *, NULL AS tile_bbox,
+        ActiveRecord::Base.connection.select_all("SELECT *, NULL AS tile_bbox,
             bbox::box2d::text AS total_bbox
             FROM changesets WHERE id = #{row['changeset_id']}")[0]
     summary_tile
