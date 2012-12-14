@@ -126,6 +126,7 @@ private
   end
 
   def load_changes(changesets)
+    return if changesets.empty?
     change_ids = Set.new
     changesets.each {|changeset| change_ids.merge(pg_string_to_array(changeset['changes']).map(&:to_i))}
     changes = {}
@@ -146,10 +147,10 @@ private
     geojson = { "type" => "FeatureCollection", "features" => []}
     for changeset in changesets
       changeset_geojson = {"type" => "FeatureCollection", "properties" => changeset.as_json, "features" => []}
-      if changeset.geojson
-        for change_geojson in pg_string_to_array(changeset.geojson)
+      if changeset['geojson']
+        for change_geojson in pg_string_to_array(changeset['geojson'])
           next if change_geojson.nil?
-          feature = {"type" => "Feature", "id" => "#{changeset.id}_#{x}_#{y}_#{zoom}}"}
+          feature = {"type" => "Feature", "id" => "#{changeset['id']}_#{x}_#{y}_#{zoom}}"}
           feature['geometry'] = JSON[change_geojson] if change_geojson
           changeset_geojson['features'] << feature
         end

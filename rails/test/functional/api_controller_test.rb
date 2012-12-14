@@ -37,6 +37,17 @@ class ApiControllerTest < ActionController::TestCase
     verify_json_12456522(json[1])
   end
 
+  test "Retrieving a GeoJSON tile range" do
+    reset_db
+    load_changeset(12917265)
+    load_changeset(12456522)
+    get(:changesets_tilerange_geojson, {:x1 => 36230, :y1 => 22910, :x2 => 36243, :y2 => 22927, :zoom => 16})
+    changesets = assigns['changesets']
+    assert_equal(2, changesets.size)
+    json = JSON[@response.body]
+    assert_equal(2, json.size)
+  end
+
   def verify_json_12917265(json)
     assert(!json.include?('geojson'))
     assert(json.include?('changes'))
