@@ -49,13 +49,16 @@ private
   def find_changesets_by_tile(format)
     @x, @y, @zoom = get_xyz(params)
     Changeset.find_by_sql("
-      SELECT cs.* #{format == 'geojson' ? ', (SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g) AS geojson' : ''}
-        #{format != 'atom' ? ', (SELECT ST_Extent(x.geom) FROM (SELECT unnest(t.geom)::box2d AS geom) x)::text AS tile_bbox, cs.bbox::box2d::text AS total_bbox' : ''}
+      SELECT cs.*,
+        (SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g) AS geojson,
+        (SELECT ST_Extent(g) FROM unnest(t.geom) AS g)::text AS tile_bbox,
+        cs.bbox::box2d::text AS total_bbox,
+        (SELECT array_agg(g) FROM unnest(t.changes) AS g) AS changes
       FROM tiles t
       INNER JOIN changesets cs ON (cs.id = t.changeset_id)
       WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
       #{get_timelimit_sql(params)}
-      GROUP BY cs.id, cs.created_at, cs.entity_changes, cs.user_id, t.geom
+      GROUP BY cs.id, t.geom, t.changes
       ORDER BY cs.created_at DESC
       #{get_limit_sql(params)}")
   end
