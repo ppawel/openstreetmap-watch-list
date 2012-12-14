@@ -194,9 +194,9 @@ class Tiler
     change['nodes_changed'] = row['nodes'] != row['prev_nodes']
     change['members_changed'] = row['members_changed']
     change['tags'] = row['tags']
-    change['prev_tags'] = row['prev_tags'] if row['tags_changed'] == 't'
+    change['prev_tags'] = row['prev_tags'] if change['tags_changed']
     change['nodes'] = row['nodes']
-    change['prev_nodes'] = row['prev_nodes'] if row['nodes_changed'] == 't'
+    change['prev_nodes'] = row['prev_nodes'] if change['nodes_changed']
     change
   end
 

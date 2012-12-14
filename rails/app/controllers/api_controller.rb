@@ -48,7 +48,7 @@ class ApiController < ApplicationController
 private
   def find_changesets_by_tile(format)
     @x, @y, @zoom = get_xyz(params)
-    Changeset.find_by_sql("
+    rows = ActiveRecord::Base.connection.select_all("
       SELECT cs.*,
         (SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g) AS geojson,
         (SELECT ST_Extent(g) FROM unnest(t.geom) AS g)::text AS tile_bbox,
@@ -61,11 +61,13 @@ private
       GROUP BY cs.id, t.geom, t.changes
       ORDER BY cs.created_at DESC
       #{get_limit_sql(params)}")
+    load_changes(rows)
+    rows
   end
 
   def find_changesets_by_range(format)
     @zoom, @x1, @y1, @x2, @y2 = get_range(params)
-    rows = Changeset.find_by_sql("
+    rows = find_by_sql("
         SELECT
           changeset_id,
           MAX(tstamp) AS max_tstamp,
@@ -103,7 +105,7 @@ private
     row = rows[0]
     summary_tile = {'num_changesets' => row['num_changesets']}
     summary_tile['latest_changeset'] =
-        Changeset.find_by_sql("SELECT *, NULL AS tile_bbox,
+        find_by_sql("SELECT *, NULL AS tile_bbox,
             bbox::box2d::text AS total_bbox
             FROM changesets WHERE id = #{row['changeset_id']}")[0]
     summary_tile
@@ -119,6 +121,23 @@ private
         #{get_timelimit_sql(params)}
         GROUP BY x, y").to_a
     rows.to_a
+  end
+
+  def load_changes(changesets)
+    change_ids = Set.new
+    changesets.each {|changeset| change_ids.merge(pg_string_to_array(changeset['changes']).map(&:to_i))}
+    changes = {}
+
+    for change in ActiveRecord::Base.connection.select_all("SELECT * FROM changes WHERE id IN
+        (#{change_ids.to_a.join(',')})")
+      change['tags'] = eval("{#{change['tags']}}")
+      change['prev_tags'] = eval("{#{change['prev_tags']}}") if change['prev_tags']
+      changes[change['id'].to_i] = change
+    end
+
+    for changeset in changesets
+      changeset['changes'] = pg_string_to_array(changeset['changes']).collect {|change_id| changes[change_id.to_i]}
+    end
   end
 
   def changesets_to_geojson(changesets, x, y, zoom)
@@ -143,7 +162,6 @@ private
     dup[0] = '['
     dup[-1] = ']'
     dup.gsub!('NULL', 'nil')
-    puts dup
     eval(dup)
   end
 end

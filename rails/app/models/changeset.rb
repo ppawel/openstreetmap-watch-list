@@ -1,16 +1,4 @@
-class Changeset < ActiveRecord::Base
-  attr_accessible :id
-  attr_accessible :user_id
-  attr_accessible :created_at
-  attr_accessible :closed_at
-  attr_accessible :last_tiled_at
-  attr_accessible :tags
-  attr_accessible :entity_changes
-  attr_accessible :bbox
-  attr_accessible :geojson
-  attr_accessible :tile_bbox
-  attr_accessible :tile_bboxes
-
+class Changeset
   def entity_changes_as_list
     entity_changes.gsub('{', '').gsub('}', '').split(',').map(&:to_i)
   end
@@ -25,6 +13,7 @@ class Changeset < ActiveRecord::Base
       "entity_changes" => entity_changes.nil? ? [] : entity_changes_as_list,
       "tags" => eval("{#{tags}}"),
       "bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
+      "changes" => changes.to_s
     }
     if has_attribute?('tile_bbox')
       boxes = box2d_to_bbox(tile_bbox)
