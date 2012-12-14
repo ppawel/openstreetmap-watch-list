@@ -5,7 +5,6 @@ STDOUT.sync = true
 $:.unshift File.absolute_path(File.dirname(__FILE__) + '/lib/')
 
 require 'pg'
-require 'parallel'
 require 'yaml'
 
 require 'cmdline_options'
