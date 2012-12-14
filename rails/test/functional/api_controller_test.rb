@@ -9,7 +9,7 @@ class ApiControllerTest < ActionController::TestCase
     assert_equal(1, changesets.size)
     json = JSON[@response.body]
     assert_equal(1, json.size)
-    verify_12917265(json[0])
+    verify_json_12917265(json[0])
   end
 
   test "Retrieving a JSON tile (multiple changes on one tile)" do
@@ -21,7 +21,7 @@ class ApiControllerTest < ActionController::TestCase
     assert_equal(2, changesets.size)
     json = JSON[@response.body]
     assert_equal(2, json.size)
-    verify_12917265(json[0])
+    verify_json_12917265(json[0])
   end
 
   test "Retrieving a JSON tile range" do
@@ -33,10 +33,11 @@ class ApiControllerTest < ActionController::TestCase
     assert_equal(2, changesets.size)
     json = JSON[@response.body]
     assert_equal(2, json.size)
-    verify_12917265(json[0])
+    verify_json_12917265(json[0])
+    verify_json_12456522(json[1])
   end
 
-  def verify_12917265(json)
+  def verify_json_12917265(json)
     assert(!json.include?('geojson'))
     assert(json.include?('changes'))
     assert_equal(1, json['changes'].size)
@@ -46,6 +47,12 @@ class ApiControllerTest < ActionController::TestCase
     assert_equal('1702297', json['changes'][0]['prev_tags']['population'])
     assert_equal('2', json['changes'][0]['tags']['admin_level'])
     assert_equal(nil, json['changes'][0]['prev_tags']['admin_level'])
+  end
+
+  def verify_json_12456522(json)
+    assert(!json.include?('geojson'))
+    assert(json.include?('changes'))
+    assert_equal(12, json['changes'].size)
   end
 
   def load_changeset(changeset_id)

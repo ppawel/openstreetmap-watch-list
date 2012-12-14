@@ -138,7 +138,7 @@ private
     end
 
     for changeset in changesets
-      changeset['changes'] = pg_string_to_array(changeset['changes']).collect {|change_id| changes[change_id.to_i]}
+      changeset['changes'] = pg_string_to_array(changeset['changes']).uniq.collect {|change_id| changes[change_id.to_i]}
     end
   end
 
