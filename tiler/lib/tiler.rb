@@ -123,7 +123,7 @@ class Tiler
 
       if prev_tile
         @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
-          ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
+          ('N', '#{node['tstamp']}', #{zoom}, #{prev_tile[0]}, #{prev_tile[1]},
           NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326), #{change_id})")
       end
     end
