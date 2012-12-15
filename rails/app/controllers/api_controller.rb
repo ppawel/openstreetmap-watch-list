@@ -162,7 +162,7 @@ private
           "id" => "#{changeset.id}_#{x}_#{y}_#{zoom}}",
           "properties" => change.as_json
         }
-        feature['geometry'] = changeset.geojson[index]
+        feature['geometry'] = JSON[changeset.geojson[index]]
         changeset_geojson['features'] << feature
       end
       geojson['features'] << changeset_geojson
