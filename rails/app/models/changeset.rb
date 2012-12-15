@@ -1,6 +1,28 @@
 class Changeset
-  def entity_changes_as_list
-    entity_changes.gsub('{', '').gsub('}', '').split(',').map(&:to_i)
+  attr_accessor :id
+  attr_accessor :user_id
+  attr_accessor :user_name
+  attr_accessor :created_at
+  attr_accessor :closed_at
+  attr_accessor :open
+  attr_accessor :tags
+  attr_accessor :entity_changes
+  attr_accessor :num_changes
+  attr_accessor :change_ids
+  attr_accessor :changes
+  attr_accessor :geojson
+
+  def initialize(hash)
+    @id = hash['id'].to_i
+    @user_id = hash['user_id'].to_i
+    @user_name = hash['user_name']
+    @created_at = Time.parse(hash['created_at'])
+    @closed_at = Time.parse(hash['closed_at'])
+    @open = hash['open'] == 't'
+    @tags = eval("{#{hash['tags']}}")
+    @change_ids = pg_string_to_array(hash['change_ids']).map(&:to_i) if hash['change_ids']
+    @change_bboxes = box2d_to_bbox(hash['change_bboxes']) if hash['change_bboxes']
+    @geojson = hash['geojson']
   end
 
   def as_json(options = {})
@@ -10,19 +32,11 @@ class Changeset
       "closed_at" => closed_at,
       "user_id" => user_id,
       "user_name" => user_name,
-      "entity_changes" => entity_changes.nil? ? [] : entity_changes_as_list,
-      "tags" => eval("{#{tags}}"),
-      "bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
-      "changes" => changes.to_s
+      #"entity_changes" => entity_changes.nil? ? [] : entity_changes_as_list,
+      "tags" => tags,
+      #"bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
+      "changes" => changes
     }
-    if has_attribute?('tile_bbox')
-      boxes = box2d_to_bbox(tile_bbox)
-      result['tile_bbox'] = boxes[0]
-    end
-    if has_attribute?('tile_bboxes')
-      boxes = box2d_to_bbox(tile_bboxes)
-      result['tile_bboxes'] = boxes
-    end
     result
   end
 
@@ -37,5 +51,13 @@ class Changeset
       result << m.map(&:to_f)
     end
     result.uniq
+  end
+
+  def pg_string_to_array(str)
+    dup = str.dup
+    dup[0] = '['
+    dup[-1] = ']'
+    dup.gsub!('NULL', 'nil')
+    eval(dup)
   end
 end

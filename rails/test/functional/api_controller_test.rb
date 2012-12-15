@@ -6,6 +6,7 @@ class ApiControllerTest < ActionController::TestCase
     load_changeset(12917265)
     get(:changesets_tile_json, {:x => 36234, :y => 22917, :zoom => 16})
     changesets = assigns['changesets']
+    verify_json_changesets(changesets)
     assert_equal(1, changesets.size)
     json = JSON[@response.body]
     assert_equal(1, json.size)
@@ -18,6 +19,7 @@ class ApiControllerTest < ActionController::TestCase
     load_changeset(12456522)
     get(:changesets_tile_json, {:x => 36234, :y => 22917, :zoom => 16})
     changesets = assigns['changesets']
+    verify_json_changesets(changesets)
     assert_equal(2, changesets.size)
     json = JSON[@response.body]
     assert_equal(2, json.size)
@@ -30,6 +32,7 @@ class ApiControllerTest < ActionController::TestCase
     load_changeset(12456522)
     get(:changesets_tilerange_json, {:x1 => 36230, :y1 => 22910, :x2 => 36243, :y2 => 22927, :zoom => 16})
     changesets = assigns['changesets']
+    verify_json_changesets(changesets)
     assert_equal(2, changesets.size)
     json = JSON[@response.body]
     assert_equal(2, json.size)
@@ -43,16 +46,31 @@ class ApiControllerTest < ActionController::TestCase
     load_changeset(12456522)
     get(:changesets_tilerange_geojson, {:x1 => 36230, :y1 => 22910, :x2 => 36243, :y2 => 22927, :zoom => 16})
     changesets = assigns['changesets']
+    verify_json_changesets(changesets)
     assert_equal(2, changesets.size)
     json = JSON[@response.body]
     assert_equal(2, json.size)
+  end
+
+  # Does some generic checks.
+  def verify_json_changesets(changesets)
+    for changeset in changesets
+      assert(changeset.created_at <= changeset.closed_at)
+      assert(changeset.created_at < Date.parse('2012-11-02'))
+      assert(changeset.created_at > Date.parse('2011-11-02'))
+      assert_equal(false, changeset.open)
+      assert_equal('Hash', changeset.tags.class.name)
+      assert(changeset.tags.size > 0)
+      assert_equal('Fixnum', changeset.id.class.name)
+      assert_equal('Fixnum', changeset.user_id.class.name)
+    end
   end
 
   def verify_json_12917265(json)
     assert(!json.include?('geojson'))
     assert(json.include?('changes'))
     assert_equal(1, json['changes'].size)
-    assert_equal('t', json['changes'][0]['tags_changed'])
+    assert_equal(true, json['changes'][0]['tags_changed'])
     assert_equal('yes', json['changes'][0]['tags']['capital'])
     assert_equal('1702297', json['changes'][0]['tags']['population'])
     assert_equal('1702297', json['changes'][0]['prev_tags']['population'])
