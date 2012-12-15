@@ -22,13 +22,17 @@ class Change
   def initialize(hash)
     @id = hash['id'].to_i
     @changeset_id = hash['changeset_id'].to_i
-    @tstamp = Date.parse(hash['tstamp'])
-    @tags = eval("{#{hash['tags']}}")
-    @prev_tags = eval("{#{hash['prev_tags']}}") if hash['prev_tags']
+    @tstamp = Time.parse(hash['tstamp'])
+    @el_type = hash['el_type']
+    @el_id = hash['el_id'].to_i
+    @el_version = hash['el_version'].to_i
+    @el_action = hash['el_action']
     @geom_changed = hash['geom_changed'] == 't' if hash['geom_changed']
     @tags_changed = hash['tags_changed'] == 't' if hash['tags_changed']
     @nodes_changed = hash['nodes_changed'] == 't' if hash['nodes_changed']
     @members_changed = hash['members_changed'] == 't' if hash['members_changed']
+    @tags = eval("{#{hash['tags']}}")
+    @prev_tags = eval("{#{hash['prev_tags']}}") if hash['prev_tags']
   end
 
   def as_json(options = {})

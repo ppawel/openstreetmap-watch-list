@@ -9,6 +9,7 @@ class Changeset
   attr_accessor :entity_changes
   attr_accessor :num_changes
   attr_accessor :change_ids
+  attr_accessor :bboxes
   attr_accessor :changes
   attr_accessor :geojson
 
@@ -21,11 +22,11 @@ class Changeset
     @open = hash['open'] == 't'
     @tags = eval("{#{hash['tags']}}")
     @change_ids = pg_string_to_array(hash['change_ids']).map(&:to_i) if hash['change_ids']
-    @change_bboxes = box2d_to_bbox(hash['change_bboxes']) if hash['change_bboxes']
+    @bboxes = box2d_to_bbox(hash['bboxes']) if hash['bboxes']
     @geojson = hash['geojson']
   end
 
-  def as_json(options = {})
+  def generate_json(options = {:include_changes => true})
     result = {
       "id" => id,
       "created_at" => created_at,
@@ -35,8 +36,9 @@ class Changeset
       #"entity_changes" => entity_changes.nil? ? [] : entity_changes_as_list,
       "tags" => tags,
       #"bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
-      "changes" => changes
+      "bboxes" => bboxes
     }
+    result['changes'] = changes if options[:include_changes]
     result
   end
 

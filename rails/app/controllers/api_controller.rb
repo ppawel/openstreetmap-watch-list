@@ -7,7 +7,7 @@ class ApiController < ApplicationController
 
   def changesets_tile_json
     @changesets = find_changesets_by_tile('json')
-    render :json => JSON[@changesets], :callback => params[:callback]
+    render :json => JSON[@changesets.map(&:generate_json)], :callback => params[:callback]
   end
 
   def changesets_tile_geojson
@@ -22,7 +22,7 @@ class ApiController < ApplicationController
 
   def changesets_tilerange_json
     @changesets = find_changesets_by_range('json')
-    render :json => JSON[@changesets], :callback => params[:callback]
+    render :json => JSON[@changesets.map(&:generate_json)], :callback => params[:callback]
   end
 
   def changesets_tilerange_geojson
@@ -51,7 +51,7 @@ private
     changesets = ActiveRecord::Base.connection.select_all("
       SELECT cs.*,
         #{format == 'geojson' ? '(SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g) AS geojson,' : ''}
-        (SELECT ST_Extent(g) FROM unnest(t.geom) AS g)::text AS change_bboxes,
+        (SELECT ST_Extent(g) FROM unnest(t.geom) AS g)::text AS bboxes,
         cs.bbox::box2d::text AS total_bbox,
         (SELECT array_agg(g) FROM unnest(t.changes) AS g) AS change_ids
       FROM tiles t
@@ -71,7 +71,8 @@ private
       SELECT
         changeset_id,
         MAX(tstamp) AS max_tstamp,
-        array_agg((SELECT ST_Extent(x.geom) FROM (SELECT unnest(t.geom)::box2d AS geom) x)::text) AS change_bboxes,
+        --array_accum((SELECT ST_Extent(x.geom) FROM (SELECT unnest(t.geom)::box2d AS geom) x)::text) AS bboxes,
+        array_accum(((SELECT array_agg(x::box2d) FROM unnest(t.geom) x))) AS bboxes,
         cs.*,
         cs.bbox AS total_bbox,
         array_accum(t.changes) AS change_ids
@@ -149,14 +150,19 @@ private
   def changesets_to_geojson(changesets, x, y, zoom)
     geojson = { "type" => "FeatureCollection", "features" => []}
     for changeset in changesets
-      changeset_geojson = {"type" => "FeatureCollection", "properties" => changeset.as_json, "features" => []}
-      if changeset.geojson
-        for change_geojson in pg_string_to_array(changeset.geojson)
-          next if change_geojson.nil?
-          feature = {"type" => "Feature", "id" => "#{changeset.id}_#{x}_#{y}_#{zoom}}"}
-          feature['geometry'] = JSON[change_geojson] if change_geojson
-          changeset_geojson['features'] << feature
-        end
+      changeset_geojson = {
+        "type" => "FeatureCollection",
+        "properties" => changeset.generate_json(:include_changes => false),
+        "features" => []
+      }
+      for change in changeset.changes
+        feature = {
+          "type" => "Feature",
+          "id" => "#{changeset.id}_#{x}_#{y}_#{zoom}}",
+          "properties" => change.as_json
+        }
+        #feature['geometry'] = JSON[change_geojson] if change_geojson
+        changeset_geojson['features'] << feature
       end
       geojson['features'] << changeset_geojson
     end

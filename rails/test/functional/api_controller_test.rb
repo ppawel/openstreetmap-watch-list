@@ -40,6 +40,19 @@ class ApiControllerTest < ActionController::TestCase
     verify_json_12456522(json[1])
   end
 
+  test "Retrieving a GeoJSON tile (multiple changes on one tile)" do
+    reset_db
+    load_changeset(12917265)
+    load_changeset(12456522)
+    get(:changesets_tile_geojson, {:x => 36234, :y => 22917, :zoom => 16})
+    changesets = assigns['changesets']
+    verify_json_changesets(changesets)
+    assert_equal(2, changesets.size)
+    json = JSON[@response.body]
+    assert_equal(2, json.size)
+    verify_geojson_12917265(json['features'][0])
+  end
+
   test "Retrieving a GeoJSON tile range" do
     reset_db
     load_changeset(12917265)
@@ -50,6 +63,7 @@ class ApiControllerTest < ActionController::TestCase
     assert_equal(2, changesets.size)
     json = JSON[@response.body]
     assert_equal(2, json.size)
+    verify_geojson_12917265(json['features'][0])
   end
 
   # Does some generic checks.
@@ -76,6 +90,19 @@ class ApiControllerTest < ActionController::TestCase
     assert_equal('1702297', json['changes'][0]['prev_tags']['population'])
     assert_equal('2', json['changes'][0]['tags']['admin_level'])
     assert_equal(nil, json['changes'][0]['prev_tags']['admin_level'])
+  end
+
+  def verify_geojson_12917265(json)
+    assert(json.include?('type'))
+    assert_equal(1, json['features'].size)
+    assert_equal(12917265, json['properties']['id'])
+    assert(!json['properties'].include?('changes'))
+    assert_equal(true, json['features'][0]['properties']['tags_changed'])
+    assert_equal('yes', json['features'][0]['properties']['tags']['capital'])
+    assert_equal('1702297', json['features'][0]['properties']['tags']['population'])
+    assert_equal('1702297', json['features'][0]['properties']['prev_tags']['population'])
+    assert_equal('2', json['features'][0]['properties']['tags']['admin_level'])
+    assert_equal(nil, json['features'][0]['properties']['prev_tags']['admin_level'])
   end
 
   def verify_json_12456522(json)
