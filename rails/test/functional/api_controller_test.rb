@@ -97,6 +97,7 @@ class ApiControllerTest < ActionController::TestCase
     assert_equal(1, json['features'].size)
     assert_equal(12917265, json['properties']['id'])
     assert(!json['properties'].include?('changes'))
+    assert(json['features'][0].include?('geometry'))
     assert_equal(true, json['features'][0]['properties']['tags_changed'])
     assert_equal('yes', json['features'][0]['properties']['tags']['capital'])
     assert_equal('1702297', json['features'][0]['properties']['tags']['population'])

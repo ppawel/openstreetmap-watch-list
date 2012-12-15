@@ -71,6 +71,7 @@ private
       SELECT
         changeset_id,
         MAX(tstamp) AS max_tstamp,
+        #{format == 'geojson' ? '(SELECT array_accum((SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g))) AS geojson,' : ''}
         --array_accum((SELECT ST_Extent(x.geom) FROM (SELECT unnest(t.geom)::box2d AS geom) x)::text) AS bboxes,
         array_accum(((SELECT array_agg(x::box2d) FROM unnest(t.geom) x))) AS bboxes,
         cs.*,
@@ -155,13 +156,13 @@ private
         "properties" => changeset.generate_json(:include_changes => false),
         "features" => []
       }
-      for change in changeset.changes
+      changeset.changes.each_with_index do |change, index|
         feature = {
           "type" => "Feature",
           "id" => "#{changeset.id}_#{x}_#{y}_#{zoom}}",
           "properties" => change.as_json
         }
-        #feature['geometry'] = JSON[change_geojson] if change_geojson
+        feature['geometry'] = changeset.geojson[index]
         changeset_geojson['features'] << feature
       end
       geojson['features'] << changeset_geojson

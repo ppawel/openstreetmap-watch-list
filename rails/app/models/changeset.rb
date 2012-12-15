@@ -23,7 +23,7 @@ class Changeset
     @tags = eval("{#{hash['tags']}}")
     @change_ids = pg_string_to_array(hash['change_ids']).map(&:to_i) if hash['change_ids']
     @bboxes = box2d_to_bbox(hash['bboxes']) if hash['bboxes']
-    @geojson = hash['geojson']
+    @geojson = pg_string_to_array(hash['geojson']) if hash['geojson']
   end
 
   def generate_json(options = {:include_changes => true})
