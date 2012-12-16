@@ -294,9 +294,12 @@ class Tiler
 
   def prepare_db
     @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, prev_geom geometry, tstamp timestamp without time zone)')
+
     @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry)')
+
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
       x int, y int, zoom int, geom geometry, prev_geom geometry, change_id bigint NOT NULL)')
+
     @conn.exec('CREATE TEMPORARY TABLE _changeset_data (
       type varchar(2),
       id bigint,
@@ -311,8 +314,7 @@ class Tiler
       prev_geom geometry,
       prev_nodes bigint[],
       changeset_nodes bigint[])')
-    @conn.exec('CREATE INDEX _idx_way_geom ON _way_geom USING gist (geom)')
-    @conn.exec('CREATE INDEX _idx_bboxes ON _tile_bboxes USING gist (tile_bbox)')
+
     @conn.prepare('insert_change', 'INSERT INTO changes (
       changeset_id,
       tstamp,
