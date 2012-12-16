@@ -23,7 +23,6 @@ class Tiler
     @conn.transaction do |c|
       tile_count = do_generate(zoom, changeset_id, options)
     end
-    clear_changeset_data
     tile_count
   end
 
@@ -142,8 +141,7 @@ class Tiler
     @conn.exec('TRUNCATE _way_geom')
 
     @conn.exec("INSERT INTO _way_geom (geom, prev_geom, tstamp)
-      SELECT geom, prev_geom, tstamp
-      FROM _changeset_data WHERE id = #{way['id']} AND version = #{way['version']}")
+      VALUES ('#{way['geom']}', #{way['prev_geom'] ? "'#{way['prev_geom']}'" : 'NULL'}, '#{way['tstamp']}')")
 
     tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
 
@@ -253,43 +251,29 @@ class Tiler
   end
 
   def remove_changeset_row(row)
-    @conn.exec("DELETE FROM _changeset_data
-      WHERE type = '#{row['type']}' AND id = #{row['id']} AND version = #{row['version']}")
     @changeset_data.delete([row['type'], row['id'], row['version']])
   end
 
   def get_affected_ways(node)
-    @conn.exec("SELECT type, id, tstamp, version, visible,
-        NULL AS prev_lon,
-        NULL AS prev_lat,
-        NULL AS lon,
-        NULL AS lat,
-        Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
-        NOT geom = prev_geom OR prev_geom IS NULL AS geom_changed,
-        tags, prev_tags, nodes, prev_nodes
-      FROM _changeset_data
-      WHERE changeset_nodes @> ARRAY[#{node['id']}::bigint]
-      ORDER BY type, id, version").to_a
+    @changeset_data.values.select do |row|
+      row['changeset_nodes'].include?(node['id']) if row['changeset_nodes']
+    end
   end
 
   def setup_changeset_data(changeset_id)
-    @conn.exec("INSERT INTO _changeset_data SELECT * FROM OWL_GetChangesetData(#{changeset_id})")
-    @changeset_data = Hash[@conn.exec("SELECT type, id, tstamp, version, visible,
+    #@conn.exec("INSERT INTO _changeset_data SELECT * FROM OWL_GetChangesetData(#{changeset_id})")
+    @changeset_data = Hash[@conn.exec("SELECT type, id, tstamp, version, visible, changeset_nodes,
         CASE WHEN type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
         CASE WHEN type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
         CASE WHEN type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
         CASE WHEN type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
         Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
         NOT geom = prev_geom OR prev_geom IS NULL AS geom_changed,
-        tags, prev_tags, nodes, prev_nodes
-      FROM _changeset_data
+        tags, prev_tags, nodes, prev_nodes, geom, prev_geom
+      FROM OWL_GetChangesetData(#{changeset_id})
       ORDER BY type, id, version").to_a.collect do |row|
       [[row['type'], row['id'], row['version']], row]
     end]
-  end
-
-  def clear_changeset_data
-    @conn.exec("TRUNCATE _changeset_data")
   end
 
   def prepare_db
@@ -299,21 +283,6 @@ class Tiler
 
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
       x int, y int, zoom int, geom geometry, prev_geom geometry, change_id bigint NOT NULL)')
-
-    @conn.exec('CREATE TEMPORARY TABLE _changeset_data (
-      type varchar(2),
-      id bigint,
-      version int,
-      tstamp timestamp without time zone,
-      visible boolean,
-      tags hstore,
-      geom geometry,
-      nodes bigint[],
-      prev_version int,
-      prev_tags hstore,
-      prev_geom geometry,
-      prev_nodes bigint[],
-      changeset_nodes bigint[])')
 
     @conn.prepare('insert_change', 'INSERT INTO changes (
       changeset_id,
