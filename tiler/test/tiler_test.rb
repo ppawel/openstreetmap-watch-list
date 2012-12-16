@@ -51,6 +51,10 @@ class TilerTest < Test::Unit::TestCase
     setup_changeset_test(13018562)
   end
 
+  def test_13258073
+    setup_changeset_test(13258073)
+  end
+
   ##
   # Utility methods
   #
