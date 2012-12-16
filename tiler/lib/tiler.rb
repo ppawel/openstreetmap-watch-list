@@ -43,7 +43,7 @@ class Tiler
 
       sql += " ORDER BY id LIMIT 1000"
 
-      @conn.query(sql).collect {|row| row['id'].to_i}
+      @conn.exec(sql).collect {|row| row['id'].to_i}
     else
       # List of changeset ids must have been provided.
       options[:changesets]
@@ -55,8 +55,8 @@ class Tiler
   # duplicate primary key error during insert.
   #
   def clear_tiles(changeset_id, zoom)
-    @conn.query("DELETE FROM changes WHERE changeset_id = #{changeset_id}")
-    count = @conn.query("DELETE FROM tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
+    @conn.exec("DELETE FROM changes WHERE changeset_id = #{changeset_id}")
+    count = @conn.exec("DELETE FROM tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
     @@log.debug "Removed existing tiles: #{count}"
     count
   end
@@ -84,7 +84,7 @@ class Tiler
       remove_changeset_row(row)
     end
 
-    count = @conn.query("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
+    count = @conn.exec("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
       SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y,
         array_agg(change_id), array_agg(geom), array_agg(prev_geom)
       FROM _tile_changes_tmp tmp
@@ -94,7 +94,7 @@ class Tiler
 
     # Now generate tiles at lower zoom levels.
     (3..16).reverse_each do |i|
-      @conn.query("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
+      @conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
     end
 
     count
@@ -113,17 +113,17 @@ class Tiler
     prev_tile = latlon2tile(node['prev_lat'].to_f, node['prev_lon'].to_f, zoom) if node['prev_lat']
 
     if tile == prev_tile
-      @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
+      @conn.exec("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
         ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
         ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326),
         ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326), #{change_id})")
     else
-      @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
+      @conn.exec("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
         ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
         ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326), NULL, #{change_id})")
 
       if prev_tile
-        @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
+        @conn.exec("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
           ('N', '#{node['tstamp']}', #{zoom}, #{prev_tile[0]}, #{prev_tile[1]},
           NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326), #{change_id})")
       end
@@ -141,7 +141,7 @@ class Tiler
     @conn.exec('TRUNCATE _tile_bboxes')
     @conn.exec('TRUNCATE _way_geom')
 
-    @conn.query("INSERT INTO _way_geom (geom, prev_geom, tstamp)
+    @conn.exec("INSERT INTO _way_geom (geom, prev_geom, tstamp)
       SELECT geom, prev_geom, tstamp
       FROM _changeset_data WHERE id = #{way['id']} AND version = #{way['version']}")
 
@@ -160,11 +160,11 @@ class Tiler
       x, y = tile[0], tile[1]
       lat1, lon1 = tile2latlon(x, y, zoom)
       lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
-      @conn.query("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
+      @conn.exec("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
         ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
     end
 
-    count = @conn.query("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id)
+    count = @conn.exec("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id)
       SELECT 'W', tstamp, bb.zoom, bb.x, bb.y,
         ST_Intersection(geom, bb.tile_bbox), ST_Intersection(prev_geom, bb.tile_bbox), #{change_id}
       FROM _tile_bboxes bb, _way_geom
@@ -231,7 +231,7 @@ class Tiler
       change['origin_el_id'],
       change['origin_el_version'],
       change['origin_el_action']])
-    @conn.query("SELECT currval('changes_id_seq')").getvalue(0, 0).to_i
+    @conn.exec("SELECT currval('changes_id_seq')").getvalue(0, 0).to_i
   end
 
   def reduce_tiles(tiles, changeset_id, change, zoom)
@@ -240,7 +240,7 @@ class Tiler
         x, y = tile[0], tile[1]
         lat1, lon1 = tile2latlon(x, y, source_zoom)
         lat2, lon2 = tile2latlon(x + 1, y + 1, source_zoom)
-        intersects = @conn.query("
+        intersects = @conn.exec("
           SELECT ST_Intersects(ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326), geom)
           FROM _way_geom").getvalue(0, 0) == 't'
         tiles.subtract(subtiles(tile, source_zoom, zoom)) if !intersects
@@ -253,13 +253,13 @@ class Tiler
   end
 
   def remove_changeset_row(row)
-    @conn.query("DELETE FROM _changeset_data
+    @conn.exec("DELETE FROM _changeset_data
       WHERE type = '#{row['type']}' AND id = #{row['id']} AND version = #{row['version']}")
     @changeset_data.delete([row['type'], row['id'], row['version']])
   end
 
   def get_affected_ways(node)
-    @conn.query("SELECT type, id, tstamp, version, visible,
+    @conn.exec("SELECT type, id, tstamp, version, visible,
         NULL AS prev_lon,
         NULL AS prev_lat,
         NULL AS lon,
@@ -273,8 +273,8 @@ class Tiler
   end
 
   def setup_changeset_data(changeset_id)
-    @conn.query("INSERT INTO _changeset_data SELECT * FROM OWL_GetChangesetData(#{changeset_id})")
-    @changeset_data = Hash[@conn.query("SELECT type, id, tstamp, version, visible,
+    @conn.exec("INSERT INTO _changeset_data SELECT * FROM OWL_GetChangesetData(#{changeset_id})")
+    @changeset_data = Hash[@conn.exec("SELECT type, id, tstamp, version, visible,
         CASE WHEN type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
         CASE WHEN type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
         CASE WHEN type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
@@ -289,7 +289,7 @@ class Tiler
   end
 
   def clear_changeset_data
-    @conn.query("TRUNCATE _changeset_data")
+    @conn.exec("TRUNCATE _changeset_data")
   end
 
   def prepare_db
