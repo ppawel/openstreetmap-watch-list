@@ -37,11 +37,26 @@ $$ LANGUAGE plpgsql;
 --
 -- OWL_GenerateChanges
 --
-CREATE FUNCTION OWL_GenerateChanges(int) RETURNS void AS $$
-DECLARE
+CREATE FUNCTION OWL_GenerateChanges(int) RETURNS TABLE (
+  changeset_id bigint,
+  tstamp timestamp without time zone,
+  el_type element_type,
+  el_id bigint,
+  el_version int,
+  el_action action,
+  geom_changed boolean,
+  tags_changed boolean,
+  nodes_changed boolean,
+  members_changed boolean,
+  geom geometry(GEOMETRY, 4326),
+  prev_geom geometry(GEOMETRY, 4326),
+  tags hstore,
+  prev_tags hstore,
+  nodes bigint[],
+  prev_nodes bigint[]
+) AS $$
 
-BEGIN
-  CREATE TEMPORARY TABLE affected_nodes ON COMMIT DROP AS
+  WITH affected_nodes AS (
   SELECT
       n.changeset_id,
       n.tstamp,
@@ -61,25 +76,8 @@ BEGIN
       NULL::bigint[] AS prev_nodes
   FROM nodes n
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
-  WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1);
+  WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1))
 
-  INSERT INTO changes (
-    changeset_id,
-    tstamp,
-    el_type,
-    el_id,
-    el_version,
-    el_action,
-    geom_changed,
-    tags_changed,
-    nodes_changed,
-    members_changed,
-    geom,
-    prev_geom,
-    tags,
-    prev_tags,
-    nodes,
-    prev_nodes)
     SELECT
       w.changeset_id,
       w.tstamp,
@@ -100,67 +98,22 @@ BEGIN
     FROM ways w
     LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
     WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1) AND
-      OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL);
+      OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL)
 
-  INSERT INTO changes (
-    changeset_id,
-    tstamp,
-    el_type,
-    el_id,
-    el_version,
-    el_action,
-    geom_changed,
-    tags_changed,
-    nodes_changed,
-    members_changed,
-    geom,
-    prev_geom,
-    tags,
-    prev_tags,
-    nodes,
-    prev_nodes)
+  UNION
+
   SELECT *
   FROM affected_nodes
-  WHERE tags != prev_tags;
+  WHERE tags != prev_tags
 
-  INSERT INTO changes (
-    changeset_id,
-    tstamp,
-    el_type,
-    el_id,
-    el_version,
-    el_action,
-    geom_changed,
-    tags_changed,
-    nodes_changed,
-    members_changed,
-    geom,
-    prev_geom,
-    tags,
-    prev_tags,
-    nodes,
-    prev_nodes)
+  UNION
+
   SELECT *
   FROM affected_nodes
-  WHERE (tags - ARRAY['created_by', 'source']) != ''::hstore OR (prev_tags - ARRAY['created_by', 'source']) != ''::hstore;
+  WHERE (tags - ARRAY['created_by', 'source']) != ''::hstore OR (prev_tags - ARRAY['created_by', 'source']) != ''::hstore
 
-  INSERT INTO changes (
-    changeset_id,
-    tstamp,
-    el_type,
-    el_id,
-    el_version,
-    el_action,
-    geom_changed,
-    tags_changed,
-    nodes_changed,
-    members_changed,
-    geom,
-    prev_geom,
-    tags,
-    prev_tags,
-    nodes,
-    prev_nodes)
+  UNION
+
   SELECT
       w.changeset_id,
       w.tstamp,
@@ -183,8 +136,7 @@ BEGIN
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags) AND
     w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes) AND w.changeset_id != $1 AND
     OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL);
-END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE sql;
 
 --
 -- OWL_UpdateChangeset
