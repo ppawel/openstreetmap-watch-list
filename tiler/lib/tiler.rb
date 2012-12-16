@@ -18,8 +18,9 @@ class Tiler
   # Generates tiles for given zoom and changeset.
   #
   def generate(zoom, changeset_id, options = {})
-    setup_changeset_data(changeset_id)
     tile_count = -1
+    #@conn.exec("DELETE FROM changes WHERE changeset_id = #{changeset_id}")
+    @conn.exec("SELECT OWL_GenerateChanges(#{changeset_id})")
     @conn.transaction do |c|
       tile_count = do_generate(zoom, changeset_id, options)
     end
@@ -54,7 +55,7 @@ class Tiler
   # duplicate primary key error during insert.
   #
   def clear_tiles(changeset_id, zoom)
-    @conn.exec("DELETE FROM changes WHERE changeset_id = #{changeset_id}")
+    #@conn.exec("DELETE FROM changes WHERE changeset_id = #{changeset_id}")
     count = @conn.exec("DELETE FROM tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
     @@log.debug "Removed existing tiles: #{count}"
     count
@@ -69,18 +70,18 @@ class Tiler
     @conn.exec('TRUNCATE _way_geom')
     @conn.exec('TRUNCATE _tile_bboxes')
 
-    while row = next_changeset_row do
-      if row['type'] == 'N'
-        ways = get_affected_ways(row)
-        for way in ways
-          process_way(changeset_id, way, zoom, options)
-          remove_changeset_row(way)
-        end
-        process_node(changeset_id, row, zoom)
-      elsif row['type'] == 'W'
-        process_way(changeset_id, row, zoom, options)
+    for change in @conn.exec("SELECT id, el_type, tstamp, geom, prev_geom,
+          CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
+          CASE WHEN el_type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
+          CASE WHEN el_type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
+          CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
+          Box2D(ST_Collect(prev_geom, geom)) AS both_bbox
+        FROM changes WHERE changeset_id = #{changeset_id}").to_a
+      if change['el_type'] == 'N'
+        create_node_tiles(changeset_id, change, change['id'].to_i, zoom)
+      elsif change['el_type'] == 'W'
+        create_way_tiles(changeset_id, change, change['id'].to_i, zoom, options)
       end
-      remove_changeset_row(row)
     end
 
     count = @conn.exec("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
@@ -97,13 +98,6 @@ class Tiler
     end
 
     count
-  end
-
-  def process_node(changeset_id, node, zoom)
-    @@log.debug "Node #{node['id']} (#{node['version']})"
-    change_id = create_node_change(changeset_id, node, zoom)
-    @@log.debug "  change_id = #{change_id}"
-    create_node_tiles(changeset_id, node, change_id, zoom) unless change_id.nil?
   end
 
   def create_node_tiles(changeset_id, node, change_id, zoom)
@@ -129,18 +123,12 @@ class Tiler
     end
   end
 
-  def process_way(changeset_id, way, zoom, options)
-    @@log.debug "Way #{way['id']} (#{way['version']})"
-    change_id = create_way_change(changeset_id, way)
-    @@log.debug "  change_id = #{change_id}"
-    create_way_tiles(changeset_id, way, change_id, zoom, options) unless change_id.nil?
-  end
-
   def create_way_tiles(changeset_id, way, change_id, zoom, options)
     @conn.exec('TRUNCATE _tile_bboxes')
     @conn.exec('TRUNCATE _way_geom')
-
+#SELECT geom, prev_geom, tstamp FROM changes WHERE id = #{change_id}")
     @conn.exec("INSERT INTO _way_geom (geom, prev_geom, tstamp)
+
       VALUES ('#{way['geom']}', #{way['prev_geom'] ? "'#{way['prev_geom']}'" : 'NULL'}, '#{way['tstamp']}')")
 
     tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
@@ -171,67 +159,6 @@ class Tiler
     @@log.debug "  Created #{count} tile(s)"
   end
 
-  def create_node_change(changeset_id, node, zoom)
-    change = prepare_change(changeset_id, node)
-    insert_change(change)
-  end
-
-  def create_way_change(changeset_id, way)
-    change = prepare_change(changeset_id, way)
-    insert_change(change)
-  end
-
-  def prepare_change(changeset_id, row)
-    change = {'changeset_id' => changeset_id}
-    change['tstamp'] = row['tstamp']
-    change['el_type'] = row['type']
-    change['el_id'] = row['id']
-    change['el_version'] = row['version']
-    change['el_action'] = determine_action(row)
-    change['geom_changed'] = row['geom_changed']
-    change['tags_changed'] = row['tags'] != row['prev_tags']
-    change['nodes_changed'] = row['nodes'] != row['prev_nodes']
-    change['members_changed'] = row['members_changed']
-    change['tags'] = row['tags']
-    change['prev_tags'] = row['prev_tags'] if change['tags_changed']
-    change['nodes'] = row['nodes']
-    change['prev_nodes'] = row['prev_nodes'] if change['nodes_changed']
-    change
-  end
-
-  def determine_action(row)
-    if row['version'].to_i == 1
-      return 'CREATE'
-    elsif row['visible'] == 't'
-      return 'MODIFY'
-    elsif row['visible'] == 'f'
-      return 'DELETE'
-    end
-  end
-
-  def insert_change(change)
-    @conn.exec_prepared('insert_change', [
-      change['changeset_id'],
-      change['tstamp'],
-      change['el_type'],
-      change['el_id'],
-      change['el_version'],
-      change['el_action'],
-      change['geom_changed'],
-      change['tags_changed'],
-      change['nodes_changed'],
-      change['members_changed'],
-      change['tags'],
-      change['prev_tags'],
-      change['nodes'],
-      change['prev_nodes'],
-      change['origin_el_type'],
-      change['origin_el_id'],
-      change['origin_el_version'],
-      change['origin_el_action']])
-    @conn.exec("SELECT currval('changes_id_seq')").getvalue(0, 0).to_i
-  end
-
   def reduce_tiles(tiles, changeset_id, change, zoom)
     for source_zoom in [4, 6, 8, 10, 11, 12, 13, 14]
       for tile in bbox_to_tiles(source_zoom, box2d_to_bbox(change["both_bbox"]))
@@ -246,36 +173,6 @@ class Tiler
     end
   end
 
-  def next_changeset_row
-    @changeset_data[@changeset_data.keys[0]]
-  end
-
-  def remove_changeset_row(row)
-    @changeset_data.delete([row['type'], row['id'], row['version']])
-  end
-
-  def get_affected_ways(node)
-    @changeset_data.values.select do |row|
-      row['changeset_nodes'].include?(node['id']) if row['changeset_nodes']
-    end
-  end
-
-  def setup_changeset_data(changeset_id)
-    #@conn.exec("INSERT INTO _changeset_data SELECT * FROM OWL_GetChangesetData(#{changeset_id})")
-    @changeset_data = Hash[@conn.exec("SELECT type, id, tstamp, version, visible, changeset_nodes,
-        CASE WHEN type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
-        CASE WHEN type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
-        CASE WHEN type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
-        CASE WHEN type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
-        Box2D(ST_Collect(prev_geom, geom)) AS both_bbox,
-        NOT geom = prev_geom OR prev_geom IS NULL AS geom_changed,
-        tags, prev_tags, nodes, prev_nodes, geom, prev_geom
-      FROM OWL_GetChangesetData(#{changeset_id})
-      ORDER BY type, id, version").to_a.collect do |row|
-      [[row['type'], row['id'], row['version']], row]
-    end]
-  end
-
   def prepare_db
     @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, prev_geom geometry, tstamp timestamp without time zone)')
 
@@ -283,26 +180,6 @@ class Tiler
 
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
       x int, y int, zoom int, geom geometry, prev_geom geometry, change_id bigint NOT NULL)')
-
-    @conn.prepare('insert_change', 'INSERT INTO changes (
-      changeset_id,
-      tstamp,
-      el_type,
-      el_id,
-      el_version,
-      el_action,
-      geom_changed,
-      tags_changed,
-      nodes_changed,
-      members_changed,
-      tags,
-      prev_tags,
-      nodes,
-      prev_nodes,
-      origin_el_type,
-      origin_el_id,
-      origin_el_version,
-      origin_el_action) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)')
   end
 end
 

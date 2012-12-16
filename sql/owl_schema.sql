@@ -49,6 +49,8 @@ CREATE TABLE changes (
   tags_changed boolean NOT NULL,
   nodes_changed boolean,
   members_changed boolean,
+  geom geometry(GEOMETRY, 4326),
+  prev_geom geometry(GEOMETRY, 4326),
   tags hstore NOT NULL,
   prev_tags hstore,
   nodes bigint[],

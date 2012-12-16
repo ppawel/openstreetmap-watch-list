@@ -1,5 +1,5 @@
 ﻿DROP FUNCTION IF EXISTS OWL_MakeLine(bigint[], timestamp without time zone);
-DROP FUNCTION IF EXISTS OWL_GetChangesetData(int);
+DROP FUNCTION IF EXISTS OWL_GenerateChanges(int);
 DROP FUNCTION IF EXISTS OWL_UpdateChangeset(bigint);
 DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
 
@@ -35,99 +35,156 @@ END;
 $$ LANGUAGE plpgsql;
 
 --
--- OWL_GetChangesetData
+-- OWL_GenerateChanges
 --
-CREATE FUNCTION OWL_GetChangesetData(int) RETURNS
-  TABLE(
-    type varchar(2),
-    id bigint,
-    version int,
-    tstamp timestamp without time zone,
-    visible boolean,
-    tags hstore,
-    geom geometry,
-    nodes bigint[],
-    prev_version int,
-    prev_tags hstore,
-    prev_geom geometry,
-    prev_nodes bigint[],
-    changeset_nodes bigint[]) AS $$
+CREATE FUNCTION OWL_GenerateChanges(int) RETURNS void AS $$
+DECLARE
 
-  WITH affected_nodes AS (
+BEGIN
+  CREATE TEMPORARY TABLE affected_nodes ON COMMIT DROP AS
   SELECT
-    'N'::text AS type,
-    n.id,
-    n.version,
-    n.tstamp,
-    n.visible,
-    n.tags,
-    n.geom,
-    NULL::bigint[] AS nodes,
-    prev.version AS prev_version,
-    prev.tags AS prev_tags,
-    prev.geom AS prev_geom,
-    NULL::bigint[] AS prev_nodes,
-    NULL::bigint[] AS changeset_nodes
+      n.changeset_id,
+      n.tstamp,
+      'N'::element_type AS type,
+      n.id,
+      n.version,
+      'MODIFY'::action AS el_type,
+      (NOT n.geom = prev.geom) OR n.version = 1 AS geom_changed,
+      n.tags != prev.tags OR n.version = 1 AS tags_changed,
+      NULL::boolean AS nodes_changed,
+      NULL::boolean AS members_changed,
+      n.geom AS geom,
+      prev.geom AS prev_geom,
+      n.tags,
+      prev.tags AS prev_tags,
+      NULL::bigint[] AS nodes,
+      NULL::bigint[] AS prev_nodes
   FROM nodes n
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
-  WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1)
-  )
-SELECT DISTINCT ON (type, id, version) * FROM
-(
+  WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1);
+
+  INSERT INTO changes (
+    changeset_id,
+    tstamp,
+    el_type,
+    el_id,
+    el_version,
+    el_action,
+    geom_changed,
+    tags_changed,
+    nodes_changed,
+    members_changed,
+    geom,
+    prev_geom,
+    tags,
+    prev_tags,
+    nodes,
+    prev_nodes)
+    SELECT
+      w.changeset_id,
+      w.tstamp,
+      'W'::element_type AS type,
+      w.id,
+      w.version,
+      'MODIFY'::action,
+      (NOT OWL_MakeLine(w.nodes, NULL) = OWL_MakeLine(prev.nodes, prev.tstamp)) OR w.version = 1,
+      w.tags != prev.tags OR w.version = 1,
+      w.nodes != prev.nodes OR w.version = 1,
+      NULL,
+      OWL_MakeLine(w.nodes, NULL),
+      OWL_MakeLine(prev.nodes, prev.tstamp),
+      w.tags,
+      prev.tags,
+      w.nodes,
+      prev.nodes
+    FROM ways w
+    LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
+    WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1) AND
+      OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL);
+
+  INSERT INTO changes (
+    changeset_id,
+    tstamp,
+    el_type,
+    el_id,
+    el_version,
+    el_action,
+    geom_changed,
+    tags_changed,
+    nodes_changed,
+    members_changed,
+    geom,
+    prev_geom,
+    tags,
+    prev_tags,
+    nodes,
+    prev_nodes)
+  SELECT *
+  FROM affected_nodes
+  WHERE tags != prev_tags;
+
+  INSERT INTO changes (
+    changeset_id,
+    tstamp,
+    el_type,
+    el_id,
+    el_version,
+    el_action,
+    geom_changed,
+    tags_changed,
+    nodes_changed,
+    members_changed,
+    geom,
+    prev_geom,
+    tags,
+    prev_tags,
+    nodes,
+    prev_nodes)
+  SELECT *
+  FROM affected_nodes
+  WHERE (tags - ARRAY['created_by', 'source']) != ''::hstore OR (prev_tags - ARRAY['created_by', 'source']) != ''::hstore;
+
+  INSERT INTO changes (
+    changeset_id,
+    tstamp,
+    el_type,
+    el_id,
+    el_version,
+    el_action,
+    geom_changed,
+    tags_changed,
+    nodes_changed,
+    members_changed,
+    geom,
+    prev_geom,
+    tags,
+    prev_tags,
+    nodes,
+    prev_nodes)
   SELECT
-    'W' AS type,
-    w.id,
-    w.version,
-    w.tstamp,
-    w.visible,
-    w.tags,
-    OWL_MakeLine(w.nodes, NULL),
-    w.nodes,
-    prev.version AS prev_version,
-    prev.tags AS prev_tags,
-    OWL_MakeLine(prev.nodes, prev.tstamp) AS prev_geom,
-    prev.nodes AS prev_nodes,
-    (SELECT array_agg(id) FROM (SELECT id FROM affected_nodes an WHERE an.tags = an.prev_tags INTERSECT SELECT unnest(w.nodes)) x) AS changeset_nodes
+      w.changeset_id,
+      w.tstamp,
+      'W'::element_type AS type,
+      w.id,
+      w.version,
+      'MODIFY'::action,
+      (NOT OWL_MakeLine(w.nodes, NULL) = OWL_MakeLine(prev.nodes, prev.tstamp)) OR w.version = 1,
+      w.tags != prev.tags OR w.version = 1,
+      w.nodes != prev.nodes OR w.version = 1,
+      NULL,
+      OWL_MakeLine(w.nodes, NULL),
+      OWL_MakeLine(prev.nodes, prev.tstamp),
+      w.tags,
+      prev.tags,
+      w.nodes,
+      prev.nodes
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags) AND
     w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes) AND w.changeset_id != $1 AND
-    OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL)
-
-  UNION
-
-  SELECT *
-  FROM affected_nodes
-  WHERE tags != prev_tags
-
-  UNION
-
-  SELECT *
-  FROM affected_nodes
-  WHERE (tags - ARRAY['created_by', 'source']) != ''::hstore OR (prev_tags - ARRAY['created_by', 'source']) != ''::hstore
-
-  UNION
-
-  SELECT
-    'W' AS type,
-    w.id,
-    w.version,
-    w.tstamp,
-    w.visible,
-    w.tags,
-    OWL_MakeLine(w.nodes, NULL),
-    w.nodes,
-    prev.version AS prev_version,
-    prev.tags AS prev_tags,
-    OWL_MakeLine(prev.nodes, prev.tstamp),
-    prev.nodes AS prev_nodes,
-    NULL::bigint[] AS changeset_nodes
-  FROM ways w
-  LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
-  WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1) AND
-    OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL)
-) x
-$$ LANGUAGE sql;
+    OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL);
+END;
+$$ LANGUAGE plpgsql;
 
 --
 -- OWL_UpdateChangeset
