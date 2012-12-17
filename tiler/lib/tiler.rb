@@ -18,36 +18,12 @@ class Tiler
   # Generates tiles for given zoom and changeset.
   #
   def generate(zoom, changeset_id, options = {})
-    tile_count = -1
-    #@conn.exec("DELETE FROM changes WHERE changeset_id = #{changeset_id}")
-    @conn.exec("SELECT OWL_GenerateChanges(#{changeset_id})")
+    tile_count = nil
     @conn.transaction do |c|
+      generate_changes(changeset_id) if options[:changes]
       tile_count = do_generate(zoom, changeset_id, options)
     end
     tile_count
-  end
-
-  ##
-  # Retrieves a list of changeset ids according to given options. If --retile option is NOT specified then
-  # changesets that already have tiles in the database are skipped.
-  #
-  def get_changeset_ids(options)
-    if options[:changesets] == ['all']
-      # Select changesets with geometry (bbox not null).
-      sql = "SELECT id FROM changesets cs WHERE bbox IS NOT NULL"
-
-      unless options[:retile]
-        # We are NOT retiling so skip changesets that have been already tiled.
-        sql += " AND NOT EXISTS (SELECT 1 FROM tiles WHERE changeset_id = cs.id)"
-      end
-
-      sql += " ORDER BY id LIMIT 1000"
-
-      @conn.exec(sql).collect {|row| row['id'].to_i}
-    else
-      # List of changeset ids must have been provided.
-      options[:changesets]
-    end
   end
 
   ##
@@ -173,11 +149,17 @@ class Tiler
     end
   end
 
+  def generate_changes(changeset_id)
+    @conn.exec("DELETE FROM changes WHERE changeset_id = #{changeset_id}")
+    @conn.exec("INSERT INTO changes
+      (changeset_id, tstamp, el_type, el_id, el_version, el_action, geom_changed, tags_changed, nodes_changed,
+        members_changed, geom, prev_geom, tags, prev_tags, nodes, prev_nodes)
+      SELECT * FROM OWL_GenerateChanges(#{changeset_id})")
+  end
+
   def prepare_db
     @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, prev_geom geometry, tstamp timestamp without time zone)')
-
     @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry)')
-
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
       x int, y int, zoom int, geom geometry, prev_geom geometry, change_id bigint NOT NULL)')
   end
