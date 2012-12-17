@@ -114,8 +114,7 @@ class ApiControllerTest < ActionController::TestCase
 
   def load_changeset(changeset_id)
     system('psql -a -d owl_test -c "\copy changesets from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-changeset.csv"')
-    system('psql -a -d owl_test -c "\copy changes (changeset_id, tstamp, el_type, el_id, el_version, el_action, geom_changed, tags_changed, nodes_changed,
-        members_changed, geom, prev_geom, tags, prev_tags, nodes, prev_nodes) from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-changes.csv"')
+    system('psql -a -d owl_test -c "\copy changes from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-changes.csv"')
     system('psql -a -d owl_test -c "\copy tiles from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-tiles.csv"')
   end
 

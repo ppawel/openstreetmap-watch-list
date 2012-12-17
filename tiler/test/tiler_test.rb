@@ -63,18 +63,11 @@ class TilerTest < Test::Unit::TestCase
     setup_db
     load_changeset(id)
     verify_changeset_data
-    @tiler.generate(16, id, prepare_options)
+    @tiler.generate(16, id, {:retile => true})
     @changes = get_changes
     @changes_h = Hash[@changes.collect {|row| [row['id'].to_i, row]}]
     @tiles = get_tiles
     verify_tiles
-  end
-
-  def prepare_options
-    options = {}
-    options[:changesets] ||= ['all']
-    options[:retile] = true
-    options
   end
 
   def setup_db
@@ -92,8 +85,7 @@ class TilerTest < Test::Unit::TestCase
   end
 
   def load_changeset(id)
-    @conn.exec("COPY changes (changeset_id, tstamp, el_type, el_id, el_version, el_action, geom_changed, tags_changed, nodes_changed,
-        members_changed, geom, prev_geom, tags, prev_tags, nodes, prev_nodes) FROM STDIN;")
+    @conn.exec("COPY changes FROM STDIN;")
     File.open("../../testdata/#{id}-changes.csv").read.each_line do |line|
       @conn.put_copy_data(line)
     end

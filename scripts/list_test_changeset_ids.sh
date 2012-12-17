@@ -1,1 +1,1 @@
-ls -1 ../tiler/test/data | grep -o '[0-9]\+'
+ls -1 ../testdata | grep -o '[0-9]\+'
