@@ -1,5 +1,5 @@
 ﻿DROP FUNCTION IF EXISTS OWL_MakeLine(bigint[], timestamp without time zone);
-DROP FUNCTION IF EXISTS OWL_GenerateChanges(int);
+DROP FUNCTION IF EXISTS OWL_GenerateChanges(bigint);
 DROP FUNCTION IF EXISTS OWL_UpdateChangeset(bigint);
 DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
 
@@ -37,7 +37,7 @@ $$ LANGUAGE plpgsql;
 --
 -- OWL_GenerateChanges
 --
-CREATE FUNCTION OWL_GenerateChanges(int) RETURNS TABLE (
+CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   changeset_id bigint,
   tstamp timestamp without time zone,
   el_type element_type,
@@ -58,12 +58,16 @@ CREATE FUNCTION OWL_GenerateChanges(int) RETURNS TABLE (
 
   WITH affected_nodes AS (
   SELECT
-      n.changeset_id,
+      $1,
       n.tstamp,
       'N'::element_type AS type,
       n.id,
       n.version,
-      'MODIFY'::action AS el_type,
+      CASE
+        WHEN n.version = 1 THEN 'CREATE'::action
+        WHEN n.version > 0 AND n.visible THEN 'MODIFY'::action
+        WHEN NOT n.visible THEN 'DELETE'::action
+      END AS el_type,
       (NOT n.geom = prev.geom) OR n.version = 1 AS geom_changed,
       n.tags != prev.tags OR n.version = 1 AS tags_changed,
       NULL::boolean AS nodes_changed,
@@ -79,12 +83,16 @@ CREATE FUNCTION OWL_GenerateChanges(int) RETURNS TABLE (
   WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1))
 
     SELECT
-      w.changeset_id,
+      $1,
       w.tstamp,
       'W'::element_type AS type,
       w.id,
       w.version,
-      'MODIFY'::action,
+      CASE
+        WHEN w.version = 1 THEN 'CREATE'::action
+        WHEN w.version > 0 AND w.visible THEN 'MODIFY'::action
+        WHEN NOT w.visible THEN 'DELETE'::action
+      END AS el_type,
       (NOT OWL_MakeLine(w.nodes, NULL) = OWL_MakeLine(prev.nodes, prev.tstamp)) OR w.version = 1,
       w.tags != prev.tags OR w.version = 1,
       w.nodes != prev.nodes OR w.version = 1,
@@ -115,7 +123,7 @@ CREATE FUNCTION OWL_GenerateChanges(int) RETURNS TABLE (
   UNION
 
   SELECT
-      w.changeset_id,
+      $1,
       w.tstamp,
       'W'::element_type AS type,
       w.id,
