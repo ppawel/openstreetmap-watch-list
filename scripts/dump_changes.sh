@@ -1,10 +1,10 @@
 #!/bin/bash
 
-CHANGESET_ID=$1
-PSQL_OPTIONS=$2
+PSQL_OPTIONS=$1
+CHANGESET_ID=$2
 
 if [ "$CHANGESET_ID" = "" ]; then
-  echo "Usage: dump_changes.sh <changeset_id> [psql_options]"
+  echo "Usage: dump_changes.sh <psql_options> <changeset_id>"
   exit 1
 fi
 
