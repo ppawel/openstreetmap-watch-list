@@ -11,3 +11,6 @@ CREATE INDEX idx_relations_changeset_id ON relations USING btree (changeset_id);
 
 -- Used for selecting nodes (by id) for a specific way when constructing way geometry.
 CREATE INDEX idx_nodes_node_id ON nodes USING btree (id);
+
+-- Used by the tiler for selecting changes to be tiled for given changeset id..
+CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
