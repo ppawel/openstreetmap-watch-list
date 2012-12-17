@@ -94,7 +94,7 @@ class TilerTest < Test::Unit::TestCase
   def load_changeset(id)
     @conn.exec("COPY changes (changeset_id, tstamp, el_type, el_id, el_version, el_action, geom_changed, tags_changed, nodes_changed,
         members_changed, geom, prev_geom, tags, prev_tags, nodes, prev_nodes) FROM STDIN;")
-    File.open("data/#{id}-changes.csv").read.each_line do |line|
+    File.open("../../testdata/#{id}-changes.csv").read.each_line do |line|
       @conn.put_copy_data(line)
     end
     @conn.put_copy_end
