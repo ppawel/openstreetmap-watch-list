@@ -153,14 +153,14 @@ private
     for changeset in changesets
       changeset_geojson = {
         "type" => "FeatureCollection",
-        "properties" => changeset.generate_json(:include_changes => false),
+        "properties" => changeset.generate_json,
         "features" => []
       }
       changeset.changes.each_with_index do |change, index|
         feature = {
           "type" => "Feature",
-          "id" => "#{changeset.id}_#{x}_#{y}_#{zoom}}",
-          "properties" => change.as_json
+          "id" => "#{changeset.id}_#{change.id}",
+          "properties" => {'changeset_id' => changeset.id, 'change_id' => change.id}
         }
         feature['geometry'] = JSON[changeset.geojson[index]]
         changeset_geojson['features'] << feature
