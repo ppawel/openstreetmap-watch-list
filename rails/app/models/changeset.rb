@@ -11,7 +11,8 @@ class Changeset
   attr_accessor :change_ids
   attr_accessor :bboxes
   attr_accessor :changes
-  attr_accessor :geojson
+  attr_accessor :geom_geojson
+  attr_accessor :prev_geom_geojson
 
   def initialize(hash)
     @id = hash['id'].to_i
@@ -23,7 +24,8 @@ class Changeset
     @tags = eval("{#{hash['tags']}}")
     @change_ids = pg_string_to_array(hash['change_ids']).map(&:to_i) if hash['change_ids']
     @bboxes = box2d_to_bbox(hash['bboxes']) if hash['bboxes']
-    @geojson = pg_string_to_array(hash['geojson']) if hash['geojson']
+    @geom_geojson = pg_string_to_array(hash['geom_geojson']) if hash['geom_geojson']
+    @prev_geom_geojson = pg_string_to_array(hash['prev_geom_geojson']) if hash['prev_geom_geojson']
   end
 
   def generate_json(options = {:include_changes => true})

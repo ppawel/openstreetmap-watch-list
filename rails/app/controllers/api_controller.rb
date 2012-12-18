@@ -50,7 +50,8 @@ private
     @x, @y, @zoom = get_xyz(params)
     changesets = ActiveRecord::Base.connection.select_all("
       SELECT cs.*,
-        #{format == 'geojson' ? '(SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g) AS geojson,' : ''}
+        #{format == 'geojson' ? '(SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g) AS geom_geojson,' : ''}
+        #{format == 'geojson' ? '(SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.prev_geom) AS g) AS prev_geom_geojson,' : ''}
         (SELECT ST_Extent(g) FROM unnest(t.geom) AS g)::text AS bboxes,
         cs.bbox::box2d::text AS total_bbox,
         (SELECT array_agg(g) FROM unnest(t.changes) AS g) AS change_ids
@@ -58,7 +59,7 @@ private
       INNER JOIN changesets cs ON (cs.id = t.changeset_id)
       WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
       #{get_timelimit_sql(params)}
-      GROUP BY cs.id, t.geom, t.changes
+      GROUP BY cs.id, t.geom, t.prev_geom, t.changes
       ORDER BY cs.created_at DESC
       #{get_limit_sql(params)}").collect {|row| Changeset.new(row)}
     load_changes(changesets)
@@ -71,8 +72,8 @@ private
       SELECT
         changeset_id,
         MAX(tstamp) AS max_tstamp,
-        #{format == 'geojson' ? '(SELECT array_accum((SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g))) AS geojson,' : ''}
-        --array_accum((SELECT ST_Extent(x.geom) FROM (SELECT unnest(t.geom)::box2d AS geom) x)::text) AS bboxes,
+        #{format == 'geojson' ? '(SELECT array_accum((SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g))) AS geom_geojson,' : ''}
+        #{format == 'geojson' ? '(SELECT array_accum((SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.prev_geom) AS g))) AS prev_geom_geojson,' : ''}
         array_accum(((SELECT array_agg(x::box2d) FROM unnest(t.geom) x))) AS bboxes,
         cs.*,
         cs.bbox AS total_bbox,
@@ -158,11 +159,18 @@ private
       }
       changeset.changes.each_with_index do |change, index|
         feature = {
-          "type" => "Feature",
+          "type" => "FeatureCollection",
           "id" => "#{changeset.id}_#{change.id}",
-          "properties" => {'changeset_id' => changeset.id, 'change_id' => change.id}
+          "properties" => {'changeset_id' => changeset.id, 'change_id' => change.id},
+          "features" => [{
+              "type" => "Feature",
+              "geometry" => JSON[changeset.geom_geojson[index]]
+            }, {
+              "type" => "Feature",
+              "geometry" => changeset.prev_geom_geojson[index] ? JSON[changeset.prev_geom_geojson[index]] : nil
+            }
+          ]
         }
-        feature['geometry'] = JSON[changeset.geojson[index]]
         changeset_geojson['features'] << feature
       end
       geojson['features'] << changeset_geojson
