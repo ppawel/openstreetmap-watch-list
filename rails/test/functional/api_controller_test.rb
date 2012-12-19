@@ -66,6 +66,26 @@ class ApiControllerTest < ActionController::TestCase
     verify_geojson_12917265(json['features'][0])
   end
 
+  test "Retrieving a GeoJSON tile range (check geometry aggregation)" do
+    reset_db
+    load_changeset(12917265)
+    load_changeset(12456522)
+    load_changeset(13275351)
+    get(:changesets_tilerange_geojson, {:x1 => 36156, :y1 => 22257, :x2 => 36161, :y2 => 22259, :zoom => 16})
+    changesets = assigns['changesets']
+    assert_equal(2, changesets[0].geom_geojson.size)
+    verify_json_changesets(changesets)
+    assert_equal(1, changesets.size)
+    json = JSON[@response.body]
+    assert_equal(1, json['features'].size)
+    assert_equal(2, json['features'][0]['properties']['changes'].size)
+    assert_equal(2, json['features'][0]['features'].size)
+#    assert_equal(1, json['features'][0]['features'][0]['features'].size)
+    assert(@response.body.include?('49.882496'))
+    assert(@response.body.include?('49.885183600000005'))
+    assert(@response.body.include?('18.6273193359375'))
+  end
+
   # Does some generic checks.
   def verify_json_changesets(changesets)
     for changeset in changesets

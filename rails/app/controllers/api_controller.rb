@@ -72,12 +72,15 @@ private
       SELECT
         changeset_id,
         MAX(tstamp) AS max_tstamp,
-        #{format == 'geojson' ? '(SELECT array_accum((SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g))) AS geom_geojson,' : ''}
-        #{format == 'geojson' ? '(SELECT array_accum((SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.prev_geom) AS g))) AS prev_geom_geojson,' : ''}
+        #{format == 'geojson' ? 'OWL_JoinTileGeometriesByChange(array_accum(t.changes), array_accum(t.geom)) AS geom_geojson,' : ''}
+        #{format == 'geojson' ? 'OWL_JoinTileGeometriesByChange(array_accum(t.changes), array_accum(t.prev_geom)) AS prev_geom_geojson,' : ''}
+        --#{format == 'geojson' ? 'array_accum((SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g)) AS geom_geojson,' : ''}
+        --#{format == 'geojson' ? 'array_accum((SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.prev_geom) AS g)) AS prev_geom_geojson,' : ''}
         array_accum(((SELECT array_agg(x::box2d) FROM unnest(t.geom) x))) AS bboxes,
         cs.*,
         cs.bbox AS total_bbox,
-        array_accum(t.changes) AS change_ids
+        --array_accum(t.changes) AS change_ids
+        ARRAY(SELECT DISTINCT unnest FROM unnest(array_accum(t.changes)) ORDER by unnest) AS change_ids
       FROM tiles t
       INNER JOIN changesets cs ON (cs.id = t.changeset_id)
       WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}

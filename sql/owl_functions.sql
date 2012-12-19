@@ -1,4 +1,5 @@
 ﻿DROP FUNCTION IF EXISTS OWL_MakeLine(bigint[], timestamp without time zone);
+DROP FUNCTION IF EXISTS OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]);
 DROP FUNCTION IF EXISTS OWL_GenerateChanges(bigint);
 DROP FUNCTION IF EXISTS OWL_UpdateChangeset(bigint);
 DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
@@ -33,6 +34,19 @@ BEGIN
   RETURN way_geom;
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]) RETURNS text[] AS $$
+ SELECT array_agg(CASE WHEN c.g IS NOT NULL AND NOT ST_IsEmpty(c.g) AND ST_NumGeometries(c.g) > 0 THEN ST_AsGeoJSON(c.g) ELSE NULL END) FROM
+ (
+ SELECT ST_Union(y.geom) AS g, x.change_id
+ FROM
+   (SELECT row_number() OVER () AS seq, unnest AS change_id FROM unnest($1)) x
+   INNER JOIN
+   (SELECT row_number() OVER () AS seq, unnest AS geom FROM unnest($2)) y
+   ON (x.seq = y.seq)
+ GROUP BY x.change_id
+ ORDER BY x.change_id) c
+$$ LANGUAGE sql;
 
 --
 -- OWL_GenerateChanges
