@@ -157,21 +157,27 @@ private
         "properties" => changeset.generate_json,
         "features" => []
       }
-      changeset.changes.each_with_index do |change, index|
-        feature = {
+      changeset.change_ids.each_with_index do |change_id, index|
+        change = changeset.changes.find {|change| change.id == change_id}
+        change_feature = {
           "type" => "FeatureCollection",
           "id" => "#{changeset.id}_#{change.id}",
           "properties" => {'changeset_id' => changeset.id, 'change_id' => change.id},
-          "features" => [{
-              "type" => "Feature",
-              "geometry" => JSON[changeset.geom_geojson[index]]
-            }, {
-              "type" => "Feature",
-              "geometry" => changeset.prev_geom_geojson[index] ? JSON[changeset.prev_geom_geojson[index]] : nil
-            }
-          ]
+          "features" => []
         }
-        changeset_geojson['features'] << feature
+        if changeset.geom_geojson[index]
+          change_feature["features"] << {
+            "type" => "Feature", "geometry" => JSON[changeset.geom_geojson[index]],
+            "properties" => {"type" => "current"}
+          }
+        end
+        if changeset.prev_geom_geojson[index]
+          change_feature["features"] << {
+            "type" => "Feature", "geometry" => JSON[changeset.prev_geom_geojson[index]],
+            "properties" => {"type" => "prev"}
+          }
+        end
+        changeset_geojson['features'] << change_feature
       end
       geojson['features'] << changeset_geojson
     end
