@@ -137,6 +137,7 @@ private
     # Gather change ids from all changesets.
     change_ids = Set.new
     changesets.each {|changeset| change_ids.merge(changeset.change_ids)}
+    return if change_ids.empty?
 
     # Now load all the changes from the database with a single query.
     changes = {}
