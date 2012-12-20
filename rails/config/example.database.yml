@@ -1,8 +1,8 @@
 development:
-  adapter: postgis
+  adapter: postgresql
   database: owl
   username: postgres
-  password: 
+  password:
   pool: 5
 
 test:
