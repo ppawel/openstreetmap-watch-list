@@ -6,4 +6,3 @@ gem 'json'
 
 gem 'pg'
 gem 'activerecord-postgresql-adapter'
-gem 'activerecord-postgresql-extensions'
