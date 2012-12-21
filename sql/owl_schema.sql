@@ -111,7 +111,7 @@ CREATE TABLE relations (
 -- Create a table for representing relation member relationships.
 CREATE TABLE relation_members (
   relation_id bigint NOT NULL,
-  relation_version bigint NOT NULL,
+  version bigint NOT NULL,
   member_id bigint NOT NULL,
   member_type character(1) NOT NULL,
   member_role text NOT NULL,
