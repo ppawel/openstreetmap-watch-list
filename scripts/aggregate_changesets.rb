@@ -10,12 +10,15 @@ $config = YAML.load_file('../rails/config/database.yml')['development']
 @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
   :user => $config['username'], :password => $config['password'])
 
-changesets = @conn.query("SELECT id FROM changesets").to_a
+count = 0
 
-changesets.each_with_index do |row, index|
-  puts "#{Time.now} - Changeset #{row['id']} (#{index + 1} / #{changesets.size})"
-
-  (3..16).reverse_each do |i|
-    @conn.query("SELECT OWL_AggregateChangeset(#{row['id']}, #{i}, #{i - 1})")
+ARGF.each_line do |line|
+  changeset_id = line.to_i
+  next if changeset_id == 0
+  puts "Aggregating changeset #{changeset_id}... (#{count})"
+  @conn.transaction do |c|
+    (3..16).reverse_each do |i|
+      @conn.query("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
+    end
   end
 end

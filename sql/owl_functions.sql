@@ -203,8 +203,15 @@ BEGIN
   DELETE FROM tiles WHERE changeset_id = $1 AND zoom = $3;
 
   INSERT INTO tiles (changeset_id, tstamp, x, y, zoom, geom, prev_geom, changes)
-  SELECT $1, MAX(tstamp), x/subtiles_per_tile, y/subtiles_per_tile, $3,
-  ARRAY[]::geometry[], ARRAY[]::geometry[], ARRAY[]::bigint[]--ARRAY[((SELECT ST_Extent(unnest(geom))))::geometry]
+  SELECT
+	$1,
+	MAX(tstamp),
+	x/subtiles_per_tile,
+	y/subtiles_per_tile,
+	$3,
+	array_accum(geom),
+	array_accum(prev_geom),
+	array_accum(changes)
   FROM tiles
   WHERE changeset_id = $1 AND zoom = $2
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
