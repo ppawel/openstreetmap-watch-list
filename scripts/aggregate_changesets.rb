@@ -15,7 +15,8 @@ count = 0
 ARGF.each_line do |line|
   changeset_id = line.to_i
   next if changeset_id == 0
-  puts "Aggregating changeset #{changeset_id}... (#{count})"
+  count += 1
+  puts "#{Time.now} Aggregating changeset #{changeset_id}... (#{count})"
   @conn.transaction do |c|
     (3..16).reverse_each do |i|
       @conn.query("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
