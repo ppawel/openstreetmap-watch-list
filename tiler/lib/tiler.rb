@@ -46,7 +46,7 @@ class Tiler
     @conn.exec('TRUNCATE _way_geom')
     @conn.exec('TRUNCATE _tile_bboxes')
 
-    for change in @conn.exec("SELECT id, el_type, tstamp, geom, prev_geom,
+    for change in @conn.exec("SELECT id, el_id, el_version, el_type, tstamp, geom, prev_geom,
           CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
           CASE WHEN el_type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
           CASE WHEN el_type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
@@ -54,8 +54,10 @@ class Tiler
           Box2D(ST_Collect(prev_geom, geom)) AS both_bbox
         FROM changes WHERE changeset_id = #{changeset_id}").to_a
       if change['el_type'] == 'N'
+        @@log.debug "Node #{change['el_id']} (#{change['el_version']})"
         create_node_tiles(changeset_id, change, change['id'].to_i, zoom)
       elsif change['el_type'] == 'W'
+        @@log.debug "Way #{change['el_id']} (#{change['el_version']})"
         create_way_tiles(changeset_id, change, change['id'].to_i, zoom, options)
       end
     end
@@ -107,16 +109,16 @@ class Tiler
 
       VALUES ('#{way['geom']}', #{way['prev_geom'] ? "'#{way['prev_geom']}'" : 'NULL'}, '#{way['tstamp']}')")
 
-    tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
+    tiles = Set.new#bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
 
     @@log.debug "  Processing #{tiles.size} tile(s)..."
 
     # Does not make sense to try to reduce small ways.
-    if tiles.size > 16
+    #if tiles.size > 16
       size_before = tiles.size
       reduce_tiles(tiles, changeset_id, way, zoom)
       @@log.debug "  Reduced tiles: #{size_before} -> #{tiles.size}"
-    end
+    #end
 
     for tile in tiles
       x, y = tile[0], tile[1]
@@ -144,7 +146,7 @@ class Tiler
         intersects = @conn.exec("
           SELECT ST_Intersects(ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326), geom)
           FROM _way_geom").getvalue(0, 0) == 't'
-        tiles.subtract(subtiles(tile, source_zoom, zoom)) if !intersects
+        tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects and source_zoom == 14
       end
     end
   end
