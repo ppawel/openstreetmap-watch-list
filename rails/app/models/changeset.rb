@@ -40,7 +40,7 @@ class Changeset
       #"bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
       "bboxes" => bboxes
     }
-    result['changes'] = changes if options[:include_changes]
+    result['changes'] = changes || [] if options[:include_changes]
     result
   end
 
