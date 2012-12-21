@@ -104,24 +104,22 @@ class Tiler
   def create_way_tiles(changeset_id, way, change_id, zoom, options)
     @conn.exec('TRUNCATE _tile_bboxes')
     @conn.exec('TRUNCATE _way_geom')
-#SELECT geom, prev_geom, tstamp FROM changes WHERE id = #{change_id}")
-    @conn.exec("INSERT INTO _way_geom (geom, prev_geom, tstamp)
 
+    @conn.exec("INSERT INTO _way_geom (geom, prev_geom, tstamp)
       VALUES ('#{way['geom']}', #{way['prev_geom'] ? "'#{way['prev_geom']}'" : 'NULL'}, '#{way['tstamp']}')")
 
-    tiles = Set.new#bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
     tile_count = bbox_tile_count(zoom, box2d_to_bbox(way["both_bbox"]))
 
-    @@log.debug "  Processing #{tiles.size} tile(s)... (#{tile_count})"
+    @@log.debug "  tile_count = #{tile_count}"
 
     # Does not make sense to try to reduce small ways.
     if tile_count < 64
       tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
     else
-      size_before = tiles.size
-      reduce_tiles(tiles, changeset_id, way, zoom)
-      @@log.debug "  Reduced tiles: #{size_before} -> #{tiles.size}"
+      tiles = reduce_tiles(changeset_id, way, zoom)
     end
+
+    @@log.debug "  Processing #{tiles.size} tile(s)..."
 
     for tile in tiles
       x, y = tile[0], tile[1]
@@ -140,8 +138,9 @@ class Tiler
     @@log.debug "  Created #{count} tile(s)"
   end
 
-  def reduce_tiles(tiles, changeset_id, change, zoom)
-    for source_zoom in [4, 6, 8, 10, 11, 12, 13, 14]
+  def reduce_tiles(changeset_id, change, zoom)
+    tiles = Set.new
+    for source_zoom in [14]
       for tile in bbox_to_tiles(source_zoom, box2d_to_bbox(change["both_bbox"]))
         x, y = tile[0], tile[1]
         lat1, lon1 = tile2latlon(x, y, source_zoom)
@@ -152,6 +151,7 @@ class Tiler
         tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects and source_zoom == 14
       end
     end
+    tiles
   end
 
   def generate_changes(changeset_id)
