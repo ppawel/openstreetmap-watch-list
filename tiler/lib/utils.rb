@@ -50,6 +50,15 @@ def bbox_to_tiles(zoom, bbox)
   tiles
 end
 
+def bbox_tile_count(zoom, bbox)
+  tiles = Set.new
+  top_left = latlon2tile(bbox[1], bbox[0], zoom)
+  bottom_right = latlon2tile(bbox[3], bbox[2], zoom)
+  min_y = [top_left[1], bottom_right[1]].min
+  max_y = [top_left[1], bottom_right[1]].max
+  (bottom_right[0] - top_left[0] + 1) * (max_y - min_y + 1)
+end
+
 def subtiles(tile, source_zoom, target_zoom)
   tiles = Set.new
   subtiles_per_tile = 2**target_zoom / 2**source_zoom

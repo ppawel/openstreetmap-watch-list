@@ -110,15 +110,18 @@ class Tiler
       VALUES ('#{way['geom']}', #{way['prev_geom'] ? "'#{way['prev_geom']}'" : 'NULL'}, '#{way['tstamp']}')")
 
     tiles = Set.new#bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
+    tile_count = bbox_tile_count(zoom, box2d_to_bbox(way["both_bbox"]))
 
-    @@log.debug "  Processing #{tiles.size} tile(s)..."
+    @@log.debug "  Processing #{tiles.size} tile(s)... (#{tile_count})"
 
     # Does not make sense to try to reduce small ways.
-    #if tiles.size > 16
+    if tile_count < 64
+      tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
+    else
       size_before = tiles.size
       reduce_tiles(tiles, changeset_id, way, zoom)
       @@log.debug "  Reduced tiles: #{size_before} -> #{tiles.size}"
-    #end
+    end
 
     for tile in tiles
       x, y = tile[0], tile[1]
