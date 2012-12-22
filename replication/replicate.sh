@@ -11,5 +11,5 @@ set -e
 (
   # Try to lock on the lock file (fd 200)
   flock -x -n 200
-  osmosis --rri --lpc --write-owldb-change authFile=~/authFile invalidActionsMode=LOG &>> ~/replication.log
+  osmosis --rri --lpc --write-owldb-change authFile=~/authFile invalidActionsMode=LOG
 ) 200>/home/ppawel/replication/lock
