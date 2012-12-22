@@ -47,7 +47,6 @@ for id in (current_state['sequence'].to_i + 1..remote_state['sequence'].to_i)
         next if f.size == 0
         gz = Zlib::GzipReader.new(f)
         text = gz.read
-        puts text
         xml = Nokogiri::XML(text)
         xml.root.children.each do |changeset_el|
           next unless changeset_el.element?
@@ -55,11 +54,6 @@ for id in (current_state['sequence'].to_i + 1..remote_state['sequence'].to_i)
           print "Processing changeset #{changeset_id}... "
           count = update_changeset(changeset_el)
           puts "#{count}, open = #{changeset_el['open']}, has_bbox = #{!changeset_el['min_lat'].nil?}"
-
-          if count == 0 and changeset_el['open'] == 'false' and changeset_el['min_lat']
-            puts ' Not in the database, stopping...'
-            raise
-          end
         end
       end
     end
