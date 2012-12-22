@@ -23,7 +23,7 @@ def insert_changeset(changeset_el)
     #{changeset_el['uid'].to_i},
     '#{changeset_el['user']}',
     '#{changeset_el['created_at']}',
-    '#{changeset_el['closed_at']}',
+    #{changeset_el['closed_at'] ? '\'' + changeset_el['closed_at'] + '\'' : 'NULL'},
     '#{changeset_el['open']}',
     '#{PGconn.escape(parse_tags(changeset_el).to_s.gsub('{', '').gsub('}', ''))}'::hstore,
     #{changeset_el['num_changes'].to_i})")
