@@ -16,6 +16,22 @@ def parse_tags(changeset_el)
   tags
 end
 
+def insert_changeset(changeset_el)
+  id = changeset_el['id'].to_i
+  count = @conn.exec("INSERT INTO changesets (id, user_id, user_name, created_at, closed_at, tags, num_changes) VALUES (
+    #{changeset_el['id'].to_i},
+    #{changeset_el['uid'].to_i},
+    '#{changeset_el['user']}',
+    '#{changeset_el['created_at']}',
+    '#{changeset_el['closed_at']}',
+    '#{PGconn.escape(parse_tags(changeset_el).to_s.gsub('{', '').gsub('}', ''))}'::hstore,
+    #{changeset_el['num_changes'].to_i})")
+end
+
+def changeset_exists(changeset_id)
+   @conn.exec("SELECT COUNT(*) FROM changesets WHERE id = #{changeset_id}").getvalue(0, 0).to_i > 0
+end
+
 def update_changeset(changeset_el)
   id = changeset_el['id'].to_i
   count = @conn.exec("
@@ -51,9 +67,13 @@ for id in (current_state['sequence'].to_i + 1..remote_state['sequence'].to_i)
         xml.root.children.each do |changeset_el|
           next unless changeset_el.element?
           changeset_id = changeset_el['id'].to_i
-          print "Processing changeset #{changeset_id}... "
-          count = update_changeset(changeset_el)
-          puts "#{count}, open = #{changeset_el['open']}, has_bbox = #{!changeset_el['min_lat'].nil?}"
+          if !changeset_exists(changeset_id)
+            puts "Inserting changeset #{changeset_id}... "
+            insert_changeset(changeset_el)
+          else
+            puts "Updating changeset #{changeset_id}... "
+            update_changeset(changeset_el)
+          end
         end
       end
     end
