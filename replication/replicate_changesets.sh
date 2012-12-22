@@ -12,6 +12,5 @@ set -e
 (
   # Try to lock on the lock file (fd 200)
   flock -x -n 200
-  ./download_changesets.rb
+  ./replicate_changesets.rb
 ) 200>/home/ppawel/.changesets.lock
-
