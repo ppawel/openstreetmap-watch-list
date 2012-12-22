@@ -21,7 +21,7 @@ def insert_changeset(changeset_el)
   count = @conn.exec("INSERT INTO changesets (id, user_id, user_name, created_at, closed_at, open, tags, num_changes) VALUES (
     #{changeset_el['id'].to_i},
     #{changeset_el['uid'].to_i},
-    '#{changeset_el['user']}',
+    '#{PGconn.escape(changeset_el['user'])}',
     '#{changeset_el['created_at']}',
     #{changeset_el['closed_at'] ? '\'' + changeset_el['closed_at'] + '\'' : 'NULL'},
     '#{changeset_el['open']}',
