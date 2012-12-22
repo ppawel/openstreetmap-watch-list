@@ -18,12 +18,13 @@ end
 
 def insert_changeset(changeset_el)
   id = changeset_el['id'].to_i
-  count = @conn.exec("INSERT INTO changesets (id, user_id, user_name, created_at, closed_at, tags, num_changes) VALUES (
+  count = @conn.exec("INSERT INTO changesets (id, user_id, user_name, created_at, closed_at, open, tags, num_changes) VALUES (
     #{changeset_el['id'].to_i},
     #{changeset_el['uid'].to_i},
     '#{changeset_el['user']}',
     '#{changeset_el['created_at']}',
     '#{changeset_el['closed_at']}',
+    '#{changeset_el['open']}',
     '#{PGconn.escape(parse_tags(changeset_el).to_s.gsub('{', '').gsub('}', ''))}'::hstore,
     #{changeset_el['num_changes'].to_i})")
 end
