@@ -5,7 +5,7 @@ PATH=/home/ppawel/jdk/bin:/home/ppawel/bin:/home/ppawel/.gem/ruby/1.9.1/bin/:$PA
 export PATH
 
 DIR=$(dirname $0)
-cd $DIR
+cd $DIR/../scripts
 
 set -e
 
