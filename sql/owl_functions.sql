@@ -154,7 +154,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       prev.nodes
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
-  WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an) AND
+  WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.version > 1) AND
     w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes) AND
     w.changeset_id != $1 AND
     OWL_MakeLine(w.nodes, w.tstamp) IS NOT NULL AND
@@ -210,8 +210,14 @@ BEGIN
 	x/subtiles_per_tile,
 	y/subtiles_per_tile,
 	$3,
-	array_accum(geom),
-	array_accum(prev_geom),
+	CASE
+	  WHEN $3 >= 14 THEN array_accum(geom)
+	  ELSE array_accum((SELECT array_agg(ST_Envelope(unnest)) FROM unnest(geom)))
+	END,
+	CASE
+	  WHEN $3 >= 14 THEN array_accum(prev_geom)
+	  ELSE array_accum((SELECT array_agg(ST_Envelope(unnest)) FROM unnest(prev_geom)))
+	END,
 	array_accum(changes)
   FROM tiles
   WHERE changeset_id = $1 AND zoom = $2
