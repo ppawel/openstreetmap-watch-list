@@ -23,8 +23,7 @@ BEGIN
     (SELECT unnest($1) AS node_id) x
     INNER JOIN nodes n ON (n.id = x.node_id)
   WHERE
-    ($2 IS NULL AND n.version = (SELECT MAX(version) FROM nodes WHERE id = n.id)) OR
-    ($2 IS NOT NULL AND n.version = (SELECT version FROM nodes WHERE id = n.id AND tstamp <= $2 ORDER BY tstamp DESC LIMIT 1)));
+    n.version = (SELECT version FROM nodes WHERE id = n.id AND tstamp <= $2 ORDER BY tstamp DESC LIMIT 1));
 
   -- Now check if the linestring has exactly the right number of points.
   IF ST_NumPoints(way_geom) != array_length($1, 1) THEN
@@ -107,11 +106,11 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
         WHEN w.version > 0 AND w.visible THEN 'MODIFY'::action
         WHEN NOT w.visible THEN 'DELETE'::action
       END AS el_type,
-      (NOT OWL_MakeLine(w.nodes, NULL) = OWL_MakeLine(prev.nodes, prev.tstamp)) OR w.version = 1,
+      (NOT OWL_MakeLine(w.nodes, w.tstamp) = OWL_MakeLine(prev.nodes, prev.tstamp)) OR w.version = 1,
       w.tags != prev.tags OR w.version = 1,
       w.nodes != prev.nodes OR w.version = 1,
       NULL,
-      OWL_MakeLine(w.nodes, NULL),
+      OWL_MakeLine(w.nodes, w.tstamp),
       OWL_MakeLine(prev.nodes, prev.tstamp),
       w.tags,
       prev.tags,
@@ -120,7 +119,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
     FROM ways w
     LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
     WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1) AND
-      OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL)
+      OWL_MakeLine(w.nodes, w.tstamp) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL)
 
   UNION
 
@@ -143,11 +142,11 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       w.id,
       w.version,
       'MODIFY'::action,
-      (NOT OWL_MakeLine(w.nodes, NULL) = OWL_MakeLine(prev.nodes, prev.tstamp)) OR w.version = 1,
+      (NOT OWL_MakeLine(w.nodes, w.tstamp) = OWL_MakeLine(prev.nodes, prev.tstamp)) OR w.version = 1,
       w.tags != prev.tags OR w.version = 1,
       w.nodes != prev.nodes OR w.version = 1,
       NULL,
-      OWL_MakeLine(w.nodes, NULL),
+      OWL_MakeLine(w.nodes, w.tstamp),
       OWL_MakeLine(prev.nodes, prev.tstamp),
       w.tags,
       prev.tags,
@@ -155,9 +154,11 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       prev.nodes
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
-  WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.tags = an.prev_tags) AND
-    w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes) AND w.changeset_id != $1 AND
-    OWL_MakeLine(w.nodes, NULL) IS NOT NULL AND (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL);
+  WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an) AND
+    w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes) AND
+    w.changeset_id != $1 AND
+    OWL_MakeLine(w.nodes, w.tstamp) IS NOT NULL AND
+    (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL);
 $$ LANGUAGE sql;
 
 --

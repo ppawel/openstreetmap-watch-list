@@ -9,8 +9,8 @@ class TilerTest < Test::Unit::TestCase
   # Tag changes in Zagreb and Budapest place nodes.
   def test_12917265
     setup_changeset_test(12917265)
-    assert_equal(2, @tiles.size)
-    assert_equal(2, find_changes('tags_changed' => 't').size)
+    assert_equal(3, @tiles.size)
+    assert_equal(3, find_changes('tags_changed' => 't').size)
   end
 
   def test_13294164
