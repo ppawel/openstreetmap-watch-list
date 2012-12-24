@@ -5,6 +5,7 @@ $:.unshift File.absolute_path(File.dirname(__FILE__) + '/../tiler/lib/')
 # Useful when redirecting log output to a file.
 STDOUT.sync = true
 
+require 'parallel'
 require 'pg'
 require 'yaml'
 
@@ -18,18 +19,17 @@ options = Tiler::parse_cmdline_options
 
 puts options.inspect
 
-@conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
-  :user => $config['username'], :password => $config['password'])
-
-tiler = Tiler::Tiler.new(@conn)
-
 zoom = 16
-count = 0
 
-ARGF.each_line do |line|
-  changeset_id = line.to_i
+changeset_ids = ARGF.each_line.collect {|line| line.to_i}
+
+Parallel.each_with_index(changeset_ids, :in_processes => 8) do |changeset_id, count|
   next if changeset_id == 0
-  count += 1
+
+  @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
+    :user => $config['username'], :password => $config['password'])
+  tiler = Tiler::Tiler.new(@conn)
+
   before = Time.now
   puts "Generating tiles for changeset #{changeset_id}... (#{count})"
   tile_count = tiler.generate(zoom, changeset_id, options)
