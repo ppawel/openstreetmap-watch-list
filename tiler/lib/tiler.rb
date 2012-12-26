@@ -53,7 +53,7 @@ class Tiler
           CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
           Box2D(geom) AS geom_bbox, Box2D(prev_geom) AS prev_geom_bbox
         FROM changes WHERE changeset_id = #{changeset_id}").to_a
-      change['geom_obj'] = @wkb_reader.read_hex(change['geom'])
+      change['geom_obj'] = @wkb_reader.read_hex(change['geom']) if change['geom']
       change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom']) if change['prev_geom']
 
       if change['el_type'] == 'N'
