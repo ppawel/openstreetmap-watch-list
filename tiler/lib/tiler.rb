@@ -111,7 +111,7 @@ class Tiler
     @@log.debug "  tile_count = #{tile_count}"
 
     # Does not make sense to try to reduce small ways.
-    if tile_count < 640000
+    if tile_count < 64
       tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
     else
       tiles = reduce_tiles(changeset_id, way, zoom)
@@ -145,9 +145,9 @@ class Tiler
         x, y = tile[0], tile[1]
         lat1, lon1 = tile2latlon(x, y, source_zoom)
         lat2, lon2 = tile2latlon(x + 1, y + 1, source_zoom)
-        intersects = @conn.exec("
-          SELECT ST_Intersects(ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326), geom)
-          FROM _way_geom").getvalue(0, 0) == 't'
+        tile_geom = @wkt_reader.read("MULTIPOINT(#{lon1} #{lat1},#{lon2} #{lat2})").envelope
+
+        intersects = tile_geom.intersects?(change['geom_obj'])
         tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects and source_zoom == 14
       end
     end
@@ -163,8 +163,6 @@ class Tiler
   end
 
   def prepare_db
-    @conn.exec('CREATE TEMPORARY TABLE _way_geom (geom geometry, prev_geom geometry, tstamp timestamp without time zone)')
-    @conn.exec('CREATE TEMPORARY TABLE _tile_bboxes (x int, y int, zoom int, tile_bbox geometry)')
     @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
       x int, y int, zoom int, geom geometry, prev_geom geometry, change_id bigint NOT NULL)')
   end
