@@ -14,9 +14,9 @@ DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
 -- Note that it returns NULL when it cannot recreate the geometry, e.g. when
 -- there is not enough historical node versions in the database.
 --
-CREATE FUNCTION OWL_MakeLine(bigint[], timestamp without time zone) RETURNS geometry(LINESTRING, 4326) AS $$
+CREATE FUNCTION OWL_MakeLine(bigint[], timestamp without time zone) RETURNS geometry(GEOMETRY, 4326) AS $$
 DECLARE
-  way_geom geometry(LINESTRING, 4326);
+  way_geom geometry(GEOMETRY, 4326);
 BEGIN
   way_geom := (SELECT ST_MakeLine(geom)
   FROM
@@ -28,6 +28,11 @@ BEGIN
   -- Now check if the linestring has exactly the right number of points.
   IF ST_NumPoints(way_geom) != array_length($1, 1) THEN
     way_geom := NULL;
+  END IF;
+
+  -- Invalid way geometry - convert to a single point.
+  IF ST_NumPoints(way_geom) = 1 THEN
+    way_geom := ST_PointN(way_geom, 1);
   END IF;
 
   RETURN way_geom;
