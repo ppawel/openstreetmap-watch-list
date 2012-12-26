@@ -10,6 +10,7 @@ end
 
 # Translated to Ruby rom http://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
 def latlon2tile(lat_deg, lon_deg, zoom)
+  lat_deg = -89.999999 if lat_deg == -90.0 # Hack
   lat_rad = radians(lat_deg)
   n = 2.0 ** zoom
   xtile = ((lon_deg + 180.0) / 360.0 * n).floor
