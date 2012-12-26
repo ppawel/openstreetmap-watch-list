@@ -15,7 +15,6 @@ class Tiler
     @wkb_reader = Geos::WkbReader.new
     @wkt_reader = Geos::WktReader.new
     @wkb_writer = Geos::WkbWriter.new
-    prepare_db
   end
 
   ##
@@ -24,6 +23,7 @@ class Tiler
   def generate(zoom, changeset_id, options = {})
     tile_count = nil
     @conn.transaction do |c|
+      @tiles = {}
       generate_changes(changeset_id) if options[:changes]
       tile_count = do_generate(zoom, changeset_id, options)
     end
@@ -46,17 +46,16 @@ class Tiler
   def do_generate(zoom, changeset_id, options = {})
     clear_tiles(changeset_id, zoom) if options[:retile]
 
-    @conn.exec('TRUNCATE _tile_changes_tmp')
-
     for change in @conn.exec("SELECT id, el_id, el_version, el_type, tstamp, geom, prev_geom,
           CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
           CASE WHEN el_type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
           CASE WHEN el_type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
           CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
-          Box2D(ST_Collect(prev_geom, geom)) AS both_bbox
+          Box2D(geom) AS geom_bbox, Box2D(prev_geom) AS prev_geom_bbox
         FROM changes WHERE changeset_id = #{changeset_id}").to_a
       change['geom_obj'] = @wkb_reader.read_hex(change['geom'])
       change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom']) if change['prev_geom']
+
       if change['el_type'] == 'N'
         @@log.debug "Node #{change['el_id']} (#{change['el_version']})"
         create_node_tiles(changeset_id, change, change['id'].to_i, zoom)
@@ -66,11 +65,11 @@ class Tiler
       end
     end
 
-    count = @conn.exec("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
-      SELECT  #{changeset_id}, MAX(tstamp) AS tstamp, zoom, x, y,
-        array_agg(change_id), array_agg(geom), array_agg(prev_geom)
-      FROM _tile_changes_tmp tmp
-      GROUP BY zoom, x, y").cmd_tuples
+    @tiles.each do |tile, data|
+      @conn.exec("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom) VALUES (
+        #{changeset_id}, '#{data[:tstamp]}', #{tile[2]}, #{tile[0]}, #{tile[1]},
+          ARRAY#{data[:changes]}, #{to_postgres_geom_array(data[:geom])}, #{to_postgres_geom_array(data[:prev_geom])})")
+    end
 
     @@log.debug "Aggregating tiles..."
 
@@ -79,7 +78,36 @@ class Tiler
       @conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
     end
 
-    count
+    @tiles.size
+  end
+
+  def to_postgres_geom_array(geom_arr)
+    str = ''
+    geom_arr.each_with_index do |geom, index|
+      str += ',' if index > 0
+      if geom.nil?
+        str += 'NULL'
+        next
+      end
+      str += "ST_SetSRID('#{geom}'::geometry, 4326)"
+    end
+    str = "ARRAY[#{str}]"
+  end
+
+  def add_change_tile(x, y, zoom, change, geom, prev_geom)
+    if !@tiles.include?([x, y, zoom])
+      @tiles[[x, y, zoom]] = {
+        :changes => [change['id'].to_i],
+        :tstamp => change['tstamp'],
+        :geom => [(geom ? @wkb_writer.write_hex(geom) : nil)],
+        :prev_geom => [(prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)]
+      }
+      return
+    end
+
+    @tiles[[x, y, zoom]][:changes] << change['id'].to_i
+    @tiles[[x, y, zoom]][:geom] << (geom ? @wkb_writer.write_hex(geom) : nil)
+    @tiles[[x, y, zoom]][:prev_geom] << (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)
   end
 
   def create_node_tiles(changeset_id, node, change_id, zoom)
@@ -88,33 +116,35 @@ class Tiler
     prev_tile = latlon2tile(node['prev_lat'].to_f, node['prev_lon'].to_f, zoom) if node['prev_lat']
 
     if tile == prev_tile
-      @conn.exec("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
-        ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-        ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326),
-        ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326), #{change_id})")
+      add_change_tile(tile[0], tile[1], zoom, node, Geos::Utils.create_point(node['lon'].to_f, node['lat'].to_f),
+        Geos::Utils.create_point(node['prev_lon'].to_f, node['prev_lat'].to_f))
     else
-      @conn.exec("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
-        ('N', '#{node['tstamp']}', #{zoom}, #{tile[0]}, #{tile[1]},
-        ST_SetSRID(ST_GeomFromText('POINT(#{node['lon']} #{node['lat']})'), 4326), NULL, #{change_id})")
-
-      if prev_tile
-        @conn.exec("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES
-          ('N', '#{node['tstamp']}', #{zoom}, #{prev_tile[0]}, #{prev_tile[1]},
-          NULL, ST_SetSRID(ST_GeomFromText('POINT(#{node['prev_lon']} #{node['prev_lat']})'), 4326), #{change_id})")
-      end
+      add_change_tile(tile[0], tile[1], zoom, node, Geos::Utils.create_point(node['lon'].to_f, node['lat'].to_f), nil)
+      add_change_tile(tile[0], tile[1], zoom, node, nil,
+        Geos::Utils.create_point(node['prev_lon'].to_f, node['prev_lat'].to_f)) if prev_tile
     end
   end
 
   def create_way_tiles(changeset_id, way, change_id, zoom, options)
-    tile_count = bbox_tile_count(zoom, box2d_to_bbox(way["both_bbox"]))
+    count = create_way_geom_tiles(changeset_id, way, way['geom_obj'], change_id, zoom, false)
+    count += create_way_geom_tiles(changeset_id, way, way['prev_geom_obj'], change_id, zoom, true)
+
+    @@log.debug "  Created #{count} tile(s)"
+  end
+
+  def create_way_geom_tiles(changeset_id, way, geom, change_id, zoom, is_prev)
+    return 0 if geom.nil?
+
+    bbox = box2d_to_bbox(way[(is_prev ? 'prev_geom' : 'geom') + '_bbox'])
+    tile_count = bbox_tile_count(zoom, bbox)
 
     @@log.debug "  tile_count = #{tile_count}"
 
     # Does not make sense to try to reduce small ways.
     if tile_count < 64
-      tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
+      tiles = bbox_to_tiles(zoom, bbox)
     else
-      tiles = reduce_tiles(changeset_id, way, zoom)
+      tiles = reduce_tiles(changeset_id, way, bbox, zoom)
     end
 
     @@log.debug "  Processing #{tiles.size} tile(s)..."
@@ -125,23 +155,21 @@ class Tiler
       x, y = tile[0], tile[1]
       lat1, lon1 = tile2latlon(x, y, zoom)
       lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
-      #@conn.exec("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
-      #  ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
       tile_geom = @wkt_reader.read("MULTIPOINT(#{lon1} #{lat1},#{lon2} #{lat2})").envelope
 
-      if tile_geom.intersects?(way['geom_obj'])
-        count += @conn.exec("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES (
-          'W', '#{way['tstamp']}', #{zoom}, #{x}, #{y}, '#{way['geom']}', #{way['prev_geom'] ? "'#{way['geom']}'" : 'NULL'}, #{change_id})").cmd_tuples
+      if geom.intersects?(tile_geom)
+        intersection = geom.intersection(tile_geom)
+        add_change_tile(x, y, zoom, way, is_prev ? nil : intersection, is_prev ? intersection : nil)
+        count += 1
       end
     end
-
-    @@log.debug "  Created #{count} tile(s)"
+    count
   end
 
-  def reduce_tiles(changeset_id, change, zoom)
+  def reduce_tiles(changeset_id, change, bbox, zoom)
     tiles = Set.new
     for source_zoom in [14]
-      for tile in bbox_to_tiles(source_zoom, box2d_to_bbox(change["both_bbox"]))
+      for tile in bbox_to_tiles(source_zoom, bbox)
         x, y = tile[0], tile[1]
         lat1, lon1 = tile2latlon(x, y, source_zoom)
         lat2, lon2 = tile2latlon(x + 1, y + 1, source_zoom)
@@ -160,11 +188,6 @@ class Tiler
       (changeset_id, tstamp, el_type, el_id, el_version, el_action, geom_changed, tags_changed, nodes_changed,
         members_changed, geom, prev_geom, tags, prev_tags, nodes, prev_nodes)
       SELECT * FROM OWL_GenerateChanges(#{changeset_id})")
-  end
-
-  def prepare_db
-    @conn.exec('CREATE TEMPORARY TABLE _tile_changes_tmp (el_type element_type NOT NULL, tstamp timestamp without time zone,
-      x int, y int, zoom int, geom geometry, prev_geom geometry, change_id bigint NOT NULL)')
   end
 end
 
