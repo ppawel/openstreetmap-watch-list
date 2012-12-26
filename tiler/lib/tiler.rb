@@ -13,6 +13,8 @@ class Tiler
   def initialize(conn)
     @conn = conn
     @wkb_reader = Geos::WkbReader.new
+    @wkt_reader = Geos::WktReader.new
+    @wkb_writer = Geos::WkbWriter.new
     prepare_db
   end
 
@@ -45,8 +47,6 @@ class Tiler
     clear_tiles(changeset_id, zoom) if options[:retile]
 
     @conn.exec('TRUNCATE _tile_changes_tmp')
-    @conn.exec('TRUNCATE _way_geom')
-    @conn.exec('TRUNCATE _tile_bboxes')
 
     for change in @conn.exec("SELECT id, el_id, el_version, el_type, tstamp, geom, prev_geom,
           CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
@@ -55,8 +55,8 @@ class Tiler
           CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
           Box2D(ST_Collect(prev_geom, geom)) AS both_bbox
         FROM changes WHERE changeset_id = #{changeset_id}").to_a
-      change['geom'] = @wkb_reader.read_hex(change['geom'])
-      change['prev_geom'] = @wkb_reader.read_hex(change['prev_geom']) if change['prev_geom']
+      change['geom_obj'] = @wkb_reader.read_hex(change['geom'])
+      change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom']) if change['prev_geom']
       if change['el_type'] == 'N'
         @@log.debug "Node #{change['el_id']} (#{change['el_version']})"
         create_node_tiles(changeset_id, change, change['id'].to_i, zoom)
@@ -106,18 +106,12 @@ class Tiler
   end
 
   def create_way_tiles(changeset_id, way, change_id, zoom, options)
-    @conn.exec('TRUNCATE _tile_bboxes')
-    @conn.exec('TRUNCATE _way_geom')
-
-    @conn.exec("INSERT INTO _way_geom (geom, prev_geom, tstamp)
-      VALUES ('#{way['geom']}', #{way['prev_geom'] ? "'#{way['prev_geom']}'" : 'NULL'}, '#{way['tstamp']}')")
-
     tile_count = bbox_tile_count(zoom, box2d_to_bbox(way["both_bbox"]))
 
     @@log.debug "  tile_count = #{tile_count}"
 
     # Does not make sense to try to reduce small ways.
-    if tile_count < 64
+    if tile_count < 640000
       tiles = bbox_to_tiles(zoom, box2d_to_bbox(way["both_bbox"]))
     else
       tiles = reduce_tiles(changeset_id, way, zoom)
@@ -125,19 +119,21 @@ class Tiler
 
     @@log.debug "  Processing #{tiles.size} tile(s)..."
 
+    count = 0
+
     for tile in tiles
       x, y = tile[0], tile[1]
       lat1, lon1 = tile2latlon(x, y, zoom)
       lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
-      @conn.exec("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
-        ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
-    end
+      #@conn.exec("INSERT INTO _tile_bboxes VALUES (#{x}, #{y}, #{zoom},
+      #  ST_SetSRID('BOX(#{lon1} #{lat1},#{lon2} #{lat2})'::box2d, 4326))")
+      tile_geom = @wkt_reader.read("MULTIPOINT(#{lon1} #{lat1},#{lon2} #{lat2})").envelope
 
-    count = @conn.exec("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id)
-      SELECT 'W', tstamp, bb.zoom, bb.x, bb.y,
-        ST_Intersection(geom, bb.tile_bbox), ST_Intersection(prev_geom, bb.tile_bbox), #{change_id}
-      FROM _tile_bboxes bb, _way_geom
-      WHERE ST_Intersects(geom, bb.tile_bbox) OR ST_Intersects(prev_geom, bb.tile_bbox)").cmd_tuples
+      if tile_geom.intersects?(way['geom_obj'])
+        count += @conn.exec("INSERT INTO _tile_changes_tmp (el_type, tstamp, zoom, x, y, geom, prev_geom, change_id) VALUES (
+          'W', '#{way['tstamp']}', #{zoom}, #{x}, #{y}, '#{way['geom']}', #{way['prev_geom'] ? "'#{way['geom']}'" : 'NULL'}, #{change_id})").cmd_tuples
+      end
+    end
 
     @@log.debug "  Created #{count} tile(s)"
   end
