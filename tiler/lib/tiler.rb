@@ -1,5 +1,6 @@
 require 'logging'
 require 'utils'
+require 'ffi-geos'
 
 module Tiler
 
@@ -11,6 +12,7 @@ class Tiler
 
   def initialize(conn)
     @conn = conn
+    @wkb_reader = Geos::WkbReader.new
     prepare_db
   end
 
@@ -53,6 +55,8 @@ class Tiler
           CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
           Box2D(ST_Collect(prev_geom, geom)) AS both_bbox
         FROM changes WHERE changeset_id = #{changeset_id}").to_a
+      change['geom'] = @wkb_reader.read_hex(change['geom'])
+      change['prev_geom'] = @wkb_reader.read_hex(change['prev_geom']) if change['prev_geom']
       if change['el_type'] == 'N'
         @@log.debug "Node #{change['el_id']} (#{change['el_version']})"
         create_node_tiles(changeset_id, change, change['id'].to_i, zoom)
