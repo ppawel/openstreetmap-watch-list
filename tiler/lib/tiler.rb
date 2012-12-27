@@ -46,13 +46,14 @@ class Tiler
   def do_generate(zoom, changeset_id, options = {})
     clear_tiles(changeset_id, zoom) if options[:retile]
 
-    for change in @conn.exec("SELECT id, el_id, el_version, el_type, tstamp, geom, prev_geom,
+    for change in @conn.exec("SELECT id, el_id, el_version, el_type, tstamp, geom, prev_geom, geom_changed,
           CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
           CASE WHEN el_type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
           CASE WHEN el_type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
           CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
           Box2D(geom) AS geom_bbox, Box2D(prev_geom) AS prev_geom_bbox
         FROM changes WHERE changeset_id = #{changeset_id}").to_a
+      change['geom_changed'] = (change['geom_changed'] == 't')
       change['geom_obj'] = @wkb_reader.read_hex(change['geom']) if change['geom']
       change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom']) if change['prev_geom']
 
@@ -107,7 +108,10 @@ class Tiler
 
   def create_change_tiles(changeset_id, change, change_id, zoom)
     count = create_geom_tiles(changeset_id, change, change['geom_obj'], change_id, zoom, false)
-    count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change_id, zoom, true)
+
+    if change['geom_changed']
+      count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change_id, zoom, true)
+    end
 
     @@log.debug "  Created #{count} tile(s)"
   end
