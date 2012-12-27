@@ -1,4 +1,4 @@
-﻿DROP FUNCTION IF EXISTS OWL_MakeLine(bigint[], timestamp without time zone);
+DROP FUNCTION IF EXISTS OWL_MakeLine(bigint[], timestamp without time zone);
 DROP FUNCTION IF EXISTS OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]);
 DROP FUNCTION IF EXISTS OWL_GenerateChanges(bigint);
 DROP FUNCTION IF EXISTS OWL_UpdateChangeset(bigint);
