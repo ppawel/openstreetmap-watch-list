@@ -56,13 +56,8 @@ class Tiler
       change['geom_obj'] = @wkb_reader.read_hex(change['geom']) if change['geom']
       change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom']) if change['prev_geom']
 
-      if change['el_type'] == 'N'
-        @@log.debug "Node #{change['el_id']} (#{change['el_version']})"
-        create_node_tiles(changeset_id, change, change['id'].to_i, zoom)
-      elsif change['el_type'] == 'W'
-        @@log.debug "Way #{change['el_id']} (#{change['el_version']})"
-        create_way_tiles(changeset_id, change, change['id'].to_i, zoom, options)
-      end
+      @@log.debug "#{change['el_type']} #{change['el_id']} (#{change['el_version']})"
+      create_change_tiles(changeset_id, change, change['id'].to_i, zoom)
     end
 
     @tiles.each do |tile, data|
@@ -110,45 +105,30 @@ class Tiler
     @tiles[[x, y, zoom]][:prev_geom] << (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)
   end
 
-  def create_node_tiles(changeset_id, node, change_id, zoom)
-    tile = latlon2tile(node['lat'].to_f, node['lon'].to_f, zoom)
-    prev_tile = nil
-    prev_tile = latlon2tile(node['prev_lat'].to_f, node['prev_lon'].to_f, zoom) if node['prev_lat']
-
-    if tile == prev_tile
-      add_change_tile(tile[0], tile[1], zoom, node, Geos::Utils.create_point(node['lon'].to_f, node['lat'].to_f),
-        Geos::Utils.create_point(node['prev_lon'].to_f, node['prev_lat'].to_f))
-    else
-      add_change_tile(tile[0], tile[1], zoom, node, Geos::Utils.create_point(node['lon'].to_f, node['lat'].to_f), nil)
-      add_change_tile(tile[0], tile[1], zoom, node, nil,
-        Geos::Utils.create_point(node['prev_lon'].to_f, node['prev_lat'].to_f)) if prev_tile
-    end
-  end
-
-  def create_way_tiles(changeset_id, way, change_id, zoom, options)
-    count = create_way_geom_tiles(changeset_id, way, way['geom_obj'], change_id, zoom, false)
-    count += create_way_geom_tiles(changeset_id, way, way['prev_geom_obj'], change_id, zoom, true)
+  def create_change_tiles(changeset_id, change, change_id, zoom)
+    count = create_geom_tiles(changeset_id, change, change['geom_obj'], change_id, zoom, false)
+    count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change_id, zoom, true)
 
     @@log.debug "  Created #{count} tile(s)"
   end
 
-  def create_way_geom_tiles(changeset_id, way, geom, change_id, zoom, is_prev)
+  def create_geom_tiles(changeset_id, change, geom, change_id, zoom, is_prev)
     return 0 if geom.nil?
 
-    bbox = box2d_to_bbox(way[(is_prev ? 'prev_geom' : 'geom') + '_bbox'])
+    bbox = box2d_to_bbox(change[(is_prev ? 'prev_geom' : 'geom') + '_bbox'])
     tile_count = bbox_tile_count(zoom, bbox)
 
     @@log.debug "  tile_count = #{tile_count}"
 
     if tile_count == 1
       tiles = bbox_to_tiles(zoom, bbox)
-      add_change_tile(tiles.to_a[0][0], tiles.to_a[0][1], zoom, way, is_prev ? nil : geom, is_prev ? geom : nil)
+      add_change_tile(tiles.to_a[0][0], tiles.to_a[0][1], zoom, change, is_prev ? nil : geom, is_prev ? geom : nil)
       return 1
     elsif tile_count < 64
-      # Does not make sense to try to reduce small ways.
+      # Does not make sense to try to reduce small geoms.
       tiles = bbox_to_tiles(zoom, bbox)
     else
-      tiles = reduce_tiles(changeset_id, way, bbox, zoom)
+      tiles = reduce_tiles(changeset_id, change, bbox, zoom)
     end
 
     @@log.debug "  Processing #{tiles.size} tile(s)..."
@@ -163,7 +143,7 @@ class Tiler
 
       if geom.intersects?(tile_geom)
         intersection = geom.intersection(tile_geom)
-        add_change_tile(x, y, zoom, way, is_prev ? nil : intersection, is_prev ? intersection : nil)
+        add_change_tile(x, y, zoom, change, is_prev ? nil : intersection, is_prev ? intersection : nil)
         count += 1
       end
     end
