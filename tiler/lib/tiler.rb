@@ -140,8 +140,12 @@ class Tiler
 
     @@log.debug "  tile_count = #{tile_count}"
 
-    # Does not make sense to try to reduce small ways.
-    if tile_count < 64
+    if tile_count == 1
+      tiles = bbox_to_tiles(zoom, bbox)
+      add_change_tile(tiles.to_a[0][0], tiles.to_a[0][1], zoom, way, is_prev ? nil : geom, is_prev ? geom : nil)
+      return 1
+    elsif tile_count < 64
+      # Does not make sense to try to reduce small ways.
       tiles = bbox_to_tiles(zoom, bbox)
     else
       tiles = reduce_tiles(changeset_id, way, bbox, zoom)
