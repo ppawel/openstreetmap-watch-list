@@ -58,4 +58,8 @@ class TilerTest < Test::Unit::TestCase
   def test_13258073
     setup_changeset_test(13258073)
   end
+
+  def test_14234906_multiple_way_versions
+    setup_changeset_test(14234906)
+  end
 end

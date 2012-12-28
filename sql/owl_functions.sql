@@ -164,7 +164,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.version > 1) AND
-    w.tstamp < (SELECT MAX(tstamp) FROM affected_nodes) AND
+    w.version = (SELECT version FROM ways WHERE tstamp <= (SELECT MAX(tstamp) FROM affected_nodes) LIMIT 1) AND
     w.changeset_id != $1 AND
     OWL_MakeLine(w.nodes, w.tstamp) IS NOT NULL AND
     (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL);

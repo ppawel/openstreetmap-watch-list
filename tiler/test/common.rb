@@ -5,10 +5,10 @@ module TestCommon
   def setup_changeset_test(id)
     setup_db
     load_changeset(id)
-    verify_changeset_data
-    @tiler.generate(16, id, {:retile => true})
     @changes = get_changes
     @changes_h = Hash[@changes.collect {|row| [row['id'].to_i, row]}]
+    verify_changes(id)
+    @tiler.generate(16, id, {:retile => true})
     @tiles = get_tiles
     verify_tiles
   end
@@ -19,7 +19,7 @@ module TestCommon
       :user => $config['username'], :password => $config['password'])
     exec_sql_file('../../sql/owl_schema.sql')
     exec_sql_file('../../sql/owl_constraints.sql')
-    #exec_sql_file('../../sql/owl_functions.sql')
+    exec_sql_file('../../sql/owl_functions.sql')
     @tiler = Tiler::Tiler.new(@conn)
   end
 
@@ -35,15 +35,13 @@ module TestCommon
     @conn.put_copy_end
   end
 
-  def verify_changeset_data
-    #data = @conn.exec("SELECT id, version,
-    #    ST_NumPoints(geom) AS num_points_geom, array_length(nodes, 1) AS num_points_arr,
-    #    ST_NumPoints(prev_geom) AS prev_num_points_geom, array_length(prev_nodes, 1) AS prev_num_points_arr
-    #  FROM _changeset_data WHERE type = 'W'").to_a
-    #for row in data
-    #  assert_equal(row['num_points_arr'].to_i, row['num_points_geom'].to_i, "Wrong linestring for row: #{row.inspect}")
-      #assert_equal(row['prev_num_points_arr'].to_i, row['prev_num_points_geom'].to_i, "Wrong prev linestring for row: #{row.inspect}")
-    #end
+  def verify_changes(changeset_id)
+    for way in find_changes('el_type' => 'W')
+      if way['el_changeset_id'].to_i != changeset_id
+        assert_equal(2, find_changes('el_type' => 'W', 'el_id' => way['el_id']).size,
+          "Too many versions for way: #{way}")
+      end
+    end
   end
 
   def get_changes
