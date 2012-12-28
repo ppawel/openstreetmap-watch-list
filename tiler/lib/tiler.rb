@@ -173,7 +173,8 @@ class Tiler
   def generate_changes(changeset_id)
     @conn.exec("DELETE FROM changes WHERE changeset_id = #{changeset_id}")
     @conn.exec("INSERT INTO changes
-      (changeset_id, tstamp, el_type, el_id, el_version, el_action, geom_changed, tags_changed, nodes_changed,
+      (changeset_id, tstamp, el_changeset_id, el_type, el_id, el_version, el_action,
+        geom_changed, tags_changed, nodes_changed,
         members_changed, geom, prev_geom, tags, prev_tags, nodes, prev_nodes)
       SELECT * FROM OWL_GenerateChanges(#{changeset_id})")
   end

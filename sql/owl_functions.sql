@@ -37,7 +37,7 @@ BEGIN
 
   RETURN way_geom;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql IMMUTABLE;
 
 CREATE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]) RETURNS text[] AS $$
  SELECT array_agg(CASE WHEN c.g IS NOT NULL AND NOT ST_IsEmpty(c.g) AND ST_NumGeometries(c.g) > 0 THEN ST_AsGeoJSON(c.g) ELSE NULL END) FROM
@@ -50,7 +50,7 @@ CREATE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326
    ON (x.seq = y.seq)
  GROUP BY x.change_id
  ORDER BY x.change_id) c
-$$ LANGUAGE sql;
+$$ LANGUAGE sql IMMUTABLE;
 
 --
 -- OWL_GenerateChanges
@@ -58,6 +58,7 @@ $$ LANGUAGE sql;
 CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   changeset_id bigint,
   tstamp timestamp without time zone,
+  el_changeset_id bigint,
   el_type element_type,
   el_id bigint,
   el_version int,
@@ -78,6 +79,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   SELECT
       $1,
       n.tstamp,
+      n.changeset_id,
       'N'::element_type AS type,
       n.id,
       n.version,
@@ -103,6 +105,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
     SELECT
       $1,
       w.tstamp,
+      w.changeset_id,
       'W'::element_type AS type,
       w.id,
       w.version,
@@ -143,6 +146,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   SELECT
       $1,
       w.tstamp,
+      w.changeset_id,
       'W'::element_type AS type,
       w.id,
       w.version,
@@ -164,7 +168,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
     w.changeset_id != $1 AND
     OWL_MakeLine(w.nodes, w.tstamp) IS NOT NULL AND
     (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL);
-$$ LANGUAGE sql;
+$$ LANGUAGE sql IMMUTABLE;
 
 --
 -- OWL_UpdateChangeset

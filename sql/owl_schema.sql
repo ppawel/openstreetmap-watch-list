@@ -41,6 +41,7 @@ CREATE TABLE changes (
   id bigserial NOT NULL,
   changeset_id bigint NOT NULL,
   tstamp timestamp without time zone NOT NULL,
+  el_changeset_id bigint NOT NULL,
   el_type element_type NOT NULL,
   el_id bigint NOT NULL,
   el_version int NOT NULL,
