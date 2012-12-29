@@ -149,7 +149,14 @@ private
 
     # And finally assign them back to changesets.
     for changeset in changesets
-      changeset.changes = changeset.change_ids.uniq.collect {|change_id| changes[change_id.to_i]}
+      changeset.changes = []
+      for change_id in changeset.change_ids.uniq
+        if !changes.include?(change_id.to_i)
+          logger.warn("Change #{change_id} not found for changeset #{changeset.id}")
+          next
+        end
+        changeset.changes << changes[change_id.to_i]
+      end
     end
   end
 
@@ -163,6 +170,10 @@ private
       }
       changeset.change_ids.each_with_index do |change_id, index|
         change = changeset.changes.find {|change| change.id == change_id}
+        if change.nil?
+          logger.warn("Change #{change_id} not found for changeset #{changeset.id}")
+          next
+        end
         change_feature = {
           "type" => "FeatureCollection",
           "id" => "#{changeset.id}_#{change.id}",
