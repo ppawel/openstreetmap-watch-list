@@ -19,7 +19,7 @@ class Changeset
     @user_id = hash['user_id'].to_i
     @user_name = hash['user_name']
     @created_at = Time.parse(hash['created_at'])
-    @closed_at = Time.parse(hash['closed_at'])
+    @closed_at = hash['closed_at'] ? Time.parse(hash['closed_at']) : nil
     @open = hash['open'] == 't'
     @tags = eval("{#{hash['tags']}}")
     @change_ids = pg_string_to_array(hash['change_ids']).map(&:to_i) if hash['change_ids']
