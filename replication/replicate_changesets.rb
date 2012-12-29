@@ -56,7 +56,7 @@ remote_state = YAML.load(open('http://planet.openstreetmap.org/replication/chang
 
 for id in (current_state['sequence'].to_i + 1..remote_state['sequence'].to_i)
   file_id = id.to_s.rjust(9, '0')
-  puts "file_id = #{file_id}"
+  puts "#{Time.now} -- file_id = #{file_id}"
 
   begin
     @conn.transaction do |c|
@@ -69,10 +69,10 @@ for id in (current_state['sequence'].to_i + 1..remote_state['sequence'].to_i)
           next unless changeset_el.element?
           changeset_id = changeset_el['id'].to_i
           if !changeset_exists(changeset_id)
-            puts "Inserting changeset #{changeset_id}... "
+            puts "#{Time.now} -- Inserting changeset #{changeset_id}... "
             insert_changeset(changeset_el)
           else
-            puts "Updating changeset #{changeset_id}... "
+            puts "#{Time.now} -- Updating changeset #{changeset_id}... "
             update_changeset(changeset_el)
           end
         end
