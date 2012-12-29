@@ -36,6 +36,17 @@ module TestCommon
   end
 
   def verify_changes(changeset_id)
+
+    for change in @changes
+      # If geom did not change, prev should not be stored.
+      if change['geom_changed'] == 'f'
+        assert_equal(nil, change['prev_geom'], "prev_geom should not be stored for change: #{change}")
+      else
+        assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}")
+      end
+    end
+
+    # There should be at most 2 versions of a way (unless there are more of them in the changeset).
     for way in find_changes('el_type' => 'W')
       if way['el_changeset_id'].to_i != changeset_id
         assert_equal(2, find_changes('el_type' => 'W', 'el_id' => way['el_id']).size,
