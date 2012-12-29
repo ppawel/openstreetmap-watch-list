@@ -164,7 +164,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   FROM ways w
   INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.version > 1) AND
-    w.version = (SELECT version FROM ways WHERE tstamp <= (SELECT MAX(tstamp) FROM affected_nodes) LIMIT 1) AND
+    w.version = (SELECT version FROM ways WHERE id = w.id AND tstamp <= (SELECT MAX(tstamp) FROM affected_nodes) LIMIT 1) AND
     w.changeset_id != $1 AND
     OWL_MakeLine(w.nodes, w.tstamp) IS NOT NULL AND
     (w.version = 1 OR OWL_MakeLine(prev.nodes, prev.tstamp) IS NOT NULL);
@@ -214,20 +214,20 @@ BEGIN
 
   INSERT INTO tiles (changeset_id, tstamp, x, y, zoom, geom, prev_geom, changes)
   SELECT
-	$1,
-	MAX(tstamp),
-	x/subtiles_per_tile,
-	y/subtiles_per_tile,
-	$3,
-	CASE
-	  WHEN $3 >= 14 THEN array_accum(geom)
-	  ELSE array_accum((SELECT array_agg(ST_Envelope(unnest)) FROM unnest(geom)))
-	END,
-	CASE
-	  WHEN $3 >= 14 THEN array_accum(prev_geom)
-	  ELSE array_accum((SELECT array_agg(ST_Envelope(unnest)) FROM unnest(prev_geom)))
-	END,
-	array_accum(changes)
+  $1,
+  MAX(tstamp),
+  x/subtiles_per_tile,
+  y/subtiles_per_tile,
+  $3,
+  CASE
+    WHEN $3 >= 14 THEN array_accum(geom)
+    ELSE array_accum((SELECT array_agg(ST_Envelope(unnest)) FROM unnest(geom)))
+  END,
+  CASE
+    WHEN $3 >= 14 THEN array_accum(prev_geom)
+    ELSE array_accum((SELECT array_agg(ST_Envelope(unnest)) FROM unnest(prev_geom)))
+  END,
+  array_accum(changes)
   FROM tiles
   WHERE changeset_id = $1 AND zoom = $2
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
