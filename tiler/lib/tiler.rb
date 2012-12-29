@@ -24,7 +24,7 @@ class Tiler
     tile_count = nil
     @conn.transaction do |c|
       @tiles = {}
-      generate_changes(changeset_id) if options[:changes]
+      generate_changes(changeset_id) if options[:changes] or !has_changes(changeset_id)
       tile_count = do_generate(zoom, changeset_id, options)
     end
     tile_count
@@ -43,6 +43,10 @@ class Tiler
 
   def has_tiles(changeset_id)
     @conn.exec("SELECT COUNT(*) FROM tiles WHERE changeset_id = #{changeset_id}").getvalue(0, 0).to_i > 0
+  end
+
+  def has_changes(changeset_id)
+    @conn.exec("SELECT COUNT(*) FROM changes WHERE changeset_id = #{changeset_id}").getvalue(0, 0).to_i > 0
   end
 
   protected
