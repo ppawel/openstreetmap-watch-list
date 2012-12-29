@@ -41,10 +41,18 @@ class Tiler
     count
   end
 
+  def has_tiles(changeset_id)
+    @conn.exec("SELECT COUNT(*) FROM tiles WHERE changeset_id = #{changeset_id}").getvalue(0, 0).to_i > 0
+  end
+
   protected
 
   def do_generate(zoom, changeset_id, options = {})
-    clear_tiles(changeset_id, zoom) if options[:retile]
+    if options[:retile]
+      clear_tiles(changeset_id, zoom)
+    else
+      return -1 if has_tiles(changeset_id)
+    end
 
     for change in @conn.exec("SELECT id, el_id, el_version, el_type, tstamp, geom, prev_geom, geom_changed,
           CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
@@ -156,16 +164,16 @@ class Tiler
 
   def reduce_tiles(changeset_id, change, bbox, zoom)
     tiles = Set.new
-    for source_zoom in [14]
-      for tile in bbox_to_tiles(source_zoom, bbox)
-        x, y = tile[0], tile[1]
-        lat1, lon1 = tile2latlon(x, y, source_zoom)
-        lat2, lon2 = tile2latlon(x + 1, y + 1, source_zoom)
-        tile_geom = @wkt_reader.read("MULTIPOINT(#{lon1} #{lat1},#{lon2} #{lat2})").envelope
+    source_zoom = 14
 
-        intersects = tile_geom.intersects?(change['geom_obj'])
-        tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects and source_zoom == 14
-      end
+    for tile in bbox_to_tiles(source_zoom, bbox)
+      x, y = tile[0], tile[1]
+      lat1, lon1 = tile2latlon(x, y, source_zoom)
+      lat2, lon2 = tile2latlon(x + 1, y + 1, source_zoom)
+      tile_geom = @wkt_reader.read("MULTIPOINT(#{lon1} #{lat1},#{lon2} #{lat2})").envelope
+
+      intersects = tile_geom.intersects?(change['geom_obj'])
+      tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects
     end
     tiles
   end
