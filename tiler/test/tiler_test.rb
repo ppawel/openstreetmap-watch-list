@@ -65,5 +65,13 @@ class TilerTest < Test::Unit::TestCase
 
   def test_14459096_affected_way_with_version_1
     setup_changeset_test(14459096)
+    assert_equal(0, find_changes('el_type' => 'N').size)
+    assert_equal(1, find_changes('el_type' => 'W').size)
+  end
+
+  def test_14458340_affected_way
+    setup_changeset_test(14458340)
+    assert_equal(0, find_changes('el_type' => 'N').size)
+    assert_equal(1, find_changes('el_type' => 'W').size)
   end
 end
