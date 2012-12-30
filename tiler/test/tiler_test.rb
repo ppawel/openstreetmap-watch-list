@@ -62,4 +62,8 @@ class TilerTest < Test::Unit::TestCase
   def test_14234906_multiple_way_versions
     setup_changeset_test(14234906)
   end
+
+  def test_14459096_affected_way_with_version_1
+    setup_changeset_test(14459096)
+  end
 end

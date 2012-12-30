@@ -162,7 +162,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       w.nodes,
       prev.nodes
   FROM ways w
-  INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
+  LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.version > 1) AND
     w.version = (SELECT version FROM ways WHERE id = w.id AND tstamp <= (SELECT MAX(tstamp) FROM affected_nodes) LIMIT 1) AND
     w.changeset_id != $1 AND
