@@ -45,17 +45,24 @@ module TestCommon
       end
     end
 
-    # There should be at most 2 versions of a way (unless there are more of them in the changeset).
     for way in find_changes('el_type' => 'W')
+      # There should be at most 2 versions of a way (unless there are more of them in the changeset).
       if way['el_changeset_id'].to_i != changeset_id and way['version'].to_i > 1
         assert_equal(2, find_changes('el_type' => 'W', 'el_id' => way['el_id']).size,
           "Too many versions for way: #{way}")
       end
+
+      assert_equal(way['nodes_len'].to_i, way['geom_num_points'].to_i)
+      assert_equal(way['prev_nodes_len'].to_i, way['prev_geom_num_points'].to_i)
     end
   end
 
   def get_changes
-    @conn.exec("SELECT * FROM changes").to_a
+    @conn.exec("
+      SELECT *,
+        array_length(nodes, 1) AS nodes_len, ST_NumPoints(geom) AS geom_num_points,
+        array_length(prev_nodes, 1) AS prev_nodes_len, ST_NumPoints(prev_geom) AS prev_geom_num_points
+      FROM changes").to_a
   end
 
   def get_tiles
