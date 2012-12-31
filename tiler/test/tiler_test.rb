@@ -36,7 +36,7 @@ class TilerTest < Test::Unit::TestCase
     setup_changeset_test(11193918)
     assert_equal(2, find_changes('el_type' => 'N').size)
     assert_equal(1, find_changes('el_id' => '1703304298').size)
-    assert_equal(6, find_changes('el_type' => 'W').size)
+    assert_equal(7, find_changes('el_type' => 'W').size)
   end
 
   def test_13477045
@@ -78,5 +78,19 @@ class TilerTest < Test::Unit::TestCase
   def test_14370470_validate_ways
     setup_changeset_test(14370470)
     assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '26393755', 'el_version' => '7').size)
+  end
+
+  def test_13223248_misaligned_way
+    setup_changeset_test(13223248)
+
+    way = find_changes('el_type' => 'W', 'el_id' => '166444532', 'el_version' => '4')
+    assert_equal(1, way.size)
+    assert_equal('11', way[0]['nodes_len'])
+    assert(way[0]['geom_astext'].include?('18.650061'))
+
+    way = find_changes('el_type' => 'W', 'el_id' => '169856888', 'el_version' => '1')
+    assert_equal(1, way.size)
+    assert_equal('4', way[0]['nodes_len'])
+    assert(way[0]['geom_astext'].include?('18.650061'))
   end
 end

@@ -61,7 +61,8 @@ module TestCommon
     @conn.exec("
       SELECT *,
         array_length(nodes, 1) AS nodes_len, ST_NumPoints(geom) AS geom_num_points,
-        array_length(prev_nodes, 1) AS prev_nodes_len, ST_NumPoints(prev_geom) AS prev_geom_num_points
+        array_length(prev_nodes, 1) AS prev_nodes_len, ST_NumPoints(prev_geom) AS prev_geom_num_points,
+        ST_AsText(geom) AS geom_astext, ST_AsText(prev_geom) AS prev_geom_astext
       FROM changes").to_a
   end
 
@@ -69,7 +70,8 @@ module TestCommon
     @conn.exec("SELECT *,
         array_length(geom, 1) AS geom_arr_len,
         array_length(prev_geom, 1) AS prev_geom_arr_len,
-        array_length(changes, 1) AS change_arr_len
+        array_length(changes, 1) AS change_arr_len,
+        (select array_agg(st_astext(unnest)) from unnest(geom)) AS geom_astext
       FROM tiles WHERE zoom = 16").to_a
   end
 
