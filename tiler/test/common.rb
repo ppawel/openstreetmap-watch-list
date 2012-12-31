@@ -39,9 +39,9 @@ module TestCommon
     for change in @changes
       # If geom did not change, prev should not be stored.
       if change['geom_changed'] == 'f'
-#        assert_equal(nil, change['prev_geom'], "prev_geom should not be stored for change: #{change}")
+        assert_equal(nil, change['prev_geom'], "prev_geom should not be stored for change: #{change}")
       else
-#        assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}")
+        assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}")
       end
     end
 
@@ -52,8 +52,12 @@ module TestCommon
           "Too many versions for way: #{way}")
       end
 
-      assert_equal(way['nodes_len'].to_i, way['geom_num_points'].to_i)
-      assert_equal(way['prev_nodes_len'].to_i, way['prev_geom_num_points'].to_i)
+      assert_equal(way['nodes_len'].to_i, way['geom_num_points'].to_i,
+        "nodes do not correspond to geom points for change: #{way}")
+      if way['geom_changed'] == 't' and way['nodes_changed'] == 't'
+        assert_equal(way['prev_nodes_len'], way['prev_geom_num_points'],
+          "prev_nodes do not correspond to prev_geom points for change: #{way}")
+      end
     end
   end
 

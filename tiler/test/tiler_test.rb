@@ -48,7 +48,7 @@ class TilerTest < Test::Unit::TestCase
   def test_3155
     setup_changeset_test(3155)
     assert_equal(0, find_changes('el_type' => 'N').size)
-    assert_equal(29, find_changes('el_type' => 'W').size)
+    assert_equal(30, find_changes('el_type' => 'W').size)
   end
 
   def test_13018562

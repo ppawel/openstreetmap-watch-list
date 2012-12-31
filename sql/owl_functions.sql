@@ -93,7 +93,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
         NULL::boolean AS nodes_changed,
         NULL::boolean AS members_changed,
         n.geom AS geom,
-        prev.geom AS prev_geom,
+        CASE WHEN n.geom = prev.geom THEN NULL ELSE prev.geom END AS prev_geom,
         n.tags,
         prev.tags AS prev_tags,
         NULL::bigint[] AS nodes,
@@ -131,11 +131,12 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       w.nodes != prev.nodes OR w.version = 1,
       NULL,
       OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)),
-      OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)),
+      CASE WHEN OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) = OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) THEN NULL
+        ELSE OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) END,
       w.tags,
       prev.tags,
       w.nodes,
-      prev.nodes
+      CASE WHEN w.nodes = prev.nodes THEN NULL ELSE prev.nodes END
     FROM ways w
     LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
     WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1) AND
@@ -169,11 +170,12 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       w.nodes != prev.nodes OR w.version = 1,
       NULL,
       OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)),
-      OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)),
+      CASE WHEN OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) = OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) THEN NULL
+        ELSE OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) END,
       w.tags,
       prev.tags,
       w.nodes,
-      prev.nodes
+      CASE WHEN w.nodes = prev.nodes THEN NULL ELSE prev.nodes END
   FROM ways w
   LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.version > 1) AND
