@@ -114,7 +114,9 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
     ) x
   )
 
-    SELECT
+  SELECT *
+  FROM
+    (SELECT
       $1,
       w.tstamp,
       w.changeset_id,
@@ -125,9 +127,10 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
         WHEN w.version = 1 THEN 'CREATE'::action
         WHEN w.version > 0 AND w.visible THEN 'MODIFY'::action
         WHEN NOT w.visible THEN 'DELETE'::action
-      END AS el_type,
-      (NOT OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) = OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps))) OR w.version = 1 OR NOT w.visible,
-      w.tags != prev.tags OR w.version = 1,
+      END AS el_action,
+      (NOT OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) = OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)))
+        OR w.version = 1 OR NOT w.visible AS geom_changed,
+      w.tags != prev.tags OR w.version = 1 AS tags_changed,
       w.nodes != prev.nodes OR w.version = 1,
       NULL,
       OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)),
@@ -141,7 +144,8 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
     LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
     WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1) AND
       (OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) IS NOT NULL OR NOT w.visible) AND
-      (w.version = 1 OR OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) IS NOT NULL)
+      (w.version = 1 OR OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) IS NOT NULL)) x
+  WHERE x.geom_changed OR x.tags_changed OR el_action = 'CREATE' OR el_action = 'DELETE'
 
   UNION
 
