@@ -132,7 +132,7 @@ class Tiler
       # Does not make sense to try to reduce small geoms.
       tiles = bbox_to_tiles(zoom, bbox)
     else
-      tiles_to_check = (tile_count < 1024 ? bbox_to_tiles(14, bbox) : prepare_tiles_to_check(geom, bbox, 14))
+      tiles_to_check = (tile_count < 2048 ? bbox_to_tiles(14, bbox) : prepare_tiles_to_check(geom, bbox, 14))
       @@log.debug "  tiles_to_check = #{tiles_to_check.size}"
       tiles = prepare_tiles(tiles_to_check, geom, 14, zoom)
     end
@@ -168,7 +168,7 @@ class Tiler
 
   def prepare_tiles_to_check(geom, bbox, source_zoom)
     tiles = Set.new
-    test_zoom = 10
+    test_zoom = 11
     bbox_to_tiles(test_zoom, bbox).select {|tile| geom.intersects?(tile_geom(tile[0], tile[1], test_zoom))}.each do |tile|
       tiles.merge(subtiles(tile, test_zoom, source_zoom))
     end
