@@ -126,7 +126,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
         WHEN w.version > 0 AND w.visible THEN 'MODIFY'::action
         WHEN NOT w.visible THEN 'DELETE'::action
       END AS el_type,
-      (NOT OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) = OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps))) OR w.version = 1,
+      (NOT OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) = OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps))) OR w.version = 1 OR NOT w.visible,
       w.tags != prev.tags OR w.version = 1,
       w.nodes != prev.nodes OR w.version = 1,
       NULL,
@@ -140,7 +140,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
     FROM ways w
     LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
     WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1) AND
-      OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) IS NOT NULL AND
+      (OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) IS NOT NULL OR NOT w.visible) AND
       (w.version = 1 OR OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) IS NOT NULL)
 
   UNION

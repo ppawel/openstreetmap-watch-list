@@ -93,4 +93,9 @@ class TilerTest < Test::Unit::TestCase
     assert_equal('4', way[0]['nodes_len'])
     assert(way[0]['geom_astext'].include?('18.650061'))
   end
+
+  def test_14429223_deleted_ways
+    setup_changeset_test(14429223)
+    assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '198336783', 'el_version' => '2').size)
+  end
 end
