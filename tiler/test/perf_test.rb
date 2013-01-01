@@ -24,4 +24,8 @@ class TilerTest < Test::Unit::TestCase
     setup_changeset_test(10822980)
     assert_equal(2396, @tiles.size)
   end
+
+  def test_dateline
+    setup_changeset_test(14483444)
+  end
 end

@@ -89,19 +89,6 @@ class Tiler
     @tiles.size
   end
 
-  def to_postgres_geom_array(geom_arr)
-    str = ''
-    geom_arr.each_with_index do |geom, index|
-      str += ',' if index > 0
-      if geom.nil?
-        str += 'NULL'
-        next
-      end
-      str += "ST_SetSRID('#{geom}'::geometry, 4326)"
-    end
-    str = "ARRAY[#{str}]"
-  end
-
   def add_change_tile(x, y, zoom, change, geom, prev_geom)
     if !@tiles.include?([x, y, zoom])
       @tiles[[x, y, zoom]] = {
@@ -137,6 +124,7 @@ class Tiler
     @@log.debug "  tile_count = #{tile_count}"
 
     if tile_count == 1
+      # Fast track a change that fits on a single tile (e.g. all nodes) - just create the tile.
       tiles = bbox_to_tiles(zoom, bbox)
       add_change_tile(tiles.to_a[0][0], tiles.to_a[0][1], zoom, change, is_prev ? nil : geom, is_prev ? geom : nil)
       return 1
@@ -144,7 +132,9 @@ class Tiler
       # Does not make sense to try to reduce small geoms.
       tiles = bbox_to_tiles(zoom, bbox)
     else
-      tiles = reduce_tiles(changeset_id, change, bbox, zoom)
+      tiles_to_check = (tile_count < 1024 ? bbox_to_tiles(14, bbox) : prepare_tiles_to_check(geom, bbox, 14))
+      @@log.debug "  tiles_to_check = #{tiles_to_check.size}"
+      tiles = prepare_tiles(tiles_to_check, geom, 14, zoom)
     end
 
     @@log.debug "  Processing #{tiles.size} tile(s)..."
@@ -166,20 +156,29 @@ class Tiler
     count
   end
 
-  def reduce_tiles(changeset_id, change, bbox, zoom)
+  def prepare_tiles(tiles_to_check, geom, source_zoom, zoom)
     tiles = Set.new
-    source_zoom = 14
-
-    for tile in bbox_to_tiles(source_zoom, bbox)
-      x, y = tile[0], tile[1]
-      lat1, lon1 = tile2latlon(x, y, source_zoom)
-      lat2, lon2 = tile2latlon(x + 1, y + 1, source_zoom)
-      tile_geom = @wkt_reader.read("MULTIPOINT(#{lon1} #{lat1},#{lon2} #{lat2})").envelope
-
-      intersects = tile_geom.intersects?(change['geom_obj'])
+    for tile in tiles_to_check
+      tile_geom = tile_geom(tile[0], tile[1], source_zoom)
+      intersects = tile_geom.intersects?(geom)
       tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects
     end
     tiles
+  end
+
+  def prepare_tiles_to_check(geom, bbox, source_zoom)
+    tiles = Set.new
+    test_zoom = 10
+    bbox_to_tiles(test_zoom, bbox).select {|tile| geom.intersects?(tile_geom(tile[0], tile[1], test_zoom))}.each do |tile|
+      tiles.merge(subtiles(tile, test_zoom, source_zoom))
+    end
+    tiles
+  end
+
+  def tile_geom(x, y, zoom)
+    lat1, lon1 = tile2latlon(x, y, zoom)
+    lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
+    @wkt_reader.read("MULTIPOINT(#{lon1} #{lat1},#{lon2} #{lat2})").envelope
   end
 
   def generate_changes(changeset_id)
