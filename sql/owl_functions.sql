@@ -1,9 +1,3 @@
-DROP FUNCTION IF EXISTS OWL_MakeLine(bigint[], timestamp without time zone);
-DROP FUNCTION IF EXISTS OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]);
-DROP FUNCTION IF EXISTS OWL_GenerateChanges(bigint);
-DROP FUNCTION IF EXISTS OWL_UpdateChangeset(bigint);
-DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
-
 --
 -- OWL_MakeLine
 --
@@ -14,7 +8,7 @@ DROP FUNCTION IF EXISTS OWL_AggregateChangeset(bigint, int, int);
 -- Note that it returns NULL when it cannot recreate the geometry, e.g. when
 -- there is not enough historical node versions in the database.
 --
-CREATE FUNCTION OWL_MakeLine(bigint[], timestamp without time zone) RETURNS geometry(GEOMETRY, 4326) AS $$
+CREATE OR REPLACE FUNCTION OWL_MakeLine(bigint[], timestamp without time zone) RETURNS geometry(GEOMETRY, 4326) AS $$
 DECLARE
   way_geom geometry(GEOMETRY, 4326);
 BEGIN
@@ -39,7 +33,24 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
-CREATE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]) RETURNS text[] AS $$
+--
+-- OWL_MakeMinimalLine
+--
+-- Creates a line from given nodes just as OWL_MakeLine does but also
+-- considers additional array of "minimal" nodes. If it's possible to
+-- build a shorter line using this subset of all nodes then do it.
+--
+-- $1 - all nodes
+-- $2 - tstamp to use for constructing geometry
+-- $3 - "minimal" nodes (needs to be a subset of $1)
+--
+CREATE OR REPLACE FUNCTION OWL_MakeMinimalLine(bigint[], timestamp without time zone, bigint[]) RETURNS geometry(GEOMETRY, 4326) AS $$
+  SELECT OWL_MakeLine(
+    (SELECT $1[MIN(idx($1, minimal_node)) - 2:MAX(idx($1, minimal_node)) + 2]
+    FROM unnest($3) AS minimal_node), $2)
+$$ LANGUAGE sql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]) RETURNS text[] AS $$
  SELECT array_agg(CASE WHEN c.g IS NOT NULL AND NOT ST_IsEmpty(c.g) AND ST_NumGeometries(c.g) > 0 THEN ST_AsGeoJSON(c.g) ELSE NULL END) FROM
  (
  SELECT ST_Union(y.geom) AS g, x.change_id
@@ -55,7 +66,7 @@ $$ LANGUAGE sql IMMUTABLE;
 --
 -- OWL_GenerateChanges
 --
-CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
+CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   changeset_id bigint,
   tstamp timestamp without time zone,
   el_changeset_id bigint,
@@ -168,12 +179,12 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       'W'::element_type AS type,
       w.id,
       w.version,
-      'MODIFY'::action,
+      'AFFECT'::action,
       NOT ST_OrderingEquals(OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)), OWL_MakeLine(w.nodes, (SELECT min FROM tstamps))) OR w.version = 1,
       false,
       false,
       NULL,
-      OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)),
+      OWL_MakeMinimalLine(w.nodes, (SELECT max FROM tstamps), array_intersect(w.nodes, (SELECT array_agg(id) FROM affected_nodes an WHERE an.version > 1 AND an.geom_changed))),
       CASE WHEN ST_OrderingEquals(OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)), OWL_MakeLine(w.nodes, (SELECT min FROM tstamps))) THEN NULL
         ELSE OWL_MakeLine(w.nodes, (SELECT min FROM tstamps)) END,
       w.tags,
@@ -193,7 +204,7 @@ $$ LANGUAGE sql IMMUTABLE;
 --
 -- OWL_UpdateChangeset
 --
-CREATE FUNCTION OWL_UpdateChangeset(bigint) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION OWL_UpdateChangeset(bigint) RETURNS void AS $$
 DECLARE
   row record;
   idx int;
@@ -223,7 +234,7 @@ $$ LANGUAGE plpgsql;
 --
 -- OWL_AggregateChangeset
 --
-CREATE FUNCTION OWL_AggregateChangeset(bigint, int, int) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION OWL_AggregateChangeset(bigint, int, int) RETURNS void AS $$
 DECLARE
   subtiles_per_tile bigint;
 
@@ -253,3 +264,32 @@ BEGIN
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
 END;
 $$ LANGUAGE plpgsql;
+
+-- 
+-- Returns index of an element in given array.
+--
+-- Source: http://wiki.postgresql.org/wiki/Array_Index
+--
+CREATE OR REPLACE FUNCTION idx(anyarray, anyelement)
+  RETURNS int AS 
+$$
+  SELECT i FROM (
+     SELECT generate_series(array_lower($1,1),array_upper($1,1))
+  ) g(i)
+  WHERE $1[i] = $2
+  LIMIT 1;
+$$ LANGUAGE sql IMMUTABLE;
+
+--
+-- Returns the intersection of two arrays.
+--
+CREATE OR REPLACE FUNCTION array_intersect(anyarray, anyarray)
+  RETURNS anyarray
+  language sql
+as $FUNCTION$
+    SELECT ARRAY(
+        SELECT UNNEST($1)
+        INTERSECT
+        SELECT UNNEST($2)
+    );
+$FUNCTION$;
