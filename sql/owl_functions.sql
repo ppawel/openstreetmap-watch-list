@@ -102,7 +102,7 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
     LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
     WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1)
   ), tstamps AS (
-    SELECT MAX(x.tstamp) AS max, MIN(x.tstamp) AS min
+    SELECT MAX(x.tstamp) AS max, MIN(x.tstamp) - INTERVAL '1 second' AS min
     FROM (
       SELECT tstamp
       FROM nodes
@@ -128,13 +128,13 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
         WHEN w.version > 0 AND w.visible THEN 'MODIFY'::action
         WHEN NOT w.visible THEN 'DELETE'::action
       END AS el_action,
-      (NOT OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) = OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)))
+      NOT ST_OrderingEquals(OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)), OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)))
         OR w.version = 1 OR NOT w.visible AS geom_changed,
       w.tags != prev.tags OR w.version = 1 AS tags_changed,
       w.nodes != prev.nodes OR w.version = 1,
       NULL,
       OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)),
-      CASE WHEN OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) = OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) THEN NULL
+      CASE WHEN ST_OrderingEquals(OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)), OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps))) THEN NULL
         ELSE OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) END,
       w.tags,
       prev.tags,
@@ -169,25 +169,24 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       w.id,
       w.version,
       'MODIFY'::action,
-      (NOT OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) = OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps))) OR w.version = 1,
-      w.tags != prev.tags OR w.version = 1,
-      w.nodes != prev.nodes OR w.version = 1,
+      NOT ST_OrderingEquals(OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)), OWL_MakeLine(w.nodes, (SELECT min FROM tstamps))) OR w.version = 1,
+      false,
+      false,
       NULL,
       OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)),
-      CASE WHEN OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) = OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) THEN NULL
-        ELSE OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) END,
+      CASE WHEN ST_OrderingEquals(OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)), OWL_MakeLine(w.nodes, (SELECT min FROM tstamps))) THEN NULL
+        ELSE OWL_MakeLine(w.nodes, (SELECT min FROM tstamps)) END,
       w.tags,
-      prev.tags,
+      NULL,
       w.nodes,
-      CASE WHEN w.nodes = prev.nodes THEN NULL ELSE prev.nodes END
+      NULL
   FROM ways w
-  LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.version > 1 AND an.geom_changed) AND
     w.version = (SELECT version FROM ways WHERE id = w.id AND
       tstamp <= (SELECT max FROM tstamps) ORDER BY version DESC LIMIT 1) AND
     w.changeset_id != $1 AND
     OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) IS NOT NULL AND
-    (w.version = 1 OR OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) IS NOT NULL);
+    (w.version = 1 OR OWL_MakeLine(w.nodes, (SELECT min FROM tstamps)) IS NOT NULL);
 
 $$ LANGUAGE sql IMMUTABLE;
 

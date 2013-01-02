@@ -101,7 +101,12 @@ class TilerTest < Test::Unit::TestCase
 
   def test_14211906_only_nodes
     setup_changeset_test(14211906)
-    assert_equal(0, find_changes('el_type' => 'W', ).size)
-    assert_equal(5998, find_changes('el_type' => 'N', ).size)
+    assert_equal(0, find_changes('el_type' => 'W').size)
+    assert_equal(5998, find_changes('el_type' => 'N').size)
+  end
+
+  def test_14123055_affected_way
+    setup_changeset_test(14123055)
+    assert_equal('t', find_changes('el_type' => 'W', 'el_id' => '185961533', 'el_version' => '2')[0]['geom_changed'])
   end
 end
