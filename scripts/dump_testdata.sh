@@ -9,5 +9,5 @@ if [ "$CHANGESET_ID" = "" ]; then
 fi
 
 psql $PSQL_OPTIONS -c "\copy (SELECT * FROM changes WHERE changeset_id = $CHANGESET_ID) TO '../testdata/$CHANGESET_ID-changes.csv'"
-psql $PSQL_OPTIONS -c "\copy (SELECT * FROM tiles WHERE changeset_id = $CHANGESET_ID) TO '../testdata/$CHANGESET_ID-tiles.csv'"
+#psql $PSQL_OPTIONS -c "\copy (SELECT * FROM tiles WHERE changeset_id = $CHANGESET_ID) TO '../testdata/$CHANGESET_ID-tiles.csv'"
 psql $PSQL_OPTIONS -c "\copy (SELECT * FROM changesets WHERE id = $CHANGESET_ID) TO '../testdata/$CHANGESET_ID-changeset.csv'"
