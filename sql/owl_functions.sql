@@ -182,12 +182,13 @@ CREATE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       CASE WHEN w.nodes = prev.nodes THEN NULL ELSE prev.nodes END
   FROM ways w
   LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
-  WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.version > 1) AND
+  WHERE w.nodes && (SELECT array_agg(id) FROM affected_nodes an WHERE an.version > 1 AND an.geom_changed) AND
     w.version = (SELECT version FROM ways WHERE id = w.id AND
       tstamp <= (SELECT max FROM tstamps) ORDER BY version DESC LIMIT 1) AND
     w.changeset_id != $1 AND
     OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) IS NOT NULL AND
     (w.version = 1 OR OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) IS NOT NULL);
+
 $$ LANGUAGE sql IMMUTABLE;
 
 --

@@ -98,4 +98,10 @@ class TilerTest < Test::Unit::TestCase
     setup_changeset_test(14429223)
     assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '198336783', 'el_version' => '2').size)
   end
+
+  def test_14211906_only_nodes
+    setup_changeset_test(14211906)
+    assert_equal(0, find_changes('el_type' => 'W', ).size)
+    assert_equal(5998, find_changes('el_type' => 'N', ).size)
+  end
 end
