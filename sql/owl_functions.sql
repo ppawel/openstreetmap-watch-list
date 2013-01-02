@@ -75,10 +75,12 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 -- $3 - "minimal" nodes (needs to be a subset of $1)
 --
 CREATE OR REPLACE FUNCTION OWL_MakeMinimalLine(bigint[], timestamp without time zone, bigint[]) RETURNS geometry(GEOMETRY, 4326) AS $$
-  SELECT OWL_MakeLine(
+BEGIN
+  RETURN OWL_MakeLine(
     (SELECT $1[MIN(idx($1, minimal_node)) - 2:MAX(idx($1, minimal_node)) + 2]
-    FROM unnest($3) AS minimal_node), $2)
-$$ LANGUAGE sql IMMUTABLE;
+    FROM unnest($3) AS minimal_node), $2);
+END
+$$ LANGUAGE plpgsql IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]) RETURNS text[] AS $$
  SELECT array_agg(CASE WHEN c.g IS NOT NULL AND NOT ST_IsEmpty(c.g) AND ST_NumGeometries(c.g) > 0 THEN ST_AsGeoJSON(c.g) ELSE NULL END) FROM
@@ -171,12 +173,20 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       WHEN w.version > 0 AND w.visible THEN 'MODIFY'::action
       WHEN NOT w.visible THEN 'DELETE'::action
     END AS el_action,
-    NOT ST_OrderingEquals(geom, prev_geom),
-    w.tags != prev_tags,
-    w.nodes != prev_nodes,
+    geom_changed,
+    tags_changed,
+    nodes_changed,
     NULL,
-    geom,
-    CASE WHEN w.visible AND ST_OrderingEquals(geom, prev_geom) THEN NULL ELSE prev_geom END,
+    CASE WHEN geom_changed AND NOT tags_changed AND NOT nodes_changed THEN
+      OWL_MakeMinimalLine(w.nodes, (SELECT max FROM tstamps), (SELECT array_agg(id) FROM changeset_nodes WHERE w.nodes @> ARRAY[id]))
+    ELSE
+      geom
+    END,
+    CASE WHEN geom_changed AND NOT tags_changed AND NOT nodes_changed THEN
+      OWL_MakeMinimalLine(prev_nodes, (SELECT min FROM tstamps), (SELECT array_agg(id) FROM changeset_nodes WHERE prev_nodes @> ARRAY[id]))
+    ELSE
+      CASE WHEN w.visible AND NOT geom_changed THEN NULL ELSE prev_geom END
+    END,
     w.tags,
     prev_tags,
     w.nodes,
@@ -184,7 +194,9 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   FROM
     (SELECT w.*, prev.tags AS prev_tags, prev.nodes AS prev_nodes,
       OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) AS geom,
-      OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) AS prev_geom
+      OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) AS prev_geom,
+      NOT ST_OrderingEquals(OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)), OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps))) AS geom_changed,
+      CASE WHEN NOT w.visible OR w.version = 1 THEN NULL ELSE w.tags != prev.tags END AS tags_changed, w.nodes != prev.nodes AS nodes_changed
     FROM ways w
     LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
     WHERE w.changeset_id = $1 AND
@@ -192,7 +204,7 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       (OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) IS NOT NULL OR NOT w.visible) AND
       (w.version = 1 OR OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) IS NOT NULL)
     ) w
-  WHERE NOT ST_OrderingEquals(geom, prev_geom) OR w.tags != prev_tags OR w.version = 1
+  WHERE geom_changed OR tags_changed OR w.version = 1
 
   UNION
 
