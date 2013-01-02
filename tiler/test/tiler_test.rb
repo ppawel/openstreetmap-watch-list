@@ -19,7 +19,7 @@ class TilerTest < Test::Unit::TestCase
 
   def test_13294164
     setup_changeset_test(13294164)
-    assert_equal(8, find_changes('el_type' => 'W').size)
+    assert_equal(9, find_changes('el_type' => 'W').size)
 
     # traffic_signals changed position - should be a change for that.
     changes = find_changes('el_type' => 'N', 'el_id' => '244942711')
@@ -43,12 +43,6 @@ class TilerTest < Test::Unit::TestCase
     setup_changeset_test(13477045)
     assert_equal(0, find_changes('el_type' => 'N').size)
     assert_equal(25, find_changes('el_type' => 'W').size)
-  end
-
-  def test_3155
-    setup_changeset_test(3155)
-    assert_equal(0, find_changes('el_type' => 'N').size)
-    assert_equal(30, find_changes('el_type' => 'W').size)
   end
 
   def test_13018562

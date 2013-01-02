@@ -58,7 +58,7 @@ class Tiler
       return -1 if has_tiles(changeset_id)
     end
 
-    for change in @conn.exec("SELECT id, el_id, el_version, el_type, tstamp, geom, prev_geom, geom_changed,
+    for change in @conn.exec("SELECT id, el_action, el_id, el_version, el_type, tstamp, geom, prev_geom, geom_changed,
           CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
           CASE WHEN el_type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
           CASE WHEN el_type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
@@ -106,10 +106,13 @@ class Tiler
   end
 
   def create_change_tiles(changeset_id, change, change_id, zoom)
-    count = create_geom_tiles(changeset_id, change, change['geom_obj'], change_id, zoom, false)
-
-    if change['geom_changed']
-      count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change_id, zoom, true)
+    if change['el_action'] == 'DELETE'
+      count = create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change_id, zoom, true)
+    else
+      count = create_geom_tiles(changeset_id, change, change['geom_obj'], change_id, zoom, false)
+      if change['geom_changed']
+        count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change_id, zoom, true)
+      end
     end
 
     @@log.debug "  Created #{count} tile(s)"

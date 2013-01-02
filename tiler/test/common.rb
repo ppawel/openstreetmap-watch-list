@@ -37,11 +37,15 @@ module TestCommon
 
   def verify_changes(changeset_id)
     for change in @changes
-      # If geom did not change, prev should not be stored.
-      if change['geom_changed'] == 'f'
-        assert_equal(nil, change['prev_geom'], "prev_geom should not be stored for change: #{change}")
+      if change['el_action'] == 'DELETE'
+        assert(!change['prev_geom'].nil?, "prev_geom should be stored for change: #{change}")
       else
-        assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}")
+        # If geom did not change, prev should not be stored.
+        if change['geom_changed'] == 'f'
+          assert_equal(nil, change['prev_geom'], "prev_geom should not be stored for change: #{change}")
+        else
+          assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}")
+        end
       end
     end
 
@@ -52,11 +56,13 @@ module TestCommon
           "Too many versions for way: #{way}")
       end
 
-      assert_equal(way['nodes_len'].to_i, way['geom_num_points'].to_i,
-        "nodes do not correspond to geom points for change: #{way}")
-      if way['geom_changed'] == 't' and way['nodes_changed'] == 't'
-        assert_equal(way['prev_nodes_len'], way['prev_geom_num_points'],
-          "prev_nodes do not correspond to prev_geom points for change: #{way}")
+      if way['el_action'] != 'AFFECT'
+        assert_equal(way['nodes_len'].to_i, way['geom_num_points'].to_i,
+          "nodes do not correspond to geom points for change: #{way}")
+        if way['geom_changed'] == 't' and way['nodes_changed'] == 't'
+          assert_equal(way['prev_nodes_len'], way['prev_geom_num_points'],
+            "prev_nodes do not correspond to prev_geom points for change: #{way}")
+        end
       end
     end
   end
@@ -84,7 +90,7 @@ module TestCommon
     # Check if each change has a tile.
     change_ids = @changes_h.keys.sort.uniq
     change_ids_from_tiles = @tiles.collect {|tile| pg_parse_array(tile['changes'])}.flatten.sort.uniq
-    assert_equal(change_ids, change_ids_from_tiles)
+    assert_equal(change_ids, change_ids_from_tiles, change_ids - change_ids_from_tiles)
 
     for tile in @tiles
       # Every change should have an associated geom and prev_geom entry.
