@@ -63,11 +63,14 @@ class Tiler
           CASE WHEN el_type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
           CASE WHEN el_type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
           CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
-          Box2D(geom) AS geom_bbox, Box2D(prev_geom) AS prev_geom_bbox
+          Box2D(geom) AS geom_bbox, Box2D(prev_geom) AS prev_geom_bbox,
+          Box2D(ST_Difference(geom, prev_geom)) AS diff_bbox
         FROM changes WHERE changeset_id = #{changeset_id}").to_a
+
       change['geom_changed'] = (change['geom_changed'] == 't')
       change['geom_obj'] = @wkb_reader.read_hex(change['geom']) if change['geom']
       change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom']) if change['prev_geom']
+      change['diff_geom_obj'] =  change['geom_obj'].difference(change['prev_geom_obj']) if change['diff_bbox']
 
       @@log.debug "#{change['el_type']} #{change['el_id']} (#{change['el_version']})"
       create_change_tiles(changeset_id, change, change['id'].to_i, zoom)
@@ -121,7 +124,12 @@ class Tiler
   def create_geom_tiles(changeset_id, change, geom, change_id, zoom, is_prev)
     return 0 if geom.nil?
 
-    bbox = box2d_to_bbox(change[(is_prev ? 'prev_geom' : 'geom') + '_bbox'])
+    if change['diff_bbox']
+      bbox = box2d_to_bbox(change['diff_bbox'])
+    else
+      bbox = box2d_to_bbox(change[(is_prev ? 'prev_geom' : 'geom') + '_bbox'])
+    end
+
     tile_count = bbox_tile_count(zoom, bbox)
 
     @@log.debug "  tile_count = #{tile_count}"
@@ -142,15 +150,14 @@ class Tiler
 
     @@log.debug "  Processing #{tiles.size} tile(s)..."
 
+    test_geom = change['diff_geom_obj'] || geom
     count = 0
 
     for tile in tiles
       x, y = tile[0], tile[1]
-      lat1, lon1 = tile2latlon(x, y, zoom)
-      lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
-      tile_geom = @wkt_reader.read("MULTIPOINT(#{lon1} #{lat1},#{lon2} #{lat2})").envelope
+      tile_geom = tile_geom(x, y, zoom)
 
-      if geom.intersects?(tile_geom)
+      if test_geom.intersects?(tile_geom)
         intersection = geom.intersection(tile_geom)
         add_change_tile(x, y, zoom, change, is_prev ? nil : intersection, is_prev ? intersection : nil)
         count += 1
