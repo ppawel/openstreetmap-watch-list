@@ -204,7 +204,7 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       (OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) IS NOT NULL OR NOT w.visible) AND
       (w.version = 1 OR OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) IS NOT NULL)
     ) w
-  WHERE geom_changed OR tags_changed OR w.version = 1
+  WHERE geom_changed OR tags_changed OR w.version = 1 OR NOT w.visible
 
   UNION
 
