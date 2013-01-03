@@ -82,6 +82,44 @@ BEGIN
 END
 $$ LANGUAGE plpgsql IMMUTABLE;
 
+--
+-- OWL_Equals
+--
+-- Determines if two geometries are the same or not in OWL sense. That is,
+-- very small changes in node geometry are ignored as they are not really
+-- useful to consider as data changes.
+--
+CREATE OR REPLACE FUNCTION OWL_Equals(geometry(GEOMETRY, 4326), geometry(GEOMETRY, 4326)) RETURNS boolean AS $$
+BEGIN
+RETURN st_equals(st_snaptogrid($1, 0.0002), st_snaptogrid($2, 0.0002));
+  -- First to a regular check to eliminate obvious geometries from futher processing.
+  IF ST_Equals($1, $2) THEN
+    RETURN true;
+  END IF;
+
+  -- If number of points is different - consider geometries as different.
+  IF ST_NumPoints($1) != ST_NumPoints($2) THEN
+    RETURN false;
+  END IF;
+
+  -- At this point we have two geometries with the same number of points
+  -- and we know that some points are not the same.
+
+  RETURN (WITH geom1_points AS (
+    SELECT (dp).geom, row_number() OVER () as seq FROM ST_DumpPoints($1) dp
+  ),
+  geom2_points AS (
+    SELECT (dp).geom, row_number() OVER () as seq FROM ST_DumpPoints($2) dp
+  )
+  SELECT COUNT(*)
+  FROM (
+    SELECT 1
+    FROM geom1_points gp1 INNER JOIN geom2_points gp2 USING (seq)
+    WHERE ST_Distance_Sphere(gp1.geom, gp2.geom) > 3 LIMIT 1) x) = 0;
+END
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+
 CREATE OR REPLACE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]) RETURNS text[] AS $$
  SELECT array_agg(CASE WHEN c.g IS NOT NULL AND NOT ST_IsEmpty(c.g) AND ST_NumGeometries(c.g) > 0 THEN ST_AsGeoJSON(c.g) ELSE NULL END) FROM
  (
@@ -131,12 +169,12 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
           WHEN n.version > 0 AND n.visible THEN 'MODIFY'::action
           WHEN NOT n.visible THEN 'DELETE'::action
         END AS el_type,
-        NOT n.geom = prev.geom AS geom_changed,
+        NOT OWL_Equals(n.geom, prev.geom) AS geom_changed,
         n.tags != prev.tags AS tags_changed,
         NULL::boolean AS nodes_changed,
         NULL::boolean AS members_changed,
         CASE WHEN NOT n.visible THEN NULL ELSE n.geom END AS geom,
-        CASE WHEN NOT n.visible OR NOT n.geom = prev.geom THEN prev.geom ELSE NULL END AS prev_geom,
+        CASE WHEN NOT n.visible OR NOT OWL_Equals(n.geom, prev.geom) THEN prev.geom ELSE NULL END AS prev_geom,
         n.tags,
         prev.tags AS prev_tags,
         NULL::bigint[] AS nodes,
@@ -195,7 +233,7 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
     (SELECT w.*, prev.tags AS prev_tags, prev.nodes AS prev_nodes,
       OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) AS geom,
       OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) AS prev_geom,
-      NOT ST_OrderingEquals(OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)), OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps))) AS geom_changed,
+      NOT OWL_Equals(OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)), OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps))) AS geom_changed,
       CASE WHEN NOT w.visible OR w.version = 1 THEN NULL ELSE w.tags != prev.tags END AS tags_changed, w.nodes != prev.nodes AS nodes_changed
     FROM ways w
     LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
