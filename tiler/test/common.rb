@@ -37,6 +37,10 @@ module TestCommon
 
   def verify_changes(changeset_id)
     for change in @changes
+      if change['el_action'] == 'MODIFY'
+        assert((change['tags_changed'] == 't' or change['geom_changed'] == 't'), "Change is not a change: #{change}")
+      end
+
       if change['el_action'] == 'DELETE'
         assert(!change['prev_geom'].nil?, "prev_geom should be stored for change: #{change}")
       else
@@ -46,6 +50,11 @@ module TestCommon
         else
           assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}")
         end
+      end
+
+      if change['el_action'] == 'AFFECT'
+        assert_equal(nil, change['tags_change'])
+        assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}") if change['geom_changed'] == 't'
       end
     end
 

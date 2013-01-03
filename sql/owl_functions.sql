@@ -83,6 +83,15 @@ END
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 --
+-- OWL_RemoveTags
+--
+-- Removes "not interesting" tags from given hstore.
+--
+CREATE OR REPLACE FUNCTION OWL_RemoveTags(hstore) RETURNS hstore AS $$
+  SELECT $1 - ARRAY['created_by', 'source']
+$$ LANGUAGE sql IMMUTABLE;
+
+--
 -- OWL_Equals
 --
 -- Determines if two geometries are the same or not in OWL sense. That is,
@@ -166,9 +175,9 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
         n.version,
         CASE
           WHEN n.version = 1 THEN 'CREATE'::action
-          WHEN n.version > 0 AND n.visible THEN 'MODIFY'::action
+          WHEN n.version > 1 AND n.visible THEN 'MODIFY'::action
           WHEN NOT n.visible THEN 'DELETE'::action
-        END AS el_type,
+        END AS el_action,
         NOT OWL_Equals(n.geom, prev.geom) AS geom_changed,
         n.tags != prev.tags AS tags_changed,
         NULL::boolean AS nodes_changed,
@@ -248,13 +257,8 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
 
   SELECT *
   FROM changeset_nodes
-  WHERE tags != prev_tags
-
-  UNION
-
-  SELECT *
-  FROM changeset_nodes
-  WHERE (tags - ARRAY['created_by', 'source']) != ''::hstore OR (prev_tags - ARRAY['created_by', 'source']) != ''::hstore
+  WHERE (el_action IN ('CREATE', 'DELETE') OR tags_changed OR geom_changed) AND
+    (OWL_RemoveTags(tags) != ''::hstore OR OWL_RemoveTags(prev_tags) != ''::hstore)
 
   UNION
 
@@ -287,7 +291,8 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
         tstamp <= (SELECT max FROM tstamps) ORDER BY version DESC LIMIT 1) AND
       w.changeset_id != $1 AND
       OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) IS NOT NULL AND
-      (w.version = 1 OR OWL_MakeLine(w.nodes, (SELECT min FROM tstamps)) IS NOT NULL)) w;
+      (w.version = 1 OR OWL_MakeLine(w.nodes, (SELECT min FROM tstamps)) IS NOT NULL)) w
+  WHERE NOT OWL_Equals(geom, prev_geom);
 
 $$ LANGUAGE sql IMMUTABLE;
 
