@@ -100,34 +100,38 @@ $$ LANGUAGE sql IMMUTABLE;
 --
 CREATE OR REPLACE FUNCTION OWL_Equals(geometry(GEOMETRY, 4326), geometry(GEOMETRY, 4326)) RETURNS boolean AS $$
 BEGIN
-RETURN st_equals(st_snaptogrid($1, 0.0002), st_snaptogrid($2, 0.0002));
-  -- First to a regular check to eliminate obvious geometries from futher processing.
-  IF ST_Equals($1, $2) THEN
-    RETURN true;
-  END IF;
-
-  -- If number of points is different - consider geometries as different.
-  IF ST_NumPoints($1) != ST_NumPoints($2) THEN
+  IF $1 IS NULL OR $2 IS NULL THEN
     RETURN false;
   END IF;
 
-  -- At this point we have two geometries with the same number of points
-  -- and we know that some points are not the same.
+  IF ST_OrderingEquals($1, $2) THEN
+    RETURN true;
+  END IF;
 
-  RETURN (WITH geom1_points AS (
-    SELECT (dp).geom, row_number() OVER () as seq FROM ST_DumpPoints($1) dp
-  ),
-  geom2_points AS (
-    SELECT (dp).geom, row_number() OVER () as seq FROM ST_DumpPoints($2) dp
-  )
-  SELECT COUNT(*)
-  FROM (
-    SELECT 1
-    FROM geom1_points gp1 INNER JOIN geom2_points gp2 USING (seq)
-    WHERE ST_Distance_Sphere(gp1.geom, gp2.geom) > 3 LIMIT 1) x) = 0;
+  RETURN OWL_Equals_Buffer($1, $2);
 END
 $$ LANGUAGE plpgsql IMMUTABLE;
 
+CREATE OR REPLACE FUNCTION OWL_Equals_Buffer(geometry(GEOMETRY, 4326), geometry(GEOMETRY, 4326)) RETURNS boolean AS $$
+DECLARE
+  buf1 geometry(GEOMETRY, 4326);
+  buf2 geometry(GEOMETRY, 4326);
+  union_area float;
+  intersection_area float;
+
+BEGIN
+  buf1 := ST_Buffer($1, 0.0002);
+  buf2 := ST_Buffer($2, 0.0002);
+  union_area := ST_Area(ST_Union(buf1, buf2));
+  intersection_area := ST_Area(ST_Intersection(buf1, buf2));
+  IF intersection_area = 0.0 THEN RETURN false; END IF;
+  RETURN ABS(1.0 - union_area / intersection_area) < 0.0002;
+END
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION OWL_Equals_Snap(geometry(GEOMETRY, 4326), geometry(GEOMETRY, 4326)) RETURNS boolean AS $$
+  SELECT ST_Equals(ST_SnapToGrid(st_Segmentize($1, 0.00002), 0.0002), ST_SnapToGrid(st_Segmentize($2, 0.00002), 0.0002));  
+$$ LANGUAGE sql IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]) RETURNS text[] AS $$
  SELECT array_agg(CASE WHEN c.g IS NOT NULL AND NOT ST_IsEmpty(c.g) AND ST_NumGeometries(c.g) > 0 THEN ST_AsGeoJSON(c.g) ELSE NULL END) FROM
@@ -208,6 +212,13 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
     ) x
   )
 
+  SELECT *
+  FROM changeset_nodes
+  WHERE (el_action IN ('CREATE', 'DELETE') OR tags_changed OR geom_changed) AND
+    (OWL_RemoveTags(tags) != ''::hstore OR OWL_RemoveTags(prev_tags) != ''::hstore)
+
+  UNION
+
   SELECT
     $1,
     w.tstamp,
@@ -255,13 +266,6 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
 
   UNION
 
-  SELECT *
-  FROM changeset_nodes
-  WHERE (el_action IN ('CREATE', 'DELETE') OR tags_changed OR geom_changed) AND
-    (OWL_RemoveTags(tags) != ''::hstore OR OWL_RemoveTags(prev_tags) != ''::hstore)
-
-  UNION
-
   SELECT
     $1,
     tstamp,
@@ -285,6 +289,8 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
       *,
       OWL_MakeMinimalLine(w.nodes, (SELECT max FROM tstamps), array_intersect(w.nodes, (SELECT array_agg(id) FROM moved_nodes))) AS geom,
       OWL_MakeMinimalLine(w.nodes, (SELECT min FROM tstamps), array_intersect(w.nodes, (SELECT array_agg(id) FROM moved_nodes))) AS prev_geom
+      --OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) AS geom,
+      --OWL_MakeLine(w.nodes, (SELECT min FROM tstamps)) AS prev_geom
     FROM ways w
     WHERE w.nodes && (SELECT array_agg(id) FROM changeset_nodes an WHERE an.version > 1 AND an.geom_changed) AND
       w.version = (SELECT version FROM ways WHERE id = w.id AND
