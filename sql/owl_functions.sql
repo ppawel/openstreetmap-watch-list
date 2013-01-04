@@ -101,7 +101,7 @@ $$ LANGUAGE sql IMMUTABLE;
 CREATE OR REPLACE FUNCTION OWL_Equals(geometry(GEOMETRY, 4326), geometry(GEOMETRY, 4326)) RETURNS boolean AS $$
 BEGIN
   IF $1 IS NULL OR $2 IS NULL THEN
-    RETURN false;
+    RETURN NULL;
   END IF;
 
   IF ST_OrderingEquals($1, $2) THEN

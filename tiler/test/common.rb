@@ -53,8 +53,16 @@ module TestCommon
       end
 
       if change['el_action'] == 'AFFECT'
-        assert_equal(nil, change['tags_change'])
+        #assert_equal(nil, change['tags_changed'])
         assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}") if change['geom_changed'] == 't'
+      end
+
+      if change['el_action'] == 'CREATE'
+        assert_equal(nil, change['nodes_changed'])
+        assert_equal(nil, change['geom_changed'])
+        assert_equal(nil, change['tags_changed'])
+        assert(!change['geom'].nil?)
+        assert_equal(nil, change['prev_geom'])
       end
     end
 
