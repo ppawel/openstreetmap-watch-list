@@ -125,16 +125,17 @@ class Tiler
     return 0 if geom.nil?
 
     if change['diff_bbox']
-      bbox = box2d_to_bbox(change['diff_bbox'])
+      bbox_to_use = 'diff_bbox'
     else
-      bbox = box2d_to_bbox(change[(is_prev ? 'prev_geom' : 'geom') + '_bbox'])
+      bbox_to_use = (is_prev ? 'prev_geom' : 'geom') + '_bbox'
     end
 
+    bbox = box2d_to_bbox(change[bbox_to_use])
     tile_count = bbox_tile_count(zoom, bbox)
 
-    @@log.debug "  tile_count = #{tile_count}"
+    @@log.debug "  tile_count = #{tile_count} (using #{bbox_to_use})"
 
-    if tile_count == 1
+    if change['el_type'] == 'N'
       # Fast track a change that fits on a single tile (e.g. all nodes) - just create the tile.
       tiles = bbox_to_tiles(zoom, bbox)
       add_change_tile(tiles.to_a[0][0], tiles.to_a[0][1], zoom, change, is_prev ? nil : geom, is_prev ? geom : nil)

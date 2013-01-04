@@ -98,4 +98,17 @@ class TilerTest < Test::Unit::TestCase
     assert_equal(0, find_changes('el_type' => 'W').size)
     assert_equal(5998, find_changes('el_type' => 'N').size)
   end
+
+  def test_14530383_forest_with_small_change_and_multiple_changes_of_one_object
+    setup_changeset_test(14530383)
+    forest_change = find_changes('el_type' => 'W', 'el_id' => '161116311', 'el_version' => '3')
+    assert_equal(1, forest_change.size)
+    forest_tile = @tiles.find {|tile| tile['changes'].include?(forest_change[0]['id'])}
+    # Tile geom should not include the whole forest (it was a bug once).
+    assert(!forest_tile['geom_astext'].include?('50.5478683'))
+
+    # Now let's test way 174644591 which has 5 revisions in this changeset.
+    p find_changes('el_type' => 'W', 'el_action' => 'DELETE').collect{|change| change['el_id']}
+    assert_equal(4, find_changes('el_type' => 'W', 'el_action' => 'DELETE').size)
+  end
 end
