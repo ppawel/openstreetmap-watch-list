@@ -10,6 +10,8 @@ class Change
   attr_accessor :tags_changed
   attr_accessor :nodes_changed
   attr_accessor :members_changed
+  attr_accessor :geom_geojson
+  attr_accessor :prev_geom_geojson
   attr_accessor :tags
   attr_accessor :prev_tags
   attr_accessor :nodes

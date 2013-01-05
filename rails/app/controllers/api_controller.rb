@@ -74,12 +74,9 @@ private
         MAX(tstamp) AS max_tstamp,
         #{format == 'geojson' ? 'OWL_JoinTileGeometriesByChange(array_accum(t.changes), array_accum(t.geom)) AS geom_geojson,' : ''}
         #{format == 'geojson' ? 'OWL_JoinTileGeometriesByChange(array_accum(t.changes), array_accum(t.prev_geom)) AS prev_geom_geojson,' : ''}
-        --#{format == 'geojson' ? 'array_accum((SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g)) AS geom_geojson,' : ''}
-        --#{format == 'geojson' ? 'array_accum((SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.prev_geom) AS g)) AS prev_geom_geojson,' : ''}
         array_accum(((SELECT array_agg(x::box2d) FROM unnest(t.geom) x))) AS bboxes,
         cs.*,
         cs.bbox AS total_bbox,
-        --array_accum(t.changes) AS change_ids
         ARRAY(SELECT DISTINCT unnest FROM unnest(array_accum(t.changes)) ORDER by unnest) AS change_ids
       FROM tiles t
       INNER JOIN changesets cs ON (cs.id = t.changeset_id)
@@ -150,13 +147,17 @@ private
     # And finally assign them back to changesets.
     for changeset in changesets
       changeset.changes = []
-      for change_id in changeset.change_ids.uniq
+      changeset.change_ids.uniq.each_with_index do |change_id, index|
         if !changes.include?(change_id.to_i)
           logger.warn("Change #{change_id} not found for changeset #{changeset.id}")
           next
         end
-        changeset.changes << changes[change_id.to_i]
+        change = changes[change_id.to_i]
+        change.geom_geojson = changeset.geom_geojson[index]
+        change.prev_geom_geojson = changeset.prev_geom_geojson[index]
+        changeset.changes << change
       end
+      changeset.changes.sort! {|c1, c2| -(c1.tstamp <=> c2.tstamp)}
     end
   end
 
@@ -168,27 +169,22 @@ private
         "properties" => changeset.generate_json,
         "features" => []
       }
-      changeset.change_ids.each_with_index do |change_id, index|
-        change = changeset.changes.find {|change| change.id == change_id}
-        if change.nil?
-          logger.warn("Change #{change_id} not found for changeset #{changeset.id}")
-          next
-        end
+      for change in changeset.changes
         change_feature = {
           "type" => "FeatureCollection",
           "id" => "#{changeset.id}_#{change.id}",
           "properties" => {'changeset_id' => changeset.id, 'change_id' => change.id},
           "features" => []
         }
-        if changeset.geom_geojson[index]
+        if change.geom_geojson
           change_feature["features"] << {
-            "type" => "Feature", "geometry" => JSON[changeset.geom_geojson[index]],
+            "type" => "Feature", "geometry" => JSON[change.geom_geojson],
             "properties" => {"type" => "current"}
           }
         end
-        if changeset.prev_geom_geojson[index]
+        if change.prev_geom_geojson
           change_feature["features"] << {
-            "type" => "Feature", "geometry" => JSON[changeset.prev_geom_geojson[index]],
+            "type" => "Feature", "geometry" => JSON[change.prev_geom_geojson],
             "properties" => {"type" => "prev"}
           }
         end
