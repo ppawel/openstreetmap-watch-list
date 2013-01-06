@@ -104,11 +104,15 @@ BEGIN
     RETURN NULL;
   END IF;
 
+  IF GeometryType($1) = 'POINT' AND GeometryType($2) = 'POINT' THEN
+    RETURN $1 = $2;
+  END IF;
+
   IF ST_OrderingEquals($1, $2) THEN
     RETURN true;
   END IF;
 
-  RETURN OWL_Equals_Buffer($1, $2);
+  RETURN OWL_Equals_Simple($1, $2);
 END
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -131,6 +135,10 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION OWL_Equals_Snap(geometry(GEOMETRY, 4326), geometry(GEOMETRY, 4326)) RETURNS boolean AS $$
   SELECT ST_Equals(ST_SnapToGrid(st_Segmentize($1, 0.00002), 0.0002), ST_SnapToGrid(st_Segmentize($2, 0.00002), 0.0002));  
+$$ LANGUAGE sql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION OWL_Equals_Simple(geometry(GEOMETRY, 4326), geometry(GEOMETRY, 4326)) RETURNS boolean AS $$
+  SELECT ABS(ST_Area($1::box2d) - ST_Area($2::box2d)) > 0.0002
 $$ LANGUAGE sql IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]) RETURNS text[] AS $$
@@ -169,56 +177,69 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   prev_nodes bigint[]
 ) AS $$
 
-  WITH changeset_nodes AS (
-    SELECT
-        $1,
-        n.tstamp,
-        n.changeset_id,
-        'N'::element_type AS type,
-        n.id,
-        n.version,
-        CASE
-          WHEN n.version = 1 THEN 'CREATE'::action
-          WHEN n.version > 1 AND n.visible THEN 'MODIFY'::action
-          WHEN NOT n.visible THEN 'DELETE'::action
-        END AS el_action,
-        NOT OWL_Equals(n.geom, prev.geom) AS geom_changed,
-        n.tags != prev.tags AS tags_changed,
-        NULL::boolean AS nodes_changed,
-        NULL::boolean AS members_changed,
-        CASE WHEN NOT n.visible THEN NULL ELSE n.geom END AS geom,
-        CASE WHEN NOT n.visible OR NOT OWL_Equals(n.geom, prev.geom) THEN prev.geom ELSE NULL END AS prev_geom,
-        n.tags,
-        prev.tags AS prev_tags,
-        NULL::bigint[] AS nodes,
-        NULL::bigint[] AS prev_nodes
+DECLARE
+  min_tstamp timestamp without time zone;
+  max_tstamp timestamp without time zone;
+  moved_nodes_ids bigint[];
+
+BEGIN
+  RAISE NOTICE '% -- Generating changes for changeset %', clock_timestamp(), $1;
+
+  CREATE TEMPORARY TABLE _tmp_changeset_nodes ON COMMIT DROP AS
+  SELECT
+    $1,
+    n.tstamp,
+    n.changeset_id,
+    'N'::element_type AS type,
+    n.id,
+    n.version,
+    CASE
+      WHEN n.version = 1 THEN 'CREATE'::action
+      WHEN n.version > 1 AND n.visible THEN 'MODIFY'::action
+      WHEN NOT n.visible THEN 'DELETE'::action
+    END AS el_action,
+    NOT OWL_Equals(n.geom, prev.geom) AS geom_changed,
+    n.tags != prev.tags AS tags_changed,
+    NULL::boolean AS nodes_changed,
+    NULL::boolean AS members_changed,
+    CASE WHEN NOT n.visible THEN NULL ELSE n.geom END AS geom,
+    CASE WHEN NOT n.visible OR NOT OWL_Equals(n.geom, prev.geom) THEN prev.geom ELSE NULL END AS prev_geom,
+    n.tags,
+    prev.tags AS prev_tags,
+    NULL::bigint[] AS nodes,
+    NULL::bigint[] AS prev_nodes
+  FROM nodes n
+  LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
+  WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1);
+
+  CREATE TEMPORARY TABLE _tmp_moved_nodes ON COMMIT DROP AS
+  SELECT * FROM _tmp_changeset_nodes n WHERE n.version > 1 AND n.geom_changed AND n.el_action != 'DELETE';
+
+  SELECT MAX(x.tstamp), MIN(x.tstamp) - INTERVAL '1 second'
+  INTO max_tstamp, min_tstamp
+  FROM (
+    SELECT n.tstamp
     FROM nodes n
-    LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
-    WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1)
-  ),
-  moved_nodes AS (
-    SELECT * FROM changeset_nodes WHERE version > 1 AND geom_changed
-  ),
-  tstamps AS (
-    SELECT MAX(x.tstamp) AS max, MIN(x.tstamp) - INTERVAL '1 second' AS min
-    FROM (
-      SELECT tstamp
-      FROM nodes
-      WHERE changeset_id = $1
-      UNION
-      SELECT tstamp
-      FROM ways
-      WHERE changeset_id = $1
-    ) x
-  )
+    WHERE n.changeset_id = $1
+    UNION
+    SELECT w.tstamp
+    FROM ways w
+    WHERE w.changeset_id = $1
+  ) x;
 
+  moved_nodes_ids := (SELECT array_agg(id) FROM _tmp_moved_nodes);
+
+  RAISE NOTICE '% -- %', clock_timestamp(), '  Prepared data';
+
+  CREATE TEMPORARY TABLE _tmp_result ON COMMIT DROP AS
   SELECT *
-  FROM changeset_nodes
-  WHERE (el_action IN ('CREATE', 'DELETE') OR tags_changed OR geom_changed) AND
-    (OWL_RemoveTags(tags) != ''::hstore OR OWL_RemoveTags(prev_tags) != ''::hstore)
+  FROM _tmp_changeset_nodes n
+  WHERE (n.el_action IN ('CREATE', 'DELETE') OR n.tags_changed OR n.geom_changed) AND
+    (OWL_RemoveTags(n.tags) != ''::hstore OR OWL_RemoveTags(n.prev_tags) != ''::hstore);
 
-  UNION
+  RAISE NOTICE '% -- %', clock_timestamp(), '  Changeset nodes done';
 
+  INSERT INTO _tmp_result
   SELECT
     $1,
     w.tstamp,
@@ -226,81 +247,87 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
     'W'::element_type AS type,
     w.id,
     w.version,
-    CASE
-      WHEN w.version = 1 THEN 'CREATE'::action
-      WHEN w.version > 0 AND w.visible THEN 'MODIFY'::action
-      WHEN NOT w.visible THEN 'DELETE'::action
-    END AS el_action,
-    geom_changed,
-    tags_changed,
-    nodes_changed,
+    w.el_action,
+    w.geom_changed,
+    w.tags_changed,
+    w.nodes_changed,
     NULL,
-    CASE WHEN geom_changed AND NOT tags_changed AND NOT nodes_changed THEN
-      OWL_MakeMinimalLine(w.nodes, (SELECT max FROM tstamps), (SELECT array_agg(id) FROM changeset_nodes WHERE w.nodes @> ARRAY[id]))
+    CASE WHEN w.geom_changed AND NOT w.tags_changed AND NOT w.nodes_changed THEN
+      OWL_MakeMinimalLine(w.nodes, max_tstamp, (SELECT array_agg(id) FROM _tmp_changeset_nodes n WHERE w.nodes @> ARRAY[n.id]))
     ELSE
-      geom
+      OWL_MakeLine(w.nodes, max_tstamp)
     END,
-    CASE WHEN geom_changed AND NOT tags_changed AND NOT nodes_changed THEN
-      OWL_MakeMinimalLine(prev_nodes, (SELECT min FROM tstamps), (SELECT array_agg(id) FROM changeset_nodes WHERE prev_nodes @> ARRAY[id]))
+    CASE WHEN w.geom_changed AND NOT w.tags_changed AND NOT w.nodes_changed THEN
+      OWL_MakeMinimalLine(w.prev_nodes, min_tstamp, (SELECT array_agg(id) FROM _tmp_changeset_nodes n WHERE w.prev_nodes @> ARRAY[n.id]))
     ELSE
-      CASE WHEN w.visible AND NOT geom_changed THEN NULL ELSE prev_geom END
+      CASE WHEN w.visible AND NOT w.geom_changed THEN NULL ELSE OWL_MakeLine(w.prev_nodes, min_tstamp) END
     END,
     w.tags,
-    prev_tags,
+    w.prev_tags,
     w.nodes,
-    CASE WHEN w.nodes = prev_nodes THEN NULL ELSE prev_nodes END
+    CASE WHEN w.nodes = w.prev_nodes THEN NULL ELSE w.prev_nodes END
   FROM
-    (SELECT w.*, prev.tags AS prev_tags, prev.nodes AS prev_nodes,
-      OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) AS geom,
-      OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) AS prev_geom,
-      NOT OWL_Equals(OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)), OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps))) AS geom_changed,
-      CASE WHEN NOT w.visible OR w.version = 1 THEN NULL ELSE w.tags != prev.tags END AS tags_changed, w.nodes != prev.nodes AS nodes_changed
+    (SELECT w.*,
+      CASE
+        WHEN w.version = 1 THEN 'CREATE'::action
+        WHEN w.version > 0 AND w.visible THEN 'MODIFY'::action
+        WHEN NOT w.visible THEN 'DELETE'::action
+      END AS el_action,
+      prev.tags AS prev_tags,
+      prev.nodes AS prev_nodes,
+      NOT OWL_Equals(OWL_MakeLine(w.nodes, max_tstamp), OWL_MakeLine(prev.nodes, min_tstamp)) AS geom_changed,
+      CASE WHEN NOT w.visible OR w.version = 1 THEN NULL ELSE w.tags != prev.tags END AS tags_changed,
+      w.nodes != prev.nodes AS nodes_changed
     FROM ways w
     LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
     WHERE w.changeset_id = $1 AND
-      (prev.version IS NOT NULL OR w.version = 1) AND
-      (OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) IS NOT NULL OR NOT w.visible) AND
-      (w.version = 1 OR OWL_MakeLine(prev.nodes, (SELECT min FROM tstamps)) IS NOT NULL)
+      (prev.version IS NOT NULL OR w.version = 1)-- AND
+      --(NOT w.visible OR OWL_MakeLine(w.nodes, max_tstamp) IS NOT NULL) AND
+      --(w.version = 1 OR OWL_MakeLine(prev.nodes, min_tstamp) IS NOT NULL)
     ) w
-  WHERE geom_changed OR tags_changed OR w.version = 1 OR NOT w.visible
+  WHERE (w.el_action IN ('MODIFY', 'DELETE') AND w.geom_changed IS NOT NULL) OR w.el_action = 'CREATE';
+    --(w.geom_changed OR w.tags_changed OR w.version = 1 OR NOT w.visible);
 
-  UNION
+  RAISE NOTICE '% -- %', clock_timestamp(), '  Changeset ways done';
 
+  INSERT INTO _tmp_result
   SELECT
     $1,
-    tstamp,
-    changeset_id,
+    w.tstamp,
+    w.changeset_id,
     'W'::element_type AS type,
-    id,
+    w.id,
     version,
     'AFFECT'::action,
     true,
     false,
     false,
     NULL,
-    geom,
-    prev_geom,
-    tags,
+    w.geom,
+    w.prev_geom,
+    w.tags,
     NULL,
-    nodes,
+    w.nodes,
     NULL
   FROM (
     SELECT
       *,
-      OWL_MakeMinimalLine(w.nodes, (SELECT max FROM tstamps), array_intersect(w.nodes, (SELECT array_agg(id) FROM moved_nodes))) AS geom,
-      OWL_MakeMinimalLine(w.nodes, (SELECT min FROM tstamps), array_intersect(w.nodes, (SELECT array_agg(id) FROM moved_nodes))) AS prev_geom
-      --OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) AS geom,
-      --OWL_MakeLine(w.nodes, (SELECT min FROM tstamps)) AS prev_geom
+      OWL_MakeMinimalLine(w.nodes, max_tstamp, array_intersect(w.nodes, moved_nodes_ids)) AS geom,
+      OWL_MakeMinimalLine(w.nodes, min_tstamp, array_intersect(w.nodes, moved_nodes_ids)) AS prev_geom
+      --OWL_MakeLine(w.nodes, max_tstamp) AS geom,
+      --OWL_MakeLine(w.nodes, min_tstamp) AS prev_geom
     FROM ways w
-    WHERE w.nodes && (SELECT array_agg(id) FROM changeset_nodes an WHERE an.version > 1 AND an.geom_changed) AND
-      w.version = (SELECT version FROM ways WHERE id = w.id AND
-        tstamp <= (SELECT max FROM tstamps) ORDER BY version DESC LIMIT 1) AND
-      w.changeset_id != $1 AND
-      OWL_MakeLine(w.nodes, (SELECT max FROM tstamps)) IS NOT NULL AND
-      (w.version = 1 OR OWL_MakeLine(w.nodes, (SELECT min FROM tstamps)) IS NOT NULL)) w
-  WHERE NOT OWL_Equals(geom, prev_geom);
+    WHERE w.nodes && moved_nodes_ids AND
+      w.version = (SELECT version FROM ways WHERE id = w.id AND w.tstamp <= max_tstamp ORDER BY version DESC LIMIT 1) AND
+      w.changeset_id != $1) w; -- AND
+      --OWL_MakeLine(w.nodes, max_tstamp) IS NOT NULL AND
+      --(w.version = 1 OR OWL_MakeLine(w.nodes, min_tstamp) IS NOT NULL)) w;
 
-$$ LANGUAGE sql IMMUTABLE;
+  RAISE NOTICE '% -- %', clock_timestamp(), '  Affected ways done';
+
+  RETURN QUERY SELECT * FROM _tmp_result;
+END
+$$ LANGUAGE plpgsql;
 
 --
 -- OWL_UpdateChangeset

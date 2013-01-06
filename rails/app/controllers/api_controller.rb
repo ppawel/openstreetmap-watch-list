@@ -153,8 +153,10 @@ private
           next
         end
         change = changes[change_id.to_i]
-        change.geom_geojson = changeset.geom_geojson[index]
-        change.prev_geom_geojson = changeset.prev_geom_geojson[index]
+        if changeset.geom_geojson
+          change.geom_geojson = changeset.geom_geojson[index]
+          change.prev_geom_geojson = changeset.prev_geom_geojson[index]
+        end
         changeset.changes << change
       end
       changeset.changes.sort! {|c1, c2| -(c1.tstamp <=> c2.tstamp)}
