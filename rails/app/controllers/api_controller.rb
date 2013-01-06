@@ -153,7 +153,7 @@ private
           next
         end
         change = changes[change_id.to_i]
-        if changeset.geom_geojson
+        if changeset.geom_geojson and changeset.prev_geom_geojson
           change.geom_geojson = changeset.geom_geojson[index]
           change.prev_geom_geojson = changeset.prev_geom_geojson[index]
         end
