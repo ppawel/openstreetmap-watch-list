@@ -141,17 +141,46 @@ CREATE OR REPLACE FUNCTION OWL_Equals_Simple(geometry(GEOMETRY, 4326), geometry(
   SELECT ABS(ST_Area($1::box2d) - ST_Area($2::box2d)) > 0.0002
 $$ LANGUAGE sql IMMUTABLE;
 
+--
+-- OWL_JoinTileGeometriesByChange
+--
+-- Merges (collects/unions in the spatial sense) geometries belonging
+-- to the same change.
+--
+-- $1 - an array of change ids
+-- $2 - an array of geometries corresponding to changes from $1
+--
+-- The two arrays are of the same size. Returns an array of GeoJSON strings.
+--
 CREATE OR REPLACE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]) RETURNS text[] AS $$
- SELECT array_agg(CASE WHEN c.g IS NOT NULL AND NOT ST_IsEmpty(c.g) AND ST_NumGeometries(c.g) > 0 THEN ST_AsGeoJSON(c.g) ELSE NULL END) FROM
- (
- SELECT ST_Union(y.geom) AS g, x.change_id
- FROM
-   (SELECT row_number() OVER () AS seq, unnest AS change_id FROM unnest($1)) x
-   INNER JOIN
-   (SELECT row_number() OVER () AS seq, unnest AS geom FROM unnest($2)) y
-   ON (x.seq = y.seq)
- GROUP BY x.change_id
- ORDER BY x.change_id) c
+  WITH joined_arrays AS (
+    SELECT change_id, geom, GeometryType(geom) AS geom_type
+    FROM
+      (SELECT row_number() OVER () AS seq, unnest AS change_id FROM unnest($1)) x
+      INNER JOIN
+      (SELECT row_number() OVER () AS seq, unnest AS geom FROM unnest($2)) y
+      ON (x.seq = y.seq)
+  )
+  SELECT
+    array_agg(CASE WHEN c.g IS NOT NULL AND NOT ST_IsEmpty(c.g) AND ST_NumGeometries(c.g) > 0 THEN ST_AsGeoJSON(ST_CollectionHomogenize(c.g)) ELSE NULL END order by c.change_id)
+  FROM (
+    SELECT ST_Collect(g) AS g, change_id
+    FROM
+      (SELECT NULL AS g, change_id
+      FROM joined_arrays
+      WHERE geom_type IS NULL
+      GROUP BY change_id
+        UNION
+      SELECT ST_LineMerge(ST_Union(geom)) AS g, change_id
+      FROM joined_arrays
+      WHERE geom_type IS NOT NULL AND geom_type LIKE '%LINESTRING'
+      GROUP BY change_id
+        UNION
+      SELECT ST_Union(geom) AS g, change_id
+      FROM joined_arrays
+      WHERE geom_type IS NOT NULL AND geom_type NOT LIKE '%LINESTRING'
+      GROUP BY change_id) x
+    GROUP BY change_id) c
 $$ LANGUAGE sql IMMUTABLE;
 
 --
