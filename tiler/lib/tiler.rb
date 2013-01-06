@@ -35,7 +35,6 @@ class Tiler
   # duplicate primary key error during insert.
   #
   def clear_tiles(changeset_id, zoom)
-    #@conn.exec("DELETE FROM changes WHERE changeset_id = #{changeset_id}")
     count = @conn.exec("DELETE FROM tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
     @@log.debug "Removed existing tiles: #{count}"
     count
