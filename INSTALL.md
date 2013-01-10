@@ -16,15 +16,12 @@ refer to http://wiki.openstreetmap.org/wiki/Osmosis/PostGIS_Setup.
 
     psql -c "CREATE EXTENSION hstore;" owl
 
-3) Set up pg snapshot schema
-
-    psql -f sql/pgsnapshot_schema_0.6.sql owl
-    psql -f sql/pgsnapshot_schema_0.6_linestring.sql owl
-
 4) Install OWL schema
 
     psql -f sql/owl_schema.sql owl
     psql -f sql/owl_functions.sql owl
+    psql -f sql/owl_indexes.sql owl
+    psql -f sql/owl_constraints.sql owl
 
 Install Osmosis
 ===============
@@ -35,7 +32,7 @@ with the OWL plugin, do the following in a checked out OWL repository:
     git submodule init
     git submodule update
     cd osmosis-plugin
-    ant build
+    ./gradlew build
     # Copy resulting build to a path of your convenience
 
 Initial data import
@@ -46,7 +43,7 @@ Initial data import
 For development it's usually sufficient to import a single osc diff file. For instance:
 
     curl -o 757.osc.gz http://planet.osm.org/replication/minute/000/069/757.osc.gz
-    osmosis --read-xml-change 757.osc --lpc --write-owldb-change database=owl user=postgres
+    osmosis --read-xml-change 757.osc.gz --lpc --write-owldb-change database=owl user=postgres
 
 *From Planet file*
 
@@ -92,15 +89,15 @@ Generating geometry tiles
 OWL serves changeset geometries using tiles - similar to regular map tiles (images). The tiles need to be generated
 after data is imported into the database.
 
-Generating tiles is done using the `owl_tiler.rb` script. To generate tiles for zoom level 16:
+Generating tiles is done using the `tiler.rb` script. To generate tiles:
 
-    cd tiler
-    ./owl_tiler.rb --geometry-tiles 16
+    cd scripts
+    ./tiler.rb
 
-To see the list of possible options and usage instructions, execute the script without any options, like so:
+To see the list of possible options and usage instructions, execute the script with the `--help` option, like so:
 
-    cd tiler
-    ./owl_tiler.rb
+    cd scripts
+    ./tiler.rb --help
 
 Set up Rails app
 ================
