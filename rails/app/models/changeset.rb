@@ -38,9 +38,19 @@ class Changeset
       #"entity_changes" => entity_changes.nil? ? [] : entity_changes_as_list,
       "tags" => tags,
       #"bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
+      "changes" => [],
       "bboxes" => bboxes
     }
-    result['changes'] = changes || [] if options[:include_changes]
+    # Optionally include metadata for changes (but without GeoJSON strings - they belong in GeoJSON features).
+    if options[:include_changes]
+      result['changes'] = changes.as_json.collect do |change|
+        if change.has_key?('geom_geojson')
+          change.delete('geom_geojson')
+          change.delete('prev_geom_geojson')
+        end
+        change
+      end
+    end
     result
   end
 
