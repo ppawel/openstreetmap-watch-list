@@ -5,34 +5,28 @@ $:.unshift File.absolute_path(File.dirname(__FILE__) + '/../tiler/lib/')
 # Useful when redirecting log output to a file.
 STDOUT.sync = true
 
-require 'parallel'
 require 'pg'
 require 'yaml'
 
 require 'cmdline_options'
 require 'logging'
-require 'parallel'
 require 'tiler'
 
 $config = YAML.load_file('../rails/config/database.yml')['development']
-
 options = Tiler::parse_cmdline_options
-
 puts options.inspect
-
 zoom = 16
-
 changeset_ids = ARGF.each_line.collect {|line| line.to_i}
-@conn = nil
 
-Parallel.each_with_index(changeset_ids, :in_processes => 3) do |changeset_id, count|
+@conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
+  :user => $config['username'], :password => $config['password'])
+@tiler = Tiler::Tiler.new(@conn)
+
+changeset_ids.each_with_index do |changeset_id, count|
   next if changeset_id == 0
 
-  if !@conn
-    @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
-      :user => $config['username'], :password => $config['password'])
-    @tiler = Tiler::Tiler.new(@conn)
-  end
+  # Every now and then let's reconnect to Postgres to free some resources.
+  @conn.reset if count % 1000 == 0
 
   before = Time.now
   puts "Generating tiles for changeset #{changeset_id}... (#{count})"
