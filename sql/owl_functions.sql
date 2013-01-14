@@ -258,7 +258,7 @@ BEGIN
 
   moved_nodes_ids := (SELECT array_agg(id) FROM _tmp_moved_nodes);
 
-  RAISE NOTICE '% -- %', clock_timestamp(), '  Prepared data';
+  RAISE NOTICE '% --   Prepared data (min = %, max = %)', clock_timestamp(), min_tstamp, max_tstamp;
 
   CREATE TEMPORARY TABLE _tmp_result ON COMMIT DROP AS
   SELECT *
