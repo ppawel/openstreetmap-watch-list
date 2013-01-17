@@ -134,7 +134,7 @@ END
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION OWL_Equals_Snap(geometry(GEOMETRY, 4326), geometry(GEOMETRY, 4326)) RETURNS boolean AS $$
-  SELECT ST_Equals(ST_SnapToGrid(st_Segmentize($1, 0.00002), 0.0002), ST_SnapToGrid(st_Segmentize($2, 0.00002), 0.0002));  
+  SELECT ST_Equals(ST_SnapToGrid(st_Segmentize($1, 0.00002), 0.0002), ST_SnapToGrid(st_Segmentize($2, 0.00002), 0.0002));
 $$ LANGUAGE sql IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION OWL_Equals_Simple(geometry(GEOMETRY, 4326), geometry(GEOMETRY, 4326)) RETURNS boolean AS $$
@@ -210,6 +210,7 @@ DECLARE
   min_tstamp timestamp without time zone;
   max_tstamp timestamp without time zone;
   moved_nodes_ids bigint[];
+  row_count int;
 
 BEGIN
   RAISE NOTICE '% -- Generating changes for changeset %', clock_timestamp(), $1;
@@ -266,7 +267,10 @@ BEGIN
   WHERE (n.el_action IN ('CREATE', 'DELETE') OR n.tags_changed OR n.geom_changed) AND
     (OWL_RemoveTags(n.tags) != ''::hstore OR OWL_RemoveTags(n.prev_tags) != ''::hstore);
 
-  RAISE NOTICE '% -- %', clock_timestamp(), '  Changeset nodes done';
+  GET DIAGNOSTICS row_count = ROW_COUNT;
+  RAISE NOTICE '% --   Nodes done (%)', clock_timestamp(), row_count;
+
+  -- Created ways
 
   INSERT INTO _tmp_result
   SELECT
@@ -276,7 +280,37 @@ BEGIN
     'W'::element_type AS type,
     w.id,
     w.version,
-    w.el_action,
+    'CREATE',
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    w.geom,
+    NULL,
+    w.tags,
+    NULL,
+    w.nodes,
+    NULL
+  FROM (
+    SELECT w.*, OWL_MakeLine(w.nodes, max_tstamp) AS geom
+    FROM ways w
+    WHERE w.changeset_id = $1 AND w.version = 1) w
+  WHERE w.geom IS NOT NULL;
+
+  GET DIAGNOSTICS row_count = ROW_COUNT;
+  RAISE NOTICE '% --   Created ways done (%)', clock_timestamp(), row_count;
+
+  -- Modified ways
+
+  INSERT INTO _tmp_result
+  SELECT
+    $1,
+    w.tstamp,
+    w.changeset_id,
+    'W'::element_type AS type,
+    w.id,
+    w.version,
+    'MODIFY',
     w.geom_changed,
     w.tags_changed,
     w.nodes_changed,
@@ -295,29 +329,56 @@ BEGIN
     w.prev_tags,
     w.nodes,
     CASE WHEN w.nodes = w.prev_nodes THEN NULL ELSE w.prev_nodes END
-  FROM
-    (SELECT w.*,
-      CASE
-        WHEN w.version = 1 THEN 'CREATE'::action
-        WHEN w.version > 0 AND w.visible THEN 'MODIFY'::action
-        WHEN NOT w.visible THEN 'DELETE'::action
-      END AS el_action,
+  FROM (
+    SELECT w.*,
       prev.tags AS prev_tags,
       prev.nodes AS prev_nodes,
       NOT OWL_Equals(OWL_MakeLine(w.nodes, max_tstamp), OWL_MakeLine(prev.nodes, min_tstamp)) AS geom_changed,
       CASE WHEN NOT w.visible OR w.version = 1 THEN NULL ELSE w.tags != prev.tags END AS tags_changed,
       w.nodes != prev.nodes AS nodes_changed
     FROM ways w
-    LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
-    WHERE w.changeset_id = $1 AND
-      (prev.version IS NOT NULL OR w.version = 1)-- AND
-      --(NOT w.visible OR OWL_MakeLine(w.nodes, max_tstamp) IS NOT NULL) AND
-      --(w.version = 1 OR OWL_MakeLine(prev.nodes, min_tstamp) IS NOT NULL)
-    ) w
-  WHERE (w.el_action IN ('MODIFY', 'DELETE') AND w.geom_changed IS NOT NULL) OR w.el_action = 'CREATE';
-    --(w.geom_changed OR w.tags_changed OR w.version = 1 OR NOT w.visible);
+    INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
+    WHERE w.changeset_id = $1 AND w.visible) w
+  WHERE w.geom_changed IS NOT NULL AND (w.geom_changed OR w.tags_changed);
 
-  RAISE NOTICE '% -- %', clock_timestamp(), '  Changeset ways done';
+  GET DIAGNOSTICS row_count = ROW_COUNT;
+  RAISE NOTICE '% --   Modified ways done (%)', clock_timestamp(), row_count;
+
+  -- Deleted ways
+
+  INSERT INTO _tmp_result
+  SELECT
+    $1,
+    w.tstamp,
+    w.changeset_id,
+    'W'::element_type AS type,
+    w.id,
+    w.version,
+    'DELETE',
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    w.prev_geom,
+    w.tags,
+    w.prev_tags,
+    w.nodes,
+    w.prev_nodes
+  FROM (
+    SELECT w.*,
+      prev.tags AS prev_tags,
+      prev.nodes AS prev_nodes,
+      OWL_MakeLine(prev.nodes, max_tstamp) AS prev_geom
+    FROM ways w
+    INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
+    WHERE w.changeset_id = $1 AND NOT w.visible) w
+  WHERE w.prev_geom IS NOT NULL;
+
+  GET DIAGNOSTICS row_count = ROW_COUNT;
+  RAISE NOTICE '% --   Deleted ways done (%)', clock_timestamp(), row_count;
+
+  -- Affected ways
 
   INSERT INTO _tmp_result
   SELECT
@@ -352,7 +413,8 @@ BEGIN
       --OWL_MakeLine(w.nodes, max_tstamp) IS NOT NULL AND
       --(w.version = 1 OR OWL_MakeLine(w.nodes, min_tstamp) IS NOT NULL)) w;
 
-  RAISE NOTICE '% -- %', clock_timestamp(), '  Affected ways done';
+  GET DIAGNOSTICS row_count = ROW_COUNT;
+  RAISE NOTICE '% --   Affected ways done (%)', clock_timestamp(), row_count;
 
   RETURN QUERY SELECT * FROM _tmp_result;
 END

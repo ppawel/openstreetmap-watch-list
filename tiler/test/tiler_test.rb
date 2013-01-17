@@ -93,12 +93,6 @@ class TilerTest < Test::Unit::TestCase
     assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '198336783', 'el_version' => '2').size)
   end
 
-  def test_14211906_only_nodes
-    setup_changeset_test(14211906)
-    assert_equal(0, find_changes('el_type' => 'W').size)
-    assert_equal(5998, find_changes('el_type' => 'N').size)
-  end
-
   def test_14530383_forest_with_small_change_and_multiple_changes_of_one_object
     setup_changeset_test(14530383)
     forest_change = find_changes('el_type' => 'W', 'el_id' => '161116311', 'el_version' => '3')

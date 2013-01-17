@@ -5,10 +5,10 @@ module TestCommon
   def setup_changeset_test(id)
     setup_db
     load_changeset(id)
+    @tiler.generate(16, id, {:retile => true, :changes => true})
     @changes = get_changes
     @changes_h = Hash[@changes.collect {|row| [row['id'].to_i, row]}]
     verify_changes(id)
-    @tiler.generate(16, id, {:retile => true})
     @tiles = get_tiles
     verify_tiles
   end
@@ -28,8 +28,13 @@ module TestCommon
   end
 
   def load_changeset(id)
-    @conn.exec("COPY changes FROM STDIN;")
-    File.open("../../testdata/#{id}-changes.csv").read.each_line do |line|
+    @conn.exec("COPY nodes FROM STDIN;")
+    File.open("../../testdata/#{id}-nodes.csv").read.each_line do |line|
+      @conn.put_copy_data(line)
+    end
+    @conn.put_copy_end
+    @conn.exec("COPY ways FROM STDIN;")
+    File.open("../../testdata/#{id}-ways.csv").read.each_line do |line|
       @conn.put_copy_data(line)
     end
     @conn.put_copy_end
@@ -39,17 +44,16 @@ module TestCommon
     for change in @changes
       if change['el_action'] == 'MODIFY'
         assert((change['tags_changed'] == 't' or change['geom_changed'] == 't'), "Change is not a change: #{change}")
-      end
-
-      if change['el_action'] == 'DELETE'
-        assert(!change['prev_geom'].nil?, "prev_geom should be stored for change: #{change}")
-      else
         # If geom did not change, prev should not be stored.
         if change['geom_changed'] == 'f'
           assert_equal(nil, change['prev_geom'], "prev_geom should not be stored for change: #{change}")
         else
           assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}")
         end
+      end
+
+      if change['el_action'] == 'DELETE'
+        assert(!change['prev_geom'].nil?, "prev_geom should be stored for change: #{change}")
       end
 
       if change['el_action'] == 'AFFECT'
@@ -61,8 +65,8 @@ module TestCommon
         assert_equal(nil, change['nodes_changed'])
         assert_equal(nil, change['geom_changed'])
         assert_equal(nil, change['tags_changed'])
-        assert(!change['geom'].nil?)
-        assert_equal(nil, change['prev_geom'])
+        assert(!change['geom'].nil?, 'Geom should not be nil for action CREATE')
+        assert_equal(nil, change['prev_geom'], 'prev_geom should be nil for action CREATE')
       end
     end
 
