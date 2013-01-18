@@ -138,7 +138,8 @@ CREATE OR REPLACE FUNCTION OWL_Equals_Snap(geometry(GEOMETRY, 4326), geometry(GE
 $$ LANGUAGE sql IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION OWL_Equals_Simple(geometry(GEOMETRY, 4326), geometry(GEOMETRY, 4326)) RETURNS boolean AS $$
-  SELECT ABS(ST_Area($1::box2d) - ST_Area($2::box2d)) > 0.0002
+  SELECT ABS(ST_Area($1::box2d) - ST_Area($2::box2d)) < 0.0002 AND
+    ABS(ST_Length($1) - ST_Length($2)) < 0.0002;
 $$ LANGUAGE sql IMMUTABLE;
 
 --

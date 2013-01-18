@@ -27,11 +27,6 @@ class TilerTest < Test::Unit::TestCase
     assert_equal('t', changes[0]['geom_changed'])
   end
 
-  def test_9769694
-    setup_changeset_test(9769694)
-    assert_equal(1, find_changes('el_id' => '27833730', 'el_version' => '14').size)
-  end
-
   def test_11193918
     setup_changeset_test(11193918)
     assert_equal(2, find_changes('el_type' => 'N').size)
@@ -69,11 +64,6 @@ class TilerTest < Test::Unit::TestCase
     assert_equal(1, find_changes('el_type' => 'W').size)
   end
 
-  def test_14370470_validate_ways
-    setup_changeset_test(14370470)
-    assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '26393755', 'el_version' => '7').size)
-  end
-
   def test_13223248_misaligned_way
     setup_changeset_test(13223248)
 
@@ -104,5 +94,16 @@ class TilerTest < Test::Unit::TestCase
     # Now let's test way 174644591 which has 5 revisions in this changeset.
     p find_changes('el_type' => 'W', 'el_action' => 'DELETE').collect{|change| change['el_id']}
     assert_equal(4, find_changes('el_type' => 'W', 'el_action' => 'DELETE').size)
+  end
+
+  def test_14698811
+    setup_changeset_test(14698811)
+    p @changes
+    assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '201787145', 'el_version' => '1').size)
+  end
+
+  def test_14698916
+    setup_changeset_test(14698916)
+    assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '201787145', 'el_version' => '2').size)
   end
 end
