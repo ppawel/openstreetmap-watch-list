@@ -30,7 +30,9 @@ changeset_ids.each_with_index do |changeset_id, count|
   if count % 1000 == 0
     @conn.reset
     p GC::stat
-    p GC::Profiler.report
+    p GC::Profiler.result
+    p GC::Profiler.total_time
+    GC::Profiler.report
   end
 
   before = Time.now
