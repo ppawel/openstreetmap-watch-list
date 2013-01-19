@@ -25,8 +25,13 @@ changeset_ids = ARGF.each_line.collect {|line| line.to_i}
 changeset_ids.each_with_index do |changeset_id, count|
   next if changeset_id == 0
 
-  # Every now and then let's reconnect to Postgres to free some resources.
-  @conn.reset if count % 1000 == 0
+  # Every now and then let's reconnect to Postgres to maybe free some resources.
+  # Also print out some diagnostic information.
+  if count % 1000 == 0
+    @conn.reset
+    p GC::stat
+    p GC::Profiler.report
+  end
 
   before = Time.now
   puts "Generating tiles for changeset #{changeset_id}... (#{count})"
