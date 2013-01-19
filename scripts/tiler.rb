@@ -12,6 +12,8 @@ require 'cmdline_options'
 require 'logging'
 require 'tiler'
 
+GC.enable
+
 $config = YAML.load_file('../rails/config/database.yml')['development']
 options = Tiler::parse_cmdline_options
 puts options.inspect
@@ -29,8 +31,10 @@ changeset_ids.each_with_index do |changeset_id, count|
   # Also print out some diagnostic information.
   if count % 1000 == 0
     @conn.reset
+    GC.start
     p GC::stat
     p GC::Profiler.result
+    p GC::Profiler.count
     p GC::Profiler.total_time
     GC::Profiler.report
   end
