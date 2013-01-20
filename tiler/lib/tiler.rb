@@ -12,9 +12,11 @@ class Tiler
 
   def initialize(conn)
     @conn = conn
+    setup_prepared_statements
     @wkb_reader = Geos::WkbReader.new
     @wkt_reader = Geos::WktReader.new
     @wkb_writer = Geos::WkbWriter.new
+    @wkb_writer.include_srid = true
   end
 
   ##
@@ -57,14 +59,7 @@ class Tiler
       return -1 if has_tiles(changeset_id)
     end
 
-    for change in @conn.exec("SELECT id, el_action, el_id, el_version, el_type, tstamp, geom, prev_geom, geom_changed,
-          CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
-          CASE WHEN el_type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
-          CASE WHEN el_type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
-          CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
-          Box2D(geom) AS geom_bbox, Box2D(prev_geom) AS prev_geom_bbox,
-          Box2D(ST_Difference(geom, prev_geom)) AS diff_bbox
-        FROM changes WHERE changeset_id = #{changeset_id}").to_a
+    for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
 
       change['geom_changed'] = (change['geom_changed'] == 't')
       change['geom_obj'] = @wkb_reader.read_hex(change['geom']) if change['geom']
@@ -76,9 +71,9 @@ class Tiler
     end
 
     @tiles.each do |tile, data|
-      @conn.exec("INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom) VALUES (
-        #{changeset_id}, '#{data[:tstamp]}', #{tile[2]}, #{tile[0]}, #{tile[1]},
-          ARRAY#{data[:changes]}, #{to_postgres_geom_array(data[:geom])}, #{to_postgres_geom_array(data[:prev_geom])})")
+      @conn.exec_prepared('insert_tile', [changeset_id, data[:tstamp], tile[2], tile[0], tile[1],
+          data[:changes].to_s.gsub("[", "{").gsub("]", "}"),
+          to_postgres_geom_array(data[:geom]), to_postgres_geom_array(data[:prev_geom])])
     end
 
     @@log.debug "Aggregating tiles..."
@@ -156,9 +151,11 @@ class Tiler
     for tile in tiles
       x, y = tile[0], tile[1]
       tile_geom = tile_geom(x, y, zoom)
+      tile_geom.srid = 4326
 
       if test_geom.intersects?(tile_geom)
         intersection = geom.intersection(tile_geom)
+        intersection.srid = 4326
         add_change_tile(x, y, zoom, change, is_prev ? nil : intersection, is_prev ? intersection : nil)
         count += 1
       end
@@ -198,6 +195,23 @@ class Tiler
         geom_changed, tags_changed, nodes_changed,
         members_changed, geom, prev_geom, tags, prev_tags, nodes, prev_nodes)
       SELECT * FROM OWL_GenerateChanges(#{changeset_id})")
+  end
+
+  def setup_prepared_statements
+    @conn.prepare('select_changes',
+      "SELECT id, el_action, el_id, el_version, el_type, tstamp, geom, prev_geom, geom_changed,
+          CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
+          CASE WHEN el_type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
+          CASE WHEN el_type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
+          CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
+          Box2D(geom) AS geom_bbox, Box2D(prev_geom) AS prev_geom_bbox,
+          Box2D(ST_Difference(geom, prev_geom)) AS diff_bbox
+        FROM changes WHERE changeset_id = $1")
+
+    @conn.prepare('insert_tile',
+      "INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom) VALUES
+        ($1, $2, $3, $4, $5, $6::bigint[],
+        $7::geometry(GEOMETRY, 4326)[], $8::geometry(GEOMETRY, 4326)[])")
   end
 end
 

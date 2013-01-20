@@ -82,12 +82,12 @@ end
 def to_postgres_geom_array(geom_arr)
   str = ''
   geom_arr.each_with_index do |geom, index|
-    str += ',' if index > 0
+    str += ':' if index > 0
     if geom.nil?
       str += 'NULL'
       next
     end
-    str += "ST_SetSRID('#{geom}'::geometry, 4326)"
+    str += "#{geom}"
   end
-  "ARRAY[#{str}]"
+  "{#{str}}"
 end

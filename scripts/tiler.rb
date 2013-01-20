@@ -27,10 +27,8 @@ changeset_ids = ARGF.each_line.collect {|line| line.to_i}
 changeset_ids.each_with_index do |changeset_id, count|
   next if changeset_id == 0
 
-  # Every now and then let's reconnect to Postgres to maybe free some resources.
-  # Also print out some diagnostic information.
+  # Print out some diagnostic information.
   if count % 1000 == 0
-    @conn.reset
     GC.start
     p GC::stat
     p GC::Profiler.result
