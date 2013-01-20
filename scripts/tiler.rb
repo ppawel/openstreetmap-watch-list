@@ -34,7 +34,6 @@ changeset_ids.each_with_index do |changeset_id, count|
     GC.start
     p GC::stat
     p GC::Profiler.result
-    p GC::Profiler.count
     p GC::Profiler.total_time
     GC::Profiler.report
   end

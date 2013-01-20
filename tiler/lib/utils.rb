@@ -89,5 +89,5 @@ def to_postgres_geom_array(geom_arr)
     end
     str += "ST_SetSRID('#{geom}'::geometry, 4326)"
   end
-  str = "ARRAY[#{str}]"
+  "ARRAY[#{str}]"
 end
