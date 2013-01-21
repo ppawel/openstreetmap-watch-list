@@ -14,6 +14,10 @@ class Tiler
     @tiles = {}
     @conn = conn
     setup_prepared_statements
+    init_geos
+  end
+
+  def init_geos
     @wkb_reader = Geos::WkbReader.new
     @wkt_reader = Geos::WktReader.new
     @wkb_writer = Geos::WkbWriter.new
@@ -25,10 +29,12 @@ class Tiler
   #
   def generate(zoom, changeset_id, options = {})
     tile_count = nil
+    @@log.debug "mem = #{memory_usage} (before)"
     @conn.transaction do |c|
       generate_changes(changeset_id) if options[:changes] or !has_changes(changeset_id)
       tile_count = do_generate(zoom, changeset_id, options)
     end
+    @@log.debug "mem = #{memory_usage} (after)"
     tile_count
   end
 
@@ -60,7 +66,6 @@ class Tiler
     end
 
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
-
       change['geom_changed'] = (change['geom_changed'] == 't')
       change['geom_obj'] = @wkb_reader.read_hex(change['geom']) if change['geom']
       change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom']) if change['prev_geom']
@@ -191,15 +196,19 @@ class Tiler
   end
 
   def generate_changes(changeset_id)
-    @conn.exec("DELETE FROM changes WHERE changeset_id = #{changeset_id}")
-    @conn.exec("INSERT INTO changes
-      (changeset_id, tstamp, el_changeset_id, el_type, el_id, el_version, el_action,
-        geom_changed, tags_changed, nodes_changed,
-        members_changed, geom, prev_geom, tags, prev_tags, nodes, prev_nodes)
-      SELECT * FROM OWL_GenerateChanges(#{changeset_id})")
+    @conn.exec_prepared('delete_changes', [changeset_id])
+    @conn.exec_prepared('insert_changes', [changeset_id])
   end
 
   def setup_prepared_statements
+    @conn.prepare('delete_changes', 'DELETE FROM changes WHERE changeset_id = $1')
+
+    @conn.prepare('insert_changes', 'INSERT INTO changes
+      (changeset_id, tstamp, el_changeset_id, el_type, el_id, el_version, el_action,
+        geom_changed, tags_changed, nodes_changed,
+        members_changed, geom, prev_geom, tags, prev_tags, nodes, prev_nodes)
+      SELECT * FROM OWL_GenerateChanges($1)')
+
     @conn.prepare('select_changes',
       "SELECT id, el_action, el_id, el_version, el_type, tstamp, geom, prev_geom, geom_changed,
           CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,

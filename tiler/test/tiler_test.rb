@@ -92,18 +92,24 @@ class TilerTest < Test::Unit::TestCase
     assert(!forest_tile['geom_astext'].include?('50.5478683'))
 
     # Now let's test way 174644591 which has 5 revisions in this changeset.
-    p find_changes('el_type' => 'W', 'el_action' => 'DELETE').collect{|change| change['el_id']}
     assert_equal(4, find_changes('el_type' => 'W', 'el_action' => 'DELETE').size)
   end
 
   def test_14698811
     setup_changeset_test(14698811)
-    p @changes
     assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '201787145', 'el_version' => '1').size)
   end
 
   def test_14698916
     setup_changeset_test(14698916)
     assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '201787145', 'el_version' => '2').size)
+  end
+
+  def test_14699204
+    setup_changeset_test(14699204)
+  end
+
+  def test_13426127
+    setup_changeset_test(13426127)
   end
 end

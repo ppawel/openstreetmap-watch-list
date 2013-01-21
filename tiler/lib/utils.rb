@@ -91,3 +91,7 @@ def to_postgres_geom_array(geom_arr)
   end
   "{#{result}}"
 end
+
+def memory_usage
+  `ps -o rss= -p #{$$}`.to_i
+end
