@@ -11,7 +11,7 @@ class Tiler
   attr_accessor :conn
 
   def initialize(conn)
-    @tiles = {}
+    @tiledata = {}
     @conn = conn
     setup_prepared_statements
     init_geos
@@ -72,10 +72,16 @@ class Tiler
       change['diff_geom_obj'] =  change['geom_obj'].difference(change['prev_geom_obj']) if change['diff_bbox']
 
       @@log.debug "#{change['el_type']} #{change['el_id']} (#{change['el_version']})"
+
       create_change_tiles(changeset_id, change, change['id'].to_i, zoom)
+
+      # GC has problems if we don't do this explicitly...
+      change['geom_obj'] = nil
+      change['prev_geom_obj'] = nil
+      change['diff_geom_obj'] = nil
     end
 
-    @tiles.each do |tile, data|
+    @tiledata.each do |tile, data|
       @conn.exec_prepared('insert_tile', [changeset_id, data[:tstamp], tile[2], tile[0], tile[1],
           data[:changes].to_s.gsub("[", "{").gsub("]", "}"),
           to_postgres_geom_array(data[:geom]), to_postgres_geom_array(data[:prev_geom])])
@@ -88,25 +94,33 @@ class Tiler
       @conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
     end
 
-    count = @tiles.size
-    @tiles = {}
+    count = @tiledata.size
+    free_tiles
     count
   end
 
   def add_change_tile(x, y, zoom, change, geom, prev_geom)
-    if !@tiles.include?([x, y, zoom])
-      @tiles[[x, y, zoom]] = {
-        :changes => [change['id'].to_i],
-        :tstamp => change['tstamp'],
+    if !@tiledata.include?([x, y, zoom])
+      @tiledata[[x, y, zoom]] = {
+        :changes => [change['id'].dup.to_i],
+        :tstamp => change['tstamp'].dup,
         :geom => [(geom ? @wkb_writer.write_hex(geom) : nil)],
         :prev_geom => [(prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)]
       }
       return
     end
 
-    @tiles[[x, y, zoom]][:changes] << change['id'].to_i
-    @tiles[[x, y, zoom]][:geom] << (geom ? @wkb_writer.write_hex(geom) : nil)
-    @tiles[[x, y, zoom]][:prev_geom] << (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)
+    @tiledata[[x, y, zoom]][:changes] << change['id'].dup.to_i
+    @tiledata[[x, y, zoom]][:geom] << (geom ? @wkb_writer.write_hex(geom) : nil)
+    @tiledata[[x, y, zoom]][:prev_geom] << (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)
+  end
+
+  def free_tiles
+    for key, tile in @tiledata
+      @tiledata[key] = nil
+    end
+
+    @tiledata = {}
   end
 
   def create_change_tiles(changeset_id, change, change_id, zoom)
@@ -157,8 +171,7 @@ class Tiler
 
     for tile in tiles
       x, y = tile[0], tile[1]
-      tile_geom = tile_geom(x, y, zoom)
-      tile_geom.srid = 4326
+      tile_geom = get_tile_geom(x, y, zoom)
 
       if test_geom.intersects?(tile_geom)
         intersection = geom.intersection(tile_geom)
@@ -173,7 +186,7 @@ class Tiler
   def prepare_tiles(tiles_to_check, geom, source_zoom, zoom)
     tiles = Set.new
     for tile in tiles_to_check
-      tile_geom = tile_geom(tile[0], tile[1], source_zoom)
+      tile_geom = get_tile_geom(tile[0], tile[1], source_zoom)
       intersects = tile_geom.intersects?(geom)
       tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects
     end
@@ -189,10 +202,18 @@ class Tiler
     tiles
   end
 
-  def tile_geom(x, y, zoom)
-    lat1, lon1 = tile2latlon(x, y, zoom)
-    lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
-    @wkt_reader.read("MULTIPOINT(#{lon1} #{lat1},#{lon2} #{lat2})").envelope
+  def get_tile_geom(x, y, zoom)
+    cs = Geos::CoordinateSequence.new(5, 2)
+    y1, x1 = tile2latlon(x, y, zoom)
+    y2, x2 = tile2latlon(x + 1, y + 1, zoom)
+    cs.y[0], cs.x[0] = y1, x1
+    cs.y[1], cs.x[1] = y1, x2
+    cs.y[2], cs.x[2] = y2, x2
+    cs.y[3], cs.x[3] = y2, x1
+    cs.y[4], cs.x[4] = y1, x1
+    geom = Geos::create_polygon(cs)
+    geom.srid = 4326
+    geom
   end
 
   def generate_changes(changeset_id)
