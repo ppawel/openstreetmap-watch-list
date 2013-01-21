@@ -11,6 +11,7 @@ class Tiler
   attr_accessor :conn
 
   def initialize(conn)
+    @tiles = {}
     @conn = conn
     setup_prepared_statements
     @wkb_reader = Geos::WkbReader.new
@@ -25,7 +26,6 @@ class Tiler
   def generate(zoom, changeset_id, options = {})
     tile_count = nil
     @conn.transaction do |c|
-      @tiles = {}
       generate_changes(changeset_id) if options[:changes] or !has_changes(changeset_id)
       tile_count = do_generate(zoom, changeset_id, options)
     end
@@ -83,7 +83,9 @@ class Tiler
       @conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
     end
 
-    @tiles.size
+    count = @tiles.size
+    @tiles = {}
+    count
   end
 
   def add_change_tile(x, y, zoom, change, geom, prev_geom)

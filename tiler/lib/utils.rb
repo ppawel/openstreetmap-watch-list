@@ -80,14 +80,14 @@ def pg_parse_geom_array(str)
 end
 
 def to_postgres_geom_array(geom_arr)
-  str = ''
+  result = ''
   geom_arr.each_with_index do |geom, index|
-    str += ':' if index > 0
+    result << ':' if index > 0
     if geom.nil?
-      str += 'NULL'
+      result << 'NULL'
       next
     end
-    str += "#{geom}"
+    result << geom
   end
-  "{#{str}}"
+  "{#{result}}"
 end

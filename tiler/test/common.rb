@@ -119,15 +119,20 @@ module TestCommon
       assert_equal(tile['change_arr_len'].to_i, tile['prev_geom_arr_len'].to_i)
       changes_arr = pg_parse_array(tile['changes'])
 
-      for geom in pg_parse_geom_array(tile['geom'])
+      geom_arr = pg_parse_geom_array(tile['geom'])
+      prev_geom_arr = pg_parse_geom_array(tile['prev_geom'])
+
+      for geom in geom_arr
         assert !geom.nil?
       end
 
-      pg_parse_geom_array(tile['prev_geom']).each_with_index do |geom, index|
+      prev_geom_arr.each_with_index do |geom, index|
         change = @changes_h[changes_arr[index]]
         if change['el_version'].to_i != 1 and change['geom_changed'] == 't'
           #assert(geom != 'NULL', "prev_geom should not be null for change: #{change} and tile: #{tile}")
         end
+
+        assert(geom != geom_arr[index], "geom and prev_geom are the same for tile: #{tile}")
       end
     end
   end
