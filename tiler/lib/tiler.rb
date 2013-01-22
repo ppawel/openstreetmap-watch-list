@@ -196,7 +196,7 @@ class Tiler
   def prepare_tiles_to_check(geom, bbox, source_zoom)
     tiles = Set.new
     test_zoom = 11
-    bbox_to_tiles(test_zoom, bbox).select {|tile| geom.intersects?(tile_geom(tile[0], tile[1], test_zoom))}.each do |tile|
+    bbox_to_tiles(test_zoom, bbox).select {|tile| geom.intersects?(get_tile_geom(tile[0], tile[1], test_zoom))}.each do |tile|
       tiles.merge(subtiles(tile, test_zoom, source_zoom))
     end
     tiles
