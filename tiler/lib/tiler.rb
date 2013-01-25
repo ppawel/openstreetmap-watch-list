@@ -67,9 +67,18 @@ class Tiler
 
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
       change['geom_changed'] = (change['geom_changed'] == 't')
-      change['geom_obj'] = @wkb_reader.read_hex(change['geom']) if change['geom']
-      change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom']) if change['prev_geom']
-      change['diff_geom_obj'] =  change['geom_obj'].difference(change['prev_geom_obj']) if change['diff_bbox']
+      if change['geom']
+        change['geom_obj'] = @wkb_reader.read_hex(change['geom'])
+        change['geom_obj_prep'] = change['geom_obj'].to_prepared
+      end
+      if change['prev_geom']
+        change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom'])
+        change['prev_geom_obj_prep'] = change['prev_geom_obj'].to_prepared
+      end
+      if change['diff_bbox']
+        change['diff_geom_obj'] =  change['geom_obj'].difference(change['prev_geom_obj'])
+        change['diff_geom_obj_prep'] = change['diff_geom_obj'].to_prepared
+      end
 
       @@log.debug "#{change['el_type']} #{change['el_id']} (#{change['el_version']})"
 
@@ -90,7 +99,7 @@ class Tiler
     @@log.debug "Aggregating tiles..."
 
     # Now generate tiles at lower zoom levels.
-    (12..16).reverse_each do |i|
+    (12..zoom).reverse_each do |i|
       @conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
     end
 
@@ -116,27 +125,23 @@ class Tiler
   end
 
   def free_tiles
-    for key, tile in @tiledata
-      @tiledata[key] = nil
-    end
-
     @tiledata = {}
   end
 
   def create_change_tiles(changeset_id, change, change_id, zoom)
     if change['el_action'] == 'DELETE'
-      count = create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change_id, zoom, true)
+      count = create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
     else
-      count = create_geom_tiles(changeset_id, change, change['geom_obj'], change_id, zoom, false)
+      count = create_geom_tiles(changeset_id, change, change['geom_obj'], change['geom_obj_prep'], change_id, zoom, false)
       if change['geom_changed']
-        count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change_id, zoom, true)
+        count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
       end
     end
 
     @@log.debug "  Created #{count} tile(s)"
   end
 
-  def create_geom_tiles(changeset_id, change, geom, change_id, zoom, is_prev)
+  def create_geom_tiles(changeset_id, change, geom, geom_prep, change_id, zoom, is_prev)
     return 0 if geom.nil?
 
     if change['diff_bbox']
@@ -159,14 +164,14 @@ class Tiler
       # Does not make sense to try to reduce small geoms.
       tiles = bbox_to_tiles(zoom, bbox)
     else
-      tiles_to_check = (tile_count < 2048 ? bbox_to_tiles(14, bbox) : prepare_tiles_to_check(geom, bbox, 14))
+      tiles_to_check = (tile_count < 2048 ? bbox_to_tiles(14, bbox) : prepare_tiles_to_check(geom_prep, bbox, 14))
       @@log.debug "  tiles_to_check = #{tiles_to_check.size}"
-      tiles = prepare_tiles(tiles_to_check, geom, 14, zoom)
+      tiles = prepare_tiles(tiles_to_check, geom_prep, 14, zoom)
     end
 
     @@log.debug "  Processing #{tiles.size} tile(s)..."
 
-    test_geom = change['diff_geom_obj'] || geom
+    test_geom = change['diff_geom_obj_prep'] || geom_prep
     count = 0
 
     for tile in tiles
@@ -187,7 +192,7 @@ class Tiler
     tiles = Set.new
     for tile in tiles_to_check
       tile_geom = get_tile_geom(tile[0], tile[1], source_zoom)
-      intersects = tile_geom.intersects?(geom)
+      intersects = geom.intersects?(tile_geom)
       tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects
     end
     tiles
@@ -211,9 +216,7 @@ class Tiler
     cs.y[2], cs.x[2] = y2, x2
     cs.y[3], cs.x[3] = y2, x1
     cs.y[4], cs.x[4] = y1, x1
-    geom = Geos::create_polygon(cs)
-    geom.srid = 4326
-    geom
+    Geos::create_polygon(cs, :srid => 4326)
   end
 
   def generate_changes(changeset_id)
