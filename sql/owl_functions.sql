@@ -199,8 +199,6 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   tags_changed boolean,
   nodes_changed boolean,
   members_changed boolean,
-  geom geometry(GEOMETRY, 4326),
-  prev_geom geometry(GEOMETRY, 4326),
   tags hstore,
   prev_tags hstore,
   nodes bigint[],
@@ -286,17 +284,15 @@ BEGIN
     NULL,
     NULL,
     NULL,
-    w.geom,
+    rev.geom,
     NULL,
     w.tags,
     NULL,
     w.nodes,
     NULL
-  FROM (
-    SELECT w.*, OWL_MakeLine(w.nodes, max_tstamp) AS geom
-    FROM ways w
-    WHERE w.changeset_id = $1 AND w.version = 1) w
-  WHERE w.geom IS NOT NULL;
+  FROM way_revisions rev
+  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
+  WHERE w.changeset_id = $1 AND w.revision = 1;
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Created ways done (%)', clock_timestamp(), row_count;
@@ -337,8 +333,8 @@ BEGIN
       NOT OWL_Equals(OWL_MakeLine(w.nodes, max_tstamp), OWL_MakeLine(prev.nodes, min_tstamp)) AS geom_changed,
       CASE WHEN NOT w.visible OR w.version = 1 THEN NULL ELSE w.tags != prev.tags END AS tags_changed,
       w.nodes != prev.nodes AS nodes_changed
-    FROM ways w
-    INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
+    FROM way_revisions w
+    INNER JOIN way_revisions prev ON (prev.id = w.id AND prev.version = w.version - 1)
     WHERE w.changeset_id = $1 AND w.visible) w
   WHERE w.geom_changed IS NOT NULL AND (w.geom_changed OR w.tags_changed);
 
@@ -461,9 +457,9 @@ DECLARE
 BEGIN
   subtiles_per_tile := POW(2, $2) / POW(2, $3);
 
-  DELETE FROM tiles WHERE changeset_id = $1 AND zoom = $3;
+  DELETE FROM changeset_tiles WHERE changeset_id = $1 AND zoom = $3;
 
-  INSERT INTO tiles (changeset_id, tstamp, x, y, zoom, geom, prev_geom, changes)
+  INSERT INTO changeset_tiles (changeset_id, tstamp, x, y, zoom, geom, prev_geom, changes)
   SELECT
   $1,
   MAX(tstamp),
@@ -479,7 +475,7 @@ BEGIN
     ELSE array_accum((SELECT array_agg(ST_Envelope(unnest)) FROM unnest(prev_geom)))
   END,
   array_accum(changes)
-  FROM tiles
+  FROM changeset_tiles
   WHERE changeset_id = $1 AND zoom = $2
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
 END;
@@ -491,20 +487,19 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION OWL_CreateWayRevisions(bigint) RETURNS void AS $$
 DECLARE
   first_version boolean;
-  current_subversion int;
+  current_revision int;
   rev record;
   prev_way record;
   way record;
 
 BEGIN
+  current_revision := 0;
   first_version := true;
   FOR way IN SELECT * FROM ways WHERE id = $1 ORDER BY version LOOP
-    --RAISE NOTICE 'Processing way % version %', $1, way.version;
+    current_revision := current_revision + 1;
 
-    current_subversion := 0;
-
-    INSERT INTO way_revisions (way_id, way_version, subversion, user_id, tstamp, changeset_id)
-    VALUES ($1, way.version, 0, way.user_id, way.tstamp, way.changeset_id);
+    INSERT INTO way_revisions (way_id, way_version, revision, user_id, tstamp, changeset_id, visible)
+    VALUES ($1, way.version, current_revision, way.user_id, way.tstamp, way.changeset_id, way.visible);
 
     IF NOT first_version THEN
       FOR rev IN
@@ -516,9 +511,9 @@ BEGIN
           GROUP BY n.changeset_id, n.user_id
           ORDER BY tstamp
       LOOP
-        current_subversion := current_subversion + 1;
-        INSERT INTO way_revisions (way_id, way_version, subversion, user_id, tstamp, changeset_id)
-        VALUES ($1, way.version - 1, current_subversion, rev.user_id, rev.tstamp, rev.changeset_id);
+        current_revision := current_revision + 1;
+        INSERT INTO way_revisions (way_id, way_version, revision, user_id, tstamp, changeset_id, visible)
+        VALUES ($1, way.version - 1, current_revision, rev.user_id, rev.tstamp, rev.changeset_id, prev_way.visible);
       END LOOP;
     END IF;
 

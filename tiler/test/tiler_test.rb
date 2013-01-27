@@ -112,4 +112,25 @@ class TilerTest < Test::Unit::TestCase
   def test_13426127
     setup_changeset_test(13426127)
   end
+
+  def test_gc
+    GC.start
+    puts memory_usage
+    polys = []
+    for i in 1..10000
+      cs = Geos::CoordinateSequence.new(5, 2)
+      y1, x1 = rand(100), rand(100)
+      y2, x2 = rand(100), rand(100)
+      cs.y[0], cs.x[0] = y1, x1
+      cs.y[1], cs.x[1] = y1, x2
+      cs.y[2], cs.x[2] = y2, x2
+      cs.y[3], cs.x[3] = y2, x1
+      cs.y[4], cs.x[4] = y1, x1
+      polys << Geos::create_polygon(cs, :srid => 4326)
+    end
+    puts memory_usage
+    polys = nil
+    GC.start
+    puts memory_usage
+  end
 end

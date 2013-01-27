@@ -52,16 +52,10 @@ CREATE TABLE changes (
   tags_changed boolean,
   nodes_changed boolean,
   members_changed boolean,
-  geom geometry(GEOMETRY, 4326),
-  prev_geom geometry(GEOMETRY, 4326),
   tags hstore NOT NULL,
   prev_tags hstore,
   nodes bigint[],
-  prev_nodes bigint[],
-  origin_el_type element_type,
-  origin_el_id bigint,
-  origin_el_version int,
-  origin_el_action action
+  prev_nodes bigint[]
 );
 
 -- Create a table for nodes.
@@ -93,7 +87,8 @@ CREATE TABLE way_revisions (
   id bigserial NOT NULL,
   way_id bigint NOT NULL,
   way_version int NOT NULL,
-  subversion int NOT NULL,
+  revision int NOT NULL,
+  visible boolean NOT NULL,
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   changeset_id bigint NOT NULL
@@ -132,10 +127,11 @@ CREATE TABLE tiles (
   el_id bigint NOT NULL,
   el_version int NOT NULL,
   el_rev int NOT NULL,
+  changeset_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   x int NOT NULL,
   y int NOT NULL,
-  geom geometry(GEOMETRY, 4326)[] NOT NULL
+  geom geometry(GEOMETRY, 4326) NOT NULL
 );
 
 -- Create a table for changeset tiles.

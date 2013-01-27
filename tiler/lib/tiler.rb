@@ -1,27 +1,22 @@
 require 'logging'
 require 'utils'
 require 'ffi-geos'
+require 'way_tiler'
 
 module Tiler
 
-# Implements tiling logic.
+# Implements tiling logic for changesets.
 class Tiler
   include ::Tiler::Logger
 
   attr_accessor :conn
 
   def initialize(conn)
+    @way_tiler = WayTiler.new(conn)
     @tiledata = {}
     @conn = conn
     setup_prepared_statements
     init_geos
-  end
-
-  def init_geos
-    @wkb_reader = Geos::WkbReader.new
-    @wkt_reader = Geos::WktReader.new
-    @wkb_writer = Geos::WkbWriter.new
-    @wkb_writer.include_srid = true
   end
 
   ##
@@ -43,13 +38,13 @@ class Tiler
   # duplicate primary key error during insert.
   #
   def clear_tiles(changeset_id, zoom)
-    count = @conn.exec("DELETE FROM tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
+    count = @conn.exec("DELETE FROM changeset_tiles WHERE changeset_id = #{changeset_id} AND zoom = #{zoom}").cmd_tuples
     @@log.debug "Removed existing tiles: #{count}"
     count
   end
 
   def has_tiles(changeset_id)
-    @conn.exec("SELECT COUNT(*) FROM tiles WHERE changeset_id = #{changeset_id}").getvalue(0, 0).to_i > 0
+    @conn.exec("SELECT COUNT(*) FROM changeset_tiles WHERE changeset_id = #{changeset_id}").getvalue(0, 0).to_i > 0
   end
 
   def has_changes(changeset_id)
@@ -207,18 +202,6 @@ class Tiler
     tiles
   end
 
-  def get_tile_geom(x, y, zoom)
-    cs = Geos::CoordinateSequence.new(5, 2)
-    y1, x1 = tile2latlon(x, y, zoom)
-    y2, x2 = tile2latlon(x + 1, y + 1, zoom)
-    cs.y[0], cs.x[0] = y1, x1
-    cs.y[1], cs.x[1] = y1, x2
-    cs.y[2], cs.x[2] = y2, x2
-    cs.y[3], cs.x[3] = y2, x1
-    cs.y[4], cs.x[4] = y1, x1
-    Geos::create_polygon(cs, :srid => 4326)
-  end
-
   def generate_changes(changeset_id)
     @conn.exec_prepared('delete_changes', [changeset_id])
     @conn.exec_prepared('insert_changes', [changeset_id])
@@ -244,7 +227,7 @@ class Tiler
         FROM changes WHERE changeset_id = $1")
 
     @conn.prepare('insert_tile',
-      "INSERT INTO tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom) VALUES
+      "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom) VALUES
         ($1, $2, $3, $4, $5, $6::bigint[],
         $7::geometry(GEOMETRY, 4326)[], $8::geometry(GEOMETRY, 4326)[])")
   end

@@ -1,4 +1,5 @@
 require 'set'
+require 'ffi-geos'
 
 def degrees(rad)
   rad * 180 / Math::PI
@@ -94,4 +95,35 @@ end
 
 def memory_usage
   `ps -o rss= -p #{$$}`.to_i
+end
+
+def get_tile_geom(x, y, zoom)
+  cs = Geos::CoordinateSequence.new(5, 2)
+  y1, x1 = tile2latlon(x, y, zoom)
+  y2, x2 = tile2latlon(x + 1, y + 1, zoom)
+  cs.y[0], cs.x[0] = y1, x1
+  cs.y[1], cs.x[1] = y1, x2
+  cs.y[2], cs.x[2] = y2, x2
+  cs.y[3], cs.x[3] = y2, x1
+  cs.y[4], cs.x[4] = y1, x1
+  Geos::create_polygon(cs, :srid => 4326)
+end
+
+def prepare_tiles(tiles_to_check, geom, source_zoom, zoom)
+  tiles = Set.new
+  for tile in tiles_to_check
+    tile_geom = get_tile_geom(tile[0], tile[1], source_zoom)
+    intersects = geom.intersects?(tile_geom)
+    tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects
+  end
+  tiles
+end
+
+def prepare_tiles_to_check(geom, bbox, source_zoom)
+  tiles = Set.new
+  test_zoom = 11
+  bbox_to_tiles(test_zoom, bbox).select {|tile| geom.intersects?(get_tile_geom(tile[0], tile[1], test_zoom))}.each do |tile|
+    tiles.merge(subtiles(tile, test_zoom, source_zoom))
+  end
+  tiles
 end

@@ -5,6 +5,7 @@ module TestCommon
   def setup_changeset_test(id)
     setup_db
     load_changeset(id)
+    @tiler = Tiler::Tiler.new(@conn)
     @tiler.generate(16, id, {:retile => true, :changes => true})
     @changes = get_changes
     @changes_h = Hash[@changes.collect {|row| [row['id'].to_i, row]}]
@@ -20,7 +21,6 @@ module TestCommon
     exec_sql_file('../../sql/owl_schema.sql')
     exec_sql_file('../../sql/owl_constraints.sql')
     exec_sql_file('../../sql/owl_functions.sql')
-    @tiler = Tiler::Tiler.new(@conn)
   end
 
   def exec_sql_file(file)
@@ -38,6 +38,7 @@ module TestCommon
       @conn.put_copy_data(line)
     end
     @conn.put_copy_end
+    @conn.exec("SELECT OWL_CreateWayRevisions(w.id) FROM (SELECT DISTINCT id FROM ways) w")
   end
 
   def verify_changes(changeset_id)
@@ -103,7 +104,7 @@ module TestCommon
         array_length(prev_geom, 1) AS prev_geom_arr_len,
         array_length(changes, 1) AS change_arr_len,
         (select array_agg(st_astext(unnest)) from unnest(geom)) AS geom_astext
-      FROM tiles WHERE zoom = 16").to_a
+      FROM changeset_tiles WHERE zoom = 16").to_a
   end
 
   # Performs sanity checks on given tiles.
