@@ -2,8 +2,10 @@
 
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS ways;
+DROP TABLE IF EXISTS way_revisions;
 DROP TABLE IF EXISTS changes;
 DROP TABLE IF EXISTS tiles;
+DROP TABLE IF EXISTS changeset_tiles;
 DROP TABLE IF EXISTS changesets;
 DROP TABLE IF EXISTS relation_members;
 DROP TABLE IF EXISTS relations;
@@ -62,18 +64,6 @@ CREATE TABLE changes (
   origin_el_action action
 );
 
--- Create a table for OWL tiles.
-CREATE TABLE tiles (
-  changeset_id bigint NOT NULL,
-  tstamp timestamp without time zone NOT NULL,
-  x int NOT NULL,
-  y int NOT NULL,
-  zoom int NOT NULL,
-  changes bigint[] NOT NULL,
-  geom geometry(GEOMETRY, 4326)[] NOT NULL,
-  prev_geom geometry(GEOMETRY, 4326)[] NOT NULL
-);
-
 -- Create a table for nodes.
 CREATE TABLE nodes (
   id bigint NOT NULL,
@@ -96,6 +86,17 @@ CREATE TABLE ways (
   changeset_id bigint NOT NULL,
   tags hstore NOT NULL,
   nodes bigint[] NOT NULL
+);
+
+-- Create a table for ways revisions.
+CREATE TABLE way_revisions (
+  id bigserial NOT NULL,
+  way_id bigint NOT NULL,
+  way_version int NOT NULL,
+  subversion int NOT NULL,
+  user_id int NOT NULL,
+  tstamp timestamp without time zone NOT NULL,
+  changeset_id bigint NOT NULL
 );
 
 -- Create a table for relations.
@@ -123,4 +124,28 @@ CREATE TABLE relation_members (
 CREATE TABLE users (
   id int NOT NULL,
   name text NOT NULL
+);
+
+-- Create a table for generic vector tiles.
+CREATE TABLE tiles (
+  el_type element_type NOT NULL,
+  el_id bigint NOT NULL,
+  el_version int NOT NULL,
+  el_rev int NOT NULL,
+  tstamp timestamp without time zone NOT NULL,
+  x int NOT NULL,
+  y int NOT NULL,
+  geom geometry(GEOMETRY, 4326)[] NOT NULL
+);
+
+-- Create a table for changeset tiles.
+CREATE TABLE changeset_tiles (
+  changeset_id bigint NOT NULL,
+  tstamp timestamp without time zone NOT NULL,
+  x int NOT NULL,
+  y int NOT NULL,
+  zoom int NOT NULL,
+  changes bigint[] NOT NULL,
+  geom geometry(GEOMETRY, 4326)[] NOT NULL,
+  prev_geom geometry(GEOMETRY, 4326)[] NOT NULL
 );

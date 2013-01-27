@@ -484,3 +484,46 @@ BEGIN
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
 END;
 $$ LANGUAGE plpgsql;
+
+--
+-- OWL_CreateWayRevisions
+--
+CREATE OR REPLACE FUNCTION OWL_CreateWayRevisions(bigint) RETURNS void AS $$
+DECLARE
+  first_version boolean;
+  current_subversion int;
+  rev record;
+  prev_way record;
+  way record;
+
+BEGIN
+  first_version := true;
+  FOR way IN SELECT * FROM ways WHERE id = $1 ORDER BY version LOOP
+    --RAISE NOTICE 'Processing way % version %', $1, way.version;
+
+    current_subversion := 0;
+
+    INSERT INTO way_revisions (way_id, way_version, subversion, user_id, tstamp, changeset_id)
+    VALUES ($1, way.version, 0, way.user_id, way.tstamp, way.changeset_id);
+
+    IF NOT first_version THEN
+      FOR rev IN
+          SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id
+          FROM nodes n
+          INNER JOIN nodes n2 ON (n.id = n2.id AND n.version = n2.version + 1)
+          WHERE n.id IN (SELECT unnest(prev_way.nodes)) AND n.tstamp > prev_way.tstamp AND n.tstamp < way.tstamp
+            AND NOT n.geom = n2.geom
+          GROUP BY n.changeset_id, n.user_id
+          ORDER BY tstamp
+      LOOP
+        current_subversion := current_subversion + 1;
+        INSERT INTO way_revisions (way_id, way_version, subversion, user_id, tstamp, changeset_id)
+        VALUES ($1, way.version - 1, current_subversion, rev.user_id, rev.tstamp, rev.changeset_id);
+      END LOOP;
+    END IF;
+
+    prev_way := way;
+    first_version := false;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql;
