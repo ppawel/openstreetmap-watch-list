@@ -5,6 +5,7 @@ ALTER TABLE ONLY changeset_tiles ADD CONSTRAINT pk_changeset_tiles PRIMARY KEY (
 
 ALTER TABLE ONLY nodes ADD CONSTRAINT pk_nodes PRIMARY KEY (id, version);
 ALTER TABLE ONLY ways ADD CONSTRAINT pk_ways PRIMARY KEY (id, version);
+ALTER TABLE ONLY way_revisions ADD CONSTRAINT pk_way_revisions PRIMARY KEY (way_id, way_version, revision);
 ALTER TABLE ONLY relations ADD CONSTRAINT pk_relations PRIMARY KEY (id, version);
 ALTER TABLE ONLY relation_members ADD CONSTRAINT pk_relation_members PRIMARY KEY (relation_id, version, sequence_id);
 ALTER TABLE ONLY users ADD CONSTRAINT pk_users PRIMARY KEY (id);
