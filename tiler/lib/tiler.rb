@@ -16,7 +16,6 @@ class Tiler
     @tiledata = {}
     @conn = conn
     setup_prepared_statements
-    init_geos
   end
 
   ##
@@ -27,7 +26,7 @@ class Tiler
     @@log.debug "mem = #{memory_usage} (before)"
     @conn.transaction do |c|
       generate_changes(changeset_id) if options[:changes] or !has_changes(changeset_id)
-      tile_count = do_generate(zoom, changeset_id, options)
+      #tile_count = do_generate(zoom, changeset_id, options)
     end
     @@log.debug "mem = #{memory_usage} (after)"
     tile_count
@@ -212,19 +211,10 @@ class Tiler
 
     @conn.prepare('insert_changes', 'INSERT INTO changes
       (changeset_id, tstamp, el_changeset_id, el_type, el_id, el_version, el_action,
-        geom_changed, tags_changed, nodes_changed,
-        members_changed, geom, prev_geom, tags, prev_tags, nodes, prev_nodes)
+        tags, prev_tags, nodes, prev_nodes)
       SELECT * FROM OWL_GenerateChanges($1)')
 
-    @conn.prepare('select_changes',
-      "SELECT id, el_action, el_id, el_version, el_type, tstamp, geom, prev_geom, geom_changed,
-          CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
-          CASE WHEN el_type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
-          CASE WHEN el_type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
-          CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
-          Box2D(geom) AS geom_bbox, Box2D(prev_geom) AS prev_geom_bbox,
-          Box2D(ST_Difference(geom, prev_geom)) AS diff_bbox
-        FROM changes WHERE changeset_id = $1")
+    @conn.prepare('select_changes', "SELECT * FROM changes WHERE changeset_id = $1")
 
     @conn.prepare('insert_tile',
       "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom) VALUES

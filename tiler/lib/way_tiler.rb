@@ -71,7 +71,7 @@ class WayTiler
   end
 
   def insert_tile(rev, x, y, geom)
-    @conn.exec_prepared('insert_tile', [rev['way_id'], rev['way_version'], rev['revision'], rev['tstamp'],
+    @conn.exec_prepared('insert_way_tile', [rev['way_id'], rev['way_version'], rev['revision'], rev['tstamp'],
       rev['changeset_id'], x, y, @wkb_writer.write_hex(geom)])
   end
 
@@ -81,7 +81,8 @@ class WayTiler
       FROM way_revisions rev
       INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
       WHERE way_id = $1")
-    @conn.prepare('insert_tile',
+
+    @conn.prepare('insert_way_tile',
       "INSERT INTO tiles (el_type, el_id, el_version, el_rev, tstamp, changeset_id, x, y, geom) VALUES
         ('W', $1, $2, $3, $4, $5, $6, $7, $8)")
   end
