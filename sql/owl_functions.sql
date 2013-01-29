@@ -1,3 +1,9 @@
+CREATE OR REPLACE FUNCTION OWL_LatLonToTile(int, geometry) RETURNS table (x int, y int) AS $$
+  SELECT
+    floor((POW(2, $1) * ((ST_X($2) + 180) / 360)))::int AS tile_x,
+    floor((1.0 - ln(tan(radians(ST_Y($2))) + 1.0 / cos(radians(ST_Y($2)))) / pi()) / 2.0 * POW(2, $1))::int AS tile_y;
+$$ LANGUAGE SQL;
+
 --
 -- Returns index of an element in given array.
 --
@@ -194,6 +200,7 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   el_type element_type,
   el_id bigint,
   el_version int,
+  el_rev int,
   el_action action,
   tags hstore,
   prev_tags hstore,
@@ -231,6 +238,7 @@ BEGIN
     'N'::element_type AS type,
     n.id,
     n.version,
+    NULL::int,
     CASE
       WHEN n.version = 1 THEN 'CREATE'::action
       WHEN n.version > 1 AND n.visible THEN 'MODIFY'::action
@@ -258,6 +266,7 @@ BEGIN
     'W'::element_type AS type,
     w.id,
     w.version,
+    rev.revision,
     'CREATE',
     w.tags,
     NULL,
@@ -280,6 +289,7 @@ BEGIN
     'W'::element_type AS type,
     w.id,
     w.version,
+    rev.revision,
     'MODIFY',
     w.tags,
     prev_way.tags,
@@ -304,20 +314,17 @@ BEGIN
     'W'::element_type AS type,
     w.id,
     w.version,
+    rev.revision,
     'DELETE',
     w.tags,
-    w.prev_tags,
+    prev_way.tags,
     w.nodes,
-    w.prev_nodes
-  FROM (
-    SELECT w.*,
-      prev.tags AS prev_tags,
-      prev.nodes AS prev_nodes,
-      OWL_MakeLine(prev.nodes, max_tstamp) AS prev_geom
-    FROM ways w
-    INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
-    WHERE w.changeset_id = $1 AND NOT w.visible) w
-  WHERE w.prev_geom IS NOT NULL;
+    prev_way.nodes
+  FROM way_revisions rev
+  INNER JOIN way_revisions prev_rev ON (prev_rev.way_id = rev.way_id AND prev_rev.revision = rev.revision - 1)
+  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
+  INNER JOIN ways prev_way ON (prev_way.id = prev_rev.way_id AND prev_way.version = prev_rev.way_version)
+  WHERE NOT rev.visible;
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Deleted ways done (%)', clock_timestamp(), row_count;

@@ -3,11 +3,11 @@ $:.unshift File.absolute_path(File.dirname(__FILE__)) + '/../lib'
 require 'pg'
 require 'test/unit'
 require 'yaml'
-require 'tiler'
+require 'changeset_tiler'
 
 require './common'
 
-class TilerTest < Test::Unit::TestCase
+class ChangesetTilerTest < Test::Unit::TestCase
   include TestCommon
 
   # Tag changes in Zagreb and Budapest place nodes.

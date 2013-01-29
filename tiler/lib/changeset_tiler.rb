@@ -6,7 +6,7 @@ require 'way_tiler'
 module Tiler
 
 # Implements tiling logic for changesets.
-class Tiler
+class ChangesetTiler
   include ::Tiler::Logger
 
   attr_accessor :conn
@@ -26,7 +26,7 @@ class Tiler
     @@log.debug "mem = #{memory_usage} (before)"
     @conn.transaction do |c|
       generate_changes(changeset_id) if options[:changes] or !has_changes(changeset_id)
-      #tile_count = do_generate(zoom, changeset_id, options)
+      tile_count = do_generate(zoom, changeset_id, options)
     end
     @@log.debug "mem = #{memory_usage} (after)"
     tile_count
@@ -53,6 +53,13 @@ class Tiler
   protected
 
   def do_generate(zoom, changeset_id, options = {})
+    for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
+      @way_tiler.create_way_tiles(change['el_id']) if change['el_type'] == 'W'
+    end
+    @conn.exec_prepared('generate_changeset_tiles', [changeset_id])
+  end
+
+  def _do_generate(zoom, changeset_id, options = {})
     if options[:retile]
       clear_tiles(changeset_id, zoom)
     else
@@ -182,25 +189,6 @@ class Tiler
     count
   end
 
-  def prepare_tiles(tiles_to_check, geom, source_zoom, zoom)
-    tiles = Set.new
-    for tile in tiles_to_check
-      tile_geom = get_tile_geom(tile[0], tile[1], source_zoom)
-      intersects = geom.intersects?(tile_geom)
-      tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects
-    end
-    tiles
-  end
-
-  def prepare_tiles_to_check(geom, bbox, source_zoom)
-    tiles = Set.new
-    test_zoom = 11
-    bbox_to_tiles(test_zoom, bbox).select {|tile| geom.intersects?(get_tile_geom(tile[0], tile[1], test_zoom))}.each do |tile|
-      tiles.merge(subtiles(tile, test_zoom, source_zoom))
-    end
-    tiles
-  end
-
   def generate_changes(changeset_id)
     @conn.exec_prepared('delete_changes', [changeset_id])
     @conn.exec_prepared('insert_changes', [changeset_id])
@@ -210,16 +198,49 @@ class Tiler
     @conn.prepare('delete_changes', 'DELETE FROM changes WHERE changeset_id = $1')
 
     @conn.prepare('insert_changes', 'INSERT INTO changes
-      (changeset_id, tstamp, el_changeset_id, el_type, el_id, el_version, el_action,
+      (changeset_id, tstamp, el_changeset_id, el_type, el_id, el_version, el_rev, el_action,
         tags, prev_tags, nodes, prev_nodes)
       SELECT * FROM OWL_GenerateChanges($1)')
 
     @conn.prepare('select_changes', "SELECT * FROM changes WHERE changeset_id = $1")
 
-    @conn.prepare('insert_tile',
-      "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom) VALUES
-        ($1, $2, $3, $4, $5, $6::bigint[],
-        $7::geometry(GEOMETRY, 4326)[], $8::geometry(GEOMETRY, 4326)[])")
+    @conn.prepare('generate_changeset_tiles',
+      "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
+      SELECT
+        $1::bigint,
+        MAX(q.tstamp),
+        16,
+        q.x,
+        q.y,
+        array_agg(q.change_id),
+        array_agg(q.geom),
+        array_agg(q.prev_geom)
+      FROM (
+        SELECT
+          t.tstamp,
+          t.x,
+          t.y,
+          c.id AS change_id,
+          t.geom,
+          prev_t.geom AS prev_geom
+        FROM tiles t
+        LEFT JOIN tiles prev_t ON (prev_t.el_id = t.el_id AND prev_t.el_rev = t.el_rev - 1)
+        INNER JOIN changes c ON (c.el_type = t.el_type AND c.el_id = t.el_id AND c.el_version = t.el_version AND c.el_rev = t.el_rev)
+        WHERE t.changeset_id = $1 AND t.el_type = 'W'
+          UNION
+        SELECT
+          n.tstamp,
+          (SELECT x FROM OWL_LatLonToTile(16, n.geom)),
+          (SELECT y FROM OWL_LatLonToTile(16, n.geom)),
+          c.id AS change_id,
+          n.geom,
+          prev_n.geom AS prev_geom
+        FROM nodes n
+        LEFT JOIN nodes prev_n ON (prev_n.id = n.id AND prev_n.version = n.version - 1)
+        INNER JOIN changes c ON (c.el_id = n.id AND c.el_version = n.version)
+        WHERE n.changeset_id = $1 AND c.el_type = 'N'
+      ) q
+      GROUP BY q.x, q.y")
   end
 end
 

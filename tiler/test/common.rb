@@ -5,7 +5,7 @@ module TestCommon
   def setup_changeset_test(id)
     setup_db
     load_changeset(id)
-    @tiler = Tiler::Tiler.new(@conn)
+    @tiler = Tiler::ChangesetTiler.new(@conn)
     @tiler.generate(16, id, {:retile => true, :changes => true})
     @changes = get_changes
     @changes_h = Hash[@changes.collect {|row| [row['id'].to_i, row]}]
@@ -42,60 +42,17 @@ module TestCommon
   end
 
   def verify_changes(changeset_id)
-    for change in @changes
-      if change['el_action'] == 'MODIFY'
-        assert((change['tags_changed'] == 't' or change['geom_changed'] == 't'), "Change is not a change: #{change}")
-        # If geom did not change, prev should not be stored.
-        if change['geom_changed'] == 'f'
-          assert_equal(nil, change['prev_geom'], "prev_geom should not be stored for change: #{change}")
-        else
-          assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}")
-        end
-      end
-
-      if change['el_action'] == 'DELETE'
-        assert(!change['prev_geom'].nil?, "prev_geom should be stored for change: #{change}")
-      end
-
-      if change['el_action'] == 'AFFECT'
-        assert_equal('t', change['geom_changed'])
-        assert(change['geom'] != change['prev_geom'], "Geom should be different for change: #{change}")
-      end
-
-      if change['el_action'] == 'CREATE'
-        assert_equal(nil, change['nodes_changed'])
-        assert_equal(nil, change['geom_changed'])
-        assert_equal(nil, change['tags_changed'])
-        assert(!change['geom'].nil?, 'Geom should not be nil for action CREATE')
-        assert_equal(nil, change['prev_geom'], 'prev_geom should be nil for action CREATE')
-      end
-    end
-
     for way in find_changes('el_type' => 'W')
       # There should be at most 2 versions of a way (unless there are more of them in the changeset).
       if way['el_changeset_id'].to_i != changeset_id and way['version'].to_i > 1
         assert_equal(2, find_changes('el_type' => 'W', 'el_id' => way['el_id']).size,
           "Too many versions for way: #{way}")
       end
-
-      if way['el_action'] != 'AFFECT'
-        assert_equal(way['nodes_len'].to_i, way['geom_num_points'].to_i,
-          "nodes do not correspond to geom points for change: #{way}")
-        if way['geom_changed'] == 't' and way['nodes_changed'] == 't'
-          assert_equal(way['prev_nodes_len'], way['prev_geom_num_points'],
-            "prev_nodes do not correspond to prev_geom points for change: #{way}")
-        end
-      end
     end
   end
 
   def get_changes
-    @conn.exec("
-      SELECT *,
-        array_length(nodes, 1) AS nodes_len, ST_NumPoints(geom) AS geom_num_points,
-        array_length(prev_nodes, 1) AS prev_nodes_len, ST_NumPoints(prev_geom) AS prev_geom_num_points,
-        ST_AsText(geom) AS geom_astext, ST_AsText(prev_geom) AS prev_geom_astext
-      FROM changes").to_a
+    @conn.exec("SELECT * FROM changes").to_a
   end
 
   def get_tiles

@@ -38,22 +38,6 @@ CREATE TABLE changesets (
   bbox geometry -- Bounding box of all changes for this changeset.
 );
 
--- Create a table for changes.
-CREATE TABLE changes (
-  id bigserial NOT NULL,
-  changeset_id bigint NOT NULL,
-  tstamp timestamp without time zone NOT NULL,
-  el_changeset_id bigint NOT NULL,
-  el_type element_type NOT NULL,
-  el_id bigint NOT NULL,
-  el_version int NOT NULL,
-  el_action action NOT NULL,
-  tags hstore NOT NULL,
-  prev_tags hstore,
-  nodes bigint[],
-  prev_nodes bigint[]
-);
-
 -- Create a table for nodes.
 CREATE TABLE nodes (
   id bigint NOT NULL,
@@ -115,6 +99,23 @@ CREATE TABLE relation_members (
 CREATE TABLE users (
   id int NOT NULL,
   name text NOT NULL
+);
+
+-- Create a table for changes.
+CREATE TABLE changes (
+  id bigserial NOT NULL,
+  changeset_id bigint NOT NULL,
+  tstamp timestamp without time zone NOT NULL,
+  el_changeset_id bigint NOT NULL,
+  el_type element_type NOT NULL,
+  el_id bigint NOT NULL,
+  el_version int NOT NULL,
+  el_rev int,
+  el_action action NOT NULL,
+  tags hstore NOT NULL,
+  prev_tags hstore,
+  nodes bigint[],
+  prev_nodes bigint[]
 );
 
 -- Create a table for generic vector tiles.
