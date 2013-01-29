@@ -54,7 +54,7 @@ class ChangesetTiler
 
   def do_generate(zoom, changeset_id, options = {})
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
-      @way_tiler.create_way_tiles(change['el_id'], changeset_id) if change['el_type'] == 'W'
+      @way_tiler.create_way_tiles(change['el_id'], nil) if change['el_type'] == 'W'
     end
     @conn.exec_prepared('generate_changeset_tiles', [changeset_id])
   end
@@ -207,7 +207,7 @@ class ChangesetTiler
     @conn.prepare('generate_changeset_tiles',
       "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
       SELECT
-        $1::bigint,
+        $1::int,
         MAX(q.tstamp),
         16,
         q.x,
@@ -222,21 +222,24 @@ class ChangesetTiler
           t.y,
           c.id AS change_id,
           t.geom AS geom,
-          NULL AS prev_geom
+          CASE WHEN t.geom = prev_t.geom THEN NULL ELSE prev_t.geom END AS prev_geom
         FROM changes c
-        INNER JOIN tiles t ON (c.el_type = t.el_type AND c.el_id = t.el_id AND c.el_rev = t.el_rev)
+        INNER JOIN tiles t ON (t.el_type = c.el_type AND t.el_id = c.el_id AND t.el_rev = c.el_rev)
+        INNER JOIN tiles prev_t ON (prev_t.el_type = c.el_type AND prev_t.el_id = c.el_id AND
+          prev_t.el_rev = c.el_rev - 1 AND prev_t.x = t.x AND prev_t.y = t.y)
         WHERE c.changeset_id = $1 AND c.el_type = 'W'
           UNION
         SELECT
-          prev_t.tstamp,
-          prev_t.x,
-          prev_t.y,
+          CASE WHEN t.tstamp IS NULL THEN prev_t.tstamp ELSE t.tstamp END,
+          CASE WHEN t.x IS NULL THEN prev_t.x ELSE t.x END,
+          CASE WHEN t.y IS NULL THEN prev_t.y ELSE t.y END,
           c.id AS change_id,
-          NULL AS geom,
-          prev_t.geom AS prev_geom
+          CASE WHEN t.geom IS NULL THEN prev_t.geom ELSE t.geom END,
+          CASE WHEN prev_t.geom IS NULL THEN prev_t.geom ELSE t.geom END
         FROM changes c
-        INNER JOIN tiles prev_t ON (prev_t.el_id = c.el_id AND prev_t.el_rev = c.el_rev - 1)
-        WHERE c.changeset_id = $1 AND c.el_type = 'W'
+        LEFT JOIN tiles t ON (t.el_type = c.el_type AND t.el_id = c.el_id AND t.el_rev = c.el_rev)
+        LEFT JOIN tiles prev_t ON (prev_t.el_type = c.el_type AND prev_t.el_id = c.el_id AND prev_t.el_rev = c.el_rev - 1)
+        WHERE c.changeset_id = $1 AND c.el_type = 'W' AND (t.tstamp IS NULL OR prev_t.tstamp IS NULL)
           UNION
         SELECT
           n.tstamp,

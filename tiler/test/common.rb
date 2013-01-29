@@ -82,13 +82,15 @@ module TestCommon
     # Check if each change has a tile.
     change_ids = @changes_h.keys.sort.uniq
     change_ids_from_tiles = @tiles.collect {|tile| pg_parse_array(tile['changes'])}.flatten.sort.uniq
-    assert_equal(change_ids, change_ids_from_tiles, change_ids - change_ids_from_tiles)
+    assert_equal(change_ids, change_ids_from_tiles,
+      (change_ids - change_ids_from_tiles).collect {|id| @changes_h[id]})
 
     for tile in @tiles
       # Every change should have an associated geom and prev_geom entry.
       assert_equal(tile['change_arr_len'].to_i, tile['geom_arr_len'].to_i)
       assert_equal(tile['change_arr_len'].to_i, tile['prev_geom_arr_len'].to_i)
       changes_arr = pg_parse_array(tile['changes'])
+      assert(changes_arr.size == changes_arr.uniq.size, "Duplicate change ids: #{changes_arr} for tile #{tile}")
 
       geom_arr = pg_parse_geom_array(tile['geom'])
       prev_geom_arr = pg_parse_geom_array(tile['prev_geom'])

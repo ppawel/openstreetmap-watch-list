@@ -9,3 +9,5 @@ ALTER TABLE ONLY way_revisions ADD CONSTRAINT pk_way_revisions PRIMARY KEY (way_
 ALTER TABLE ONLY relations ADD CONSTRAINT pk_relations PRIMARY KEY (id, version);
 ALTER TABLE ONLY relation_members ADD CONSTRAINT pk_relation_members PRIMARY KEY (relation_id, version, sequence_id);
 ALTER TABLE ONLY users ADD CONSTRAINT pk_users PRIMARY KEY (id);
+
+ALTER TABLE ONLY tiles ADD CONSTRAINT pk_tiles PRIMARY KEY (el_type, el_id, el_version, el_rev, x, y);

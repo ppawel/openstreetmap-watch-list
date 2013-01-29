@@ -22,10 +22,11 @@ class WayTiler
   end
 
   def create_way_tiles(way_id, changeset_id = nil)
+    @@log.debug "Way #{way_id}"
     for rev in @conn.exec_prepared('select_revisions', [way_id, changeset_id]).to_a
       next if !rev['geom']
       rev['geom_obj'] = @wkb_reader.read_hex(rev['geom'])
-      @@log.debug "Way #{way_id} version #{rev['way_version']} rev #{rev['revision']}"
+      @@log.debug "  version #{rev['way_version']} rev #{rev['revision']}"
 
       create_rev_tiles(rev)
 
@@ -37,23 +38,25 @@ class WayTiler
   private
 
   def create_rev_tiles(rev)
+    return if has_tiles(rev)
+
     geom = rev['geom_obj']
     geom_prep = rev['geom_obj'].to_prepared
     bbox = box2d_to_bbox(rev['bbox'])
     tile_count = bbox_tile_count(@zoom, bbox)
 
-    @@log.debug "  tile_count = #{tile_count}"
+    @@log.debug "    tile_count = #{tile_count}"
 
     if tile_count < 64
       # Does not make sense to try to reduce small geoms.
       tiles = bbox_to_tiles(@zoom, bbox)
     else
       tiles_to_check = (tile_count < 2048 ? bbox_to_tiles(14, bbox) : prepare_tiles_to_check(geom_prep, bbox, 14))
-      @@log.debug "  tiles_to_check = #{tiles_to_check.size}"
+      @@log.debug "    tiles_to_check = #{tiles_to_check.size}"
       tiles = prepare_tiles(tiles_to_check, geom_prep, 14, @zoom)
     end
 
-    @@log.debug "  Processing #{tiles.size} tile(s)..."
+    @@log.debug "    Processing #{tiles.size} tile(s)..."
 
     count = 0
     for tile in tiles
@@ -75,12 +78,20 @@ class WayTiler
       rev['changeset_id'], x, y, @wkb_writer.write_hex(geom)])
   end
 
+  def has_tiles(rev)
+    @conn.exec_prepared('has_tiles', [rev['way_id'], rev['way_version'], rev['revision']]).getvalue(0, 0).to_i > 0
+  end
+
   def setup_prepared_statements
     @conn.prepare('select_revisions',
       "SELECT *, OWL_MakeLine(w.nodes, rev.tstamp) AS geom, OWL_MakeLine(w.nodes, rev.tstamp)::box2d AS bbox
       FROM way_revisions rev
       INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
-      WHERE way_id = $1 AND ($2::int IS NULL OR rev.changeset_id = $2::int)")
+      WHERE way_id = $1 AND ($2::int IS NULL OR rev.changeset_id = $2::int)
+      ORDER BY rev.way_id, rev.revision")
+
+    @conn.prepare('has_tiles', "SELECT COUNT(*) FROM tiles WHERE el_type = 'W' AND el_id = $1 AND
+      el_version = $2 AND el_rev = $3")
 
     @conn.prepare('insert_way_tile',
       "INSERT INTO tiles (el_type, el_id, el_version, el_rev, tstamp, changeset_id, x, y, geom) VALUES
