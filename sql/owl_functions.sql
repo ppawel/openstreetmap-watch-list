@@ -412,11 +412,6 @@ BEGIN
   current_revision := 0;
   first_version := true;
   FOR way IN SELECT * FROM ways WHERE id = $1 ORDER BY version LOOP
-    current_revision := current_revision + 1;
-
-    INSERT INTO way_revisions (way_id, way_version, revision, user_id, tstamp, changeset_id, visible)
-    VALUES ($1, way.version, current_revision, way.user_id, way.tstamp, way.changeset_id, way.visible);
-
     IF NOT first_version THEN
       FOR rev IN
           SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id
@@ -432,6 +427,11 @@ BEGIN
         VALUES ($1, way.version - 1, current_revision, rev.user_id, rev.tstamp, rev.changeset_id, prev_way.visible);
       END LOOP;
     END IF;
+
+    current_revision := current_revision + 1;
+
+    INSERT INTO way_revisions (way_id, way_version, revision, user_id, tstamp, changeset_id, visible)
+    VALUES ($1, way.version, current_revision, way.user_id, way.tstamp, way.changeset_id, way.visible);
 
     prev_way := way;
     first_version := false;

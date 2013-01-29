@@ -54,7 +54,7 @@ class ChangesetTiler
 
   def do_generate(zoom, changeset_id, options = {})
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
-      @way_tiler.create_way_tiles(change['el_id']) if change['el_type'] == 'W'
+      @way_tiler.create_way_tiles(change['el_id'], changeset_id) if change['el_type'] == 'W'
     end
     @conn.exec_prepared('generate_changeset_tiles', [changeset_id])
   end
@@ -221,12 +221,22 @@ class ChangesetTiler
           t.x,
           t.y,
           c.id AS change_id,
-          t.geom,
+          t.geom AS geom,
+          NULL AS prev_geom
+        FROM changes c
+        INNER JOIN tiles t ON (c.el_type = t.el_type AND c.el_id = t.el_id AND c.el_rev = t.el_rev)
+        WHERE c.changeset_id = $1 AND c.el_type = 'W'
+          UNION
+        SELECT
+          prev_t.tstamp,
+          prev_t.x,
+          prev_t.y,
+          c.id AS change_id,
+          NULL AS geom,
           prev_t.geom AS prev_geom
-        FROM tiles t
-        LEFT JOIN tiles prev_t ON (prev_t.el_id = t.el_id AND prev_t.el_rev = t.el_rev - 1)
-        INNER JOIN changes c ON (c.el_type = t.el_type AND c.el_id = t.el_id AND c.el_version = t.el_version AND c.el_rev = t.el_rev)
-        WHERE t.changeset_id = $1 AND t.el_type = 'W'
+        FROM changes c
+        INNER JOIN tiles prev_t ON (prev_t.el_id = c.el_id AND prev_t.el_rev = c.el_rev - 1)
+        WHERE c.changeset_id = $1 AND c.el_type = 'W'
           UNION
         SELECT
           n.tstamp,
@@ -234,11 +244,21 @@ class ChangesetTiler
           (SELECT y FROM OWL_LatLonToTile(16, n.geom)),
           c.id AS change_id,
           n.geom,
+          NULL AS prev_geom
+        FROM changes c
+        INNER JOIN nodes n ON (c.el_id = n.id AND c.el_version = n.version)
+        WHERE c.changeset_id = $1 AND c.el_type = 'N'
+          UNION
+        SELECT
+          prev_n.tstamp,
+          (SELECT x FROM OWL_LatLonToTile(16, prev_n.geom)),
+          (SELECT y FROM OWL_LatLonToTile(16, prev_n.geom)),
+          c.id AS change_id,
+          NULL,
           prev_n.geom AS prev_geom
-        FROM nodes n
-        LEFT JOIN nodes prev_n ON (prev_n.id = n.id AND prev_n.version = n.version - 1)
-        INNER JOIN changes c ON (c.el_id = n.id AND c.el_version = n.version)
-        WHERE n.changeset_id = $1 AND c.el_type = 'N'
+        FROM changes c
+        INNER JOIN nodes prev_n ON (c.el_id = prev_n.id AND c.el_version = prev_n.version)
+        WHERE c.changeset_id = $1 AND c.el_type = 'N'
       ) q
       GROUP BY q.x, q.y")
   end

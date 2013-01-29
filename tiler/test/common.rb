@@ -3,6 +3,7 @@
 #
 module TestCommon
   def setup_changeset_test(id)
+    puts "setup_changeset_test(#{id})"
     setup_db
     load_changeset(id)
     @tiler = Tiler::ChangesetTiler.new(@conn)
@@ -39,6 +40,15 @@ module TestCommon
     end
     @conn.put_copy_end
     @conn.exec("SELECT OWL_CreateWayRevisions(w.id) FROM (SELECT DISTINCT id FROM ways) w")
+    verify_way_revisions
+  end
+
+  def verify_way_revisions
+    @conn.exec("SELECT * FROM way_revisions ORDER BY way_id, way_version, revision").to_a.each_cons(2) do |rev1, rev2|
+      next if rev1['way_id'] != rev2['way_id']
+      assert(rev1['way_version'].to_i <= rev2['way_version'].to_i)
+      assert(rev1['revision'].to_i <= rev2['revision'].to_i, "Wrong revision order:\n#{rev1}\n#{rev2}")
+    end
   end
 
   def verify_changes(changeset_id)
@@ -52,7 +62,10 @@ module TestCommon
   end
 
   def get_changes
-    @conn.exec("SELECT * FROM changes").to_a
+    @conn.exec("SELECT *,
+        array_length(nodes, 1) AS nodes_len,
+        array_length(prev_nodes, 1) AS prev_nodes_len
+      FROM changes").to_a
   end
 
   def get_tiles

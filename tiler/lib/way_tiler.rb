@@ -21,8 +21,8 @@ class WayTiler
     setup_prepared_statements
   end
 
-  def create_way_tiles(way_id)
-    for rev in @conn.exec_prepared('select_revisions', [way_id]).to_a
+  def create_way_tiles(way_id, changeset_id = nil)
+    for rev in @conn.exec_prepared('select_revisions', [way_id, changeset_id]).to_a
       next if !rev['geom']
       rev['geom_obj'] = @wkb_reader.read_hex(rev['geom'])
       @@log.debug "Way #{way_id} version #{rev['way_version']} rev #{rev['revision']}"
@@ -80,7 +80,7 @@ class WayTiler
       "SELECT *, OWL_MakeLine(w.nodes, rev.tstamp) AS geom, OWL_MakeLine(w.nodes, rev.tstamp)::box2d AS bbox
       FROM way_revisions rev
       INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
-      WHERE way_id = $1")
+      WHERE way_id = $1 AND ($2::int IS NULL OR rev.changeset_id = $2::int)")
 
     @conn.prepare('insert_way_tile',
       "INSERT INTO tiles (el_type, el_id, el_version, el_rev, tstamp, changeset_id, x, y, geom) VALUES

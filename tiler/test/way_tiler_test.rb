@@ -14,6 +14,12 @@ class WayTilerTest < Test::Unit::TestCase
     setup_way_tiler_test(11193918)
   end
 
+  def test_14429223_deleted_ways
+    setup_way_tiler_test(14429223)
+    p @conn.exec("SELECT * FROM way_revisions where way_id = 198336783").to_a
+    p @conn.exec("SELECT distinct el_id, el_version, el_rev FROM tiles where el_id = 198336783").to_a
+  end
+
   def setup_way_tiler_test(changeset_id)
     setup_db
     load_changeset(changeset_id)
