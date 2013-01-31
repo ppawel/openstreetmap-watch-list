@@ -24,6 +24,8 @@ class ChangesetTiler
   def generate(zoom, changeset_id, options = {})
     tile_count = nil
     @@log.debug "mem = #{memory_usage} (before)"
+
+    ensure_way_revisions(changeset_id)
     @conn.transaction do |c|
       generate_changes(changeset_id) if options[:changes] or !has_changes(changeset_id)
       tile_count = do_generate(zoom, changeset_id, options)
@@ -53,10 +55,15 @@ class ChangesetTiler
   protected
 
   def do_generate(zoom, changeset_id, options = {})
+    if options[:retile]
+      clear_tiles(changeset_id, zoom)
+    else
+      return -1 if has_tiles(changeset_id)
+    end
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
       @way_tiler.create_way_tiles(change['el_id'], changeset_id) if change['el_type'] == 'W'
     end
-    @conn.exec_prepared('generate_changeset_tiles', [changeset_id])
+    @conn.exec_prepared('generate_changeset_tiles', [changeset_id]).cmd_tuples
   end
 
   def _do_generate(zoom, changeset_id, options = {})
@@ -107,6 +114,12 @@ class ChangesetTiler
     count = @tiledata.size
     free_tiles
     count
+  end
+
+  def ensure_way_revisions(changeset_id)
+    @conn.exec("SELECT OWL_CreateWayRevisions(q.id) FROM (
+      SELECT DISTINCT id FROM ways WHERE changeset_id = #{changeset_id} UNION
+      SELECT DISTINCT id FROM ways WHERE nodes && (SELECT array_agg(id) FROM nodes WHERE changeset_id = #{changeset_id})) q")
   end
 
   def add_change_tile(x, y, zoom, change, geom, prev_geom)

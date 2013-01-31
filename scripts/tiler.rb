@@ -10,7 +10,7 @@ require 'yaml'
 
 require 'cmdline_options'
 require 'logging'
-require 'tiler'
+require 'changeset_tiler'
 
 GC.enable
 
@@ -22,7 +22,7 @@ changeset_ids = ARGF.each_line.collect {|line| line.to_i}
 
 conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
   :user => $config['username'], :password => $config['password'])
-tiler = Tiler::Tiler.new(conn)
+tiler = Tiler::ChangesetTiler.new(conn)
 
 changeset_ids.each_with_index do |changeset_id, count|
   next if changeset_id == 0

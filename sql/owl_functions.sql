@@ -95,7 +95,7 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 --
 CREATE OR REPLACE FUNCTION OWL_RemoveTags(hstore) RETURNS hstore AS $$
   SELECT $1 - ARRAY['created_by', 'source']
-$$ LANGUAGE sql IMMUTABLE;
+$$ LANGUAGE sql STRICT IMMUTABLE;
 
 --
 -- OWL_Equals
@@ -251,7 +251,7 @@ BEGIN
   FROM nodes n
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
   WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1) AND
-    OWL_RemoveTags(n.tags) != ''::hstore OR OWL_RemoveTags(prev.tags) != ''::hstore;
+    (n.tags - ARRAY['created_by', 'source'] != ''::hstore OR prev.tags - ARRAY['created_by', 'source'] != ''::hstore);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Nodes done (%)', clock_timestamp(), row_count;
@@ -402,6 +402,7 @@ $$ LANGUAGE plpgsql;
 --
 CREATE OR REPLACE FUNCTION OWL_CreateWayRevisions(bigint) RETURNS void AS $$
 DECLARE
+  last_way_tstamp timestamp without time zone;
   first_version boolean;
   current_revision int;
   rev record;
@@ -409,9 +410,11 @@ DECLARE
   way record;
 
 BEGIN
+  last_way_tstamp := (SELECT MAX(tstamp) FROM way_revisions WHERE way_id = $1);
   current_revision := 0;
   first_version := true;
-  FOR way IN SELECT * FROM ways WHERE id = $1 ORDER BY version LOOP
+
+  FOR way IN SELECT * FROM ways WHERE id = $1 AND (last_way_tstamp IS NULL OR tstamp > last_way_tstamp) ORDER BY version LOOP
     RAISE NOTICE 'Way % version %', way.id, way.version;
 
     IF NOT first_version THEN
@@ -420,7 +423,7 @@ BEGIN
           FROM nodes n
           INNER JOIN nodes n2 ON (n.id = n2.id AND n.version = n2.version + 1)
           WHERE n.id IN (SELECT unnest(prev_way.nodes)) AND n.tstamp > prev_way.tstamp AND n.tstamp < way.tstamp
-            AND NOT n.geom = n2.geom
+            AND NOT n.geom = n2.geom AND (last_way_tstamp IS NULL OR n.tstamp > last_way_tstamp)
           GROUP BY n.changeset_id, n.user_id
           ORDER BY tstamp
       LOOP
@@ -439,12 +442,15 @@ BEGIN
     first_version := false;
   END LOOP;
 
+  SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO
+  prev_way;
+
   FOR rev IN
       SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id
       FROM nodes n
       INNER JOIN nodes n2 ON (n.id = n2.id AND n.version = n2.version + 1)
       WHERE n.id IN (SELECT unnest(prev_way.nodes)) AND n.tstamp > prev_way.tstamp AND n.tstamp <= NOW()
-        AND NOT n.geom = n2.geom
+        AND NOT n.geom = n2.geom AND (last_way_tstamp IS NULL OR n.tstamp > last_way_tstamp)
       GROUP BY n.changeset_id, n.user_id
       ORDER BY tstamp
   LOOP
