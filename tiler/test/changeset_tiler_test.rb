@@ -61,6 +61,26 @@ class ChangesetTilerTest < Test::Unit::TestCase
     setup_changeset_test(13426127)
   end
 
+  def test_14820799_created_way
+    setup_changeset_test(14820799)
+    assert_equal(0, find_changes('el_type' => 'N').size)
+    assert_equal(1, find_changes('el_type' => 'W', 'el_action' => 'CREATE', 'el_id' => '203232361').size)
+  end
+
+  def test_14797380_created_area
+    setup_changeset_test(14797380)
+    assert_equal(0, find_changes('el_type' => 'N').size)
+    assert_equal(1, find_changes('el_type' => 'W', 'el_action' => 'CREATE', 'el_id' => '203011417').size)
+  end
+
+  def test_14796945
+    setup_changeset_test(14796945)
+    assert_equal(0, find_changes('el_type' => 'N').size)
+    assert_equal(4, find_changes('el_type' => 'W').size)
+    assert_equal(1, find_changes('el_type' => 'W', 'el_action' => 'CREATE', 'el_id' => '203008418').size)
+  end
+
+
 =begin
   TESTS WITH INCOMPLETE CHANGESET DATA - NEED FULL HISTORY - RE-ENABLE WHEN DATA IS COMPLETE
 
