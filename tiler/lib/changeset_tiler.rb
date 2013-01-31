@@ -54,7 +54,7 @@ class ChangesetTiler
 
   def do_generate(zoom, changeset_id, options = {})
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
-      @way_tiler.create_way_tiles(change['el_id'], nil) if change['el_type'] == 'W'
+      @way_tiler.create_way_tiles(change['el_id'], changeset_id) if change['el_type'] == 'W'
     end
     @conn.exec_prepared('generate_changeset_tiles', [changeset_id])
   end
@@ -226,42 +226,80 @@ class ChangesetTiler
         FROM changes c
         INNER JOIN tiles t ON (t.el_type = c.el_type AND t.el_id = c.el_id AND t.el_rev = c.el_rev)
         INNER JOIN tiles prev_t ON (prev_t.el_type = c.el_type AND prev_t.el_id = c.el_id AND
-          prev_t.el_rev = c.el_rev - 1 AND prev_t.x = t.x AND prev_t.y = t.y)
+          prev_t.el_rev = c.el_rev - 1 AND t.x = prev_t.x AND t.y = prev_t.y)
         WHERE c.changeset_id = $1 AND c.el_type = 'W'
+
           UNION
+
         SELECT
-          CASE WHEN t.tstamp IS NULL THEN prev_t.tstamp ELSE t.tstamp END,
-          CASE WHEN t.x IS NULL THEN prev_t.x ELSE t.x END,
-          CASE WHEN t.y IS NULL THEN prev_t.y ELSE t.y END,
+          t.tstamp,
+          t.x,
+          t.y,
           c.id AS change_id,
-          CASE WHEN t.geom IS NULL THEN prev_t.geom ELSE t.geom END,
-          CASE WHEN prev_t.geom IS NULL THEN prev_t.geom ELSE t.geom END
-        FROM changes c
-        LEFT JOIN tiles t ON (t.el_type = c.el_type AND t.el_id = c.el_id AND t.el_rev = c.el_rev)
-        LEFT JOIN tiles prev_t ON (prev_t.el_type = c.el_type AND prev_t.el_id = c.el_id AND prev_t.el_rev = c.el_rev - 1)
-        WHERE c.changeset_id = $1 AND c.el_type = 'W' AND (t.tstamp IS NULL OR prev_t.tstamp IS NULL)
-          UNION
-        SELECT
-          n.tstamp,
-          (SELECT x FROM OWL_LatLonToTile(16, n.geom)),
-          (SELECT y FROM OWL_LatLonToTile(16, n.geom)),
-          c.id AS change_id,
-          n.geom,
+          t.geom AS geom,
           NULL AS prev_geom
         FROM changes c
-        INNER JOIN nodes n ON (c.el_id = n.id AND c.el_version = n.version)
-        WHERE c.changeset_id = $1 AND c.el_type = 'N'
+        INNER JOIN tiles t ON (t.el_type = c.el_type AND t.el_id = c.el_id AND t.el_rev = c.el_rev)
+        LEFT JOIN tiles prev_t ON (prev_t.el_type = c.el_type AND prev_t.el_id = c.el_id AND
+          prev_t.el_rev = c.el_rev - 1 AND t.x = prev_t.x AND t.y = prev_t.y)
+        WHERE c.changeset_id = $1 AND c.el_type = 'W' AND prev_t.x IS NULL
+
           UNION
+
         SELECT
-          prev_n.tstamp,
-          (SELECT x FROM OWL_LatLonToTile(16, prev_n.geom)),
-          (SELECT y FROM OWL_LatLonToTile(16, prev_n.geom)),
+          prev_t.tstamp,
+          prev_t.x,
+          prev_t.y,
           c.id AS change_id,
-          NULL,
-          prev_n.geom AS prev_geom
+          NULL AS geom,
+          prev_t.geom AS prev_geom
         FROM changes c
-        INNER JOIN nodes prev_n ON (c.el_id = prev_n.id AND c.el_version = prev_n.version)
-        WHERE c.changeset_id = $1 AND c.el_type = 'N'
+        INNER JOIN tiles prev_t ON (prev_t.el_type = c.el_type AND prev_t.el_id = c.el_id AND
+          prev_t.el_rev = c.el_rev - 1)
+        LEFT JOIN tiles t ON (t.el_type = c.el_type AND t.el_id = c.el_id AND t.el_rev = c.el_rev AND
+          t.x = prev_t.x AND t.y = prev_t.y)
+        WHERE c.changeset_id = $1 AND c.el_type = 'W' AND t.x IS NULL
+
+          UNION
+
+        SELECT
+          q.tstamp,
+          q.t_x,
+          q.t_y,
+          q.change_id AS change_id,
+          q.geom,
+          CASE WHEN q.geom = q.prev_geom OR t_x != prev_t_x OR t_y != prev_t_y THEN NULL ELSE prev_geom END AS prev_geom
+        FROM (SELECT n.tstamp, n.geom, prev_n.geom AS prev_geom,
+            (SELECT x FROM OWL_LatLonToTile(16, n.geom)) AS t_x,
+            (SELECT y FROM OWL_LatLonToTile(16, n.geom)) AS t_y,
+            (SELECT x FROM OWL_LatLonToTile(16, prev_n.geom)) AS prev_t_x,
+            (SELECT y FROM OWL_LatLonToTile(16, prev_n.geom)) AS prev_t_y,
+            c.id AS change_id
+          FROM changes c
+          INNER JOIN nodes n ON (n.id = c.el_id AND n.version = c.el_version)
+          INNER JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.version = c.el_version - 1)
+          WHERE c.changeset_id = $1 AND c.el_type = 'N') q
+
+          UNION
+
+        SELECT
+          q.tstamp,
+          q.t_x,
+          q.t_y,
+          q.change_id AS change_id,
+          q.geom,
+          CASE WHEN q.geom = q.prev_geom OR t_x != prev_t_x OR t_y != prev_t_y THEN NULL ELSE prev_geom END AS prev_geom
+        FROM (SELECT n.tstamp, n.geom, prev_n.geom AS prev_geom,
+            (SELECT x FROM OWL_LatLonToTile(16, n.geom)) AS t_x,
+            (SELECT y FROM OWL_LatLonToTile(16, n.geom)) AS t_y,
+            (SELECT x FROM OWL_LatLonToTile(16, prev_n.geom)) AS prev_t_x,
+            (SELECT y FROM OWL_LatLonToTile(16, prev_n.geom)) AS prev_t_y,
+            c.id AS change_id
+          FROM changes c
+          LEFT JOIN nodes n ON (n.id = c.el_id AND n.version = c.el_version)
+          LEFT JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.version = c.el_version - 1)
+          WHERE c.changeset_id = $1 AND c.el_type = 'N' AND (n.tstamp IS NULL OR prev_n.tstamp IS NULL) AND
+            (n.tstamp IS NOT NULL OR prev_n.tstamp IS NOT NULL)) q
       ) q
       GROUP BY q.x, q.y")
   end

@@ -41,6 +41,12 @@ module TestCommon
     @conn.put_copy_end
     @conn.exec("SELECT OWL_CreateWayRevisions(w.id) FROM (SELECT DISTINCT id FROM ways) w")
     verify_way_revisions
+    if @conn.exec("SELECT COUNT(*) FROM ways w
+        INNER JOIN ways w2 ON (w2.id = w.id AND w2.version = w.version - 1)
+        WHERE OWL_MakeLine(w.nodes, w.tstamp) IS NULL").getvalue(0, 0).to_i != 0
+      puts "ERROR: Incomplete changeset data"
+      exit
+    end
   end
 
   def verify_way_revisions
@@ -53,6 +59,10 @@ module TestCommon
 
   def verify_changes(changeset_id)
     for way in find_changes('el_type' => 'W')
+      if way['el_action'] == 'MODIFY'
+        assert(!way['nodes'].nil?, "nodes should not be nil for change: #{way}")
+        assert(!way['prev_nodes'].nil?, "prev_nodes should not be nil for change: #{way}")
+      end
       # There should be at most 2 versions of a way (unless there are more of them in the changeset).
       if way['el_changeset_id'].to_i != changeset_id and way['version'].to_i > 1
         assert_equal(2, find_changes('el_type' => 'W', 'el_id' => way['el_id']).size,

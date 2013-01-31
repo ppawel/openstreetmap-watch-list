@@ -22,8 +22,9 @@ class WayTiler
   end
 
   def create_way_tiles(way_id, changeset_id = nil)
-    @@log.debug "Way #{way_id}"
-    for rev in @conn.exec_prepared('select_revisions', [way_id, changeset_id]).to_a
+    revs = @conn.exec_prepared('select_revisions', [way_id, changeset_id]).to_a
+    @@log.debug "Way #{way_id} (revs = #{revs.size})"
+    for rev in revs
       next if !rev['geom']
       rev['geom_obj'] = @wkb_reader.read_hex(rev['geom'])
       @@log.debug "  version #{rev['way_version']} rev #{rev['revision']}"

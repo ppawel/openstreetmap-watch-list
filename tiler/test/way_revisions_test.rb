@@ -3,24 +3,26 @@ $:.unshift File.absolute_path(File.dirname(__FILE__)) + '/../lib'
 require 'pg'
 require 'test/unit'
 require 'yaml'
-require 'tiler'
+require 'way_tiler'
 
 require './common'
 
 class WayRevisionsTest < Test::Unit::TestCase
   include TestCommon
 
-  def test_13294164
-    setup_way_revisions_test(13294164)
+  def test_14459096
+    setup_way_revisions_test(14459096)
+    p @revisions
+    assert_equal(7, @revisions[35345926].size)
   end
 
   def setup_way_revisions_test(id)
     setup_db
-    load_changeset(13294164)
+    load_changeset(id)
     @revisions = {}
     for sub in @conn.exec("SELECT * FROM way_revisions ORDER BY way_id, way_version, revision").to_a
-      @revisions[sub['way_id']] ||= []
-      @revisions[sub['way_id']] << sub
+      @revisions[sub['way_id'].to_i] ||= []
+      @revisions[sub['way_id'].to_i] << sub
     end
     verify_revisions
   end
