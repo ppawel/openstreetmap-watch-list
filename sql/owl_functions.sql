@@ -48,16 +48,19 @@ DECLARE
   way_geom geometry(GEOMETRY, 4326);
 
 BEGIN
-  way_geom := (SELECT ST_MakeLine(geom)
-  FROM
-    (SELECT unnest($1) AS node_id) x
-    INNER JOIN nodes n ON (n.id = x.node_id)
-  WHERE
-    n.version = (SELECT version FROM nodes WHERE id = n.id AND tstamp <= $2 ORDER BY tstamp DESC LIMIT 1));
+  way_geom := (SELECT ST_MakeLine(q.geom ORDER BY x.seq)
+    FROM (SELECT row_number() OVER () AS seq, n AS node_id FROM unnest($1) n) x
+    INNER JOIN (
+      SELECT DISTINCT ON (id) id, geom
+      FROM nodes n
+      WHERE n.id IN (SELECT unnest($1))
+      AND tstamp <= $2
+      ORDER BY id, tstamp DESC) q ON (q.id = x.node_id)
+    );
 
   -- Now check if the linestring has exactly the right number of points.
   IF ST_NumPoints(way_geom) != array_length($1, 1) THEN
-    way_geom := NULL;
+    RETURN NULL;
   END IF;
 
   -- Invalid way geometry - convert to a single point.
