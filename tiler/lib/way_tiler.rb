@@ -25,7 +25,11 @@ class WayTiler
     revs = @conn.exec_prepared('select_revisions', [way_id, changeset_id]).to_a
     @@log.debug "Way #{way_id} (revs = #{revs.size})"
     for rev in revs
-      next if !rev['geom']
+      if !rev['geom']
+        @@log.warn "  version #{rev['way_version']} rev #{rev['revision']} -- NO GEOMETRY"
+        next
+      end
+
       rev['geom_obj'] = @wkb_reader.read_hex(rev['geom'])
       @@log.debug "  version #{rev['way_version']} rev #{rev['revision']}"
 

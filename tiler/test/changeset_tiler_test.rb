@@ -23,10 +23,6 @@ class ChangesetTilerTest < Test::Unit::TestCase
     assert_equal(26, find_changes('el_type' => 'W').size)
   end
 
-  def test_13258073
-    setup_changeset_test(13258073)
-  end
-
   def test_14234906_multiple_way_versions
     setup_changeset_test(14234906)
   end
@@ -53,14 +49,6 @@ class ChangesetTilerTest < Test::Unit::TestCase
     assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '201787145', 'el_version' => '2').size)
   end
 
-  def test_14699204
-    setup_changeset_test(14699204)
-  end
-
-  def test_13426127
-    setup_changeset_test(13426127)
-  end
-
   def test_14820799_created_way
     setup_changeset_test(14820799)
     assert_equal(0, find_changes('el_type' => 'N').size)
@@ -82,6 +70,18 @@ class ChangesetTilerTest < Test::Unit::TestCase
 
 =begin
   TESTS WITH INCOMPLETE CHANGESET DATA - NEED FULL HISTORY - RE-ENABLE WHEN DATA IS COMPLETE
+
+  def test_14699204
+    setup_changeset_test(14699204)
+  end
+
+  def test_13426127
+    setup_changeset_test(13426127)
+  end
+
+  def test_13258073
+    setup_changeset_test(13258073)
+  end
 
   def test_14429223_deleted_ways
     setup_changeset_test(14429223)
