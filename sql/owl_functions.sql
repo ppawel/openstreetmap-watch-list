@@ -442,8 +442,7 @@ BEGIN
     first_version := false;
   END LOOP;
 
-  SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO
-  prev_way;
+  SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO prev_way;
 
   FOR rev IN
       SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id

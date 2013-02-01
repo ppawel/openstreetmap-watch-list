@@ -63,46 +63,7 @@ class ChangesetTiler
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
       @way_tiler.create_way_tiles(change['el_id'], changeset_id) if change['el_type'] == 'W'
     end
-    @conn.exec_prepared('generate_changeset_tiles', [changeset_id]).cmd_tuples
-  end
-
-  def _do_generate(zoom, changeset_id, options = {})
-    if options[:retile]
-      clear_tiles(changeset_id, zoom)
-    else
-      return -1 if has_tiles(changeset_id)
-    end
-
-    for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
-      change['geom_changed'] = (change['geom_changed'] == 't')
-      if change['geom']
-        change['geom_obj'] = @wkb_reader.read_hex(change['geom'])
-        change['geom_obj_prep'] = change['geom_obj'].to_prepared
-      end
-      if change['prev_geom']
-        change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom'])
-        change['prev_geom_obj_prep'] = change['prev_geom_obj'].to_prepared
-      end
-      if change['diff_bbox']
-        change['diff_geom_obj'] =  change['geom_obj'].difference(change['prev_geom_obj'])
-        change['diff_geom_obj_prep'] = change['diff_geom_obj'].to_prepared
-      end
-
-      @@log.debug "#{change['el_type']} #{change['el_id']} (#{change['el_version']})"
-
-      create_change_tiles(changeset_id, change, change['id'].to_i, zoom)
-
-      # GC has problems if we don't do this explicitly...
-      change['geom_obj'] = nil
-      change['prev_geom_obj'] = nil
-      change['diff_geom_obj'] = nil
-    end
-
-    @tiledata.each do |tile, data|
-      @conn.exec_prepared('insert_tile', [changeset_id, data[:tstamp], tile[2], tile[0], tile[1],
-          data[:changes].to_s.gsub("[", "{").gsub("]", "}"),
-          to_postgres_geom_array(data[:geom]), to_postgres_geom_array(data[:prev_geom])])
-    end
+    count = @conn.exec_prepared('generate_changeset_tiles', [changeset_id]).cmd_tuples
 
     @@log.debug "Aggregating tiles..."
 
@@ -111,8 +72,6 @@ class ChangesetTiler
       @conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
     end
 
-    count = @tiledata.size
-    free_tiles
     count
   end
 
