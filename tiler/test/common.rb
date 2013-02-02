@@ -46,9 +46,9 @@ module TestCommon
         INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
         WHERE OWL_MakeLine(w.nodes, rev.tstamp) IS NULL AND rev.visible AND rev.tstamp > '2007-10-07' ").to_a
     if not incomplete.empty?
-      puts "ERROR: Incomplete changeset data"
-      p incomplete
-      exit
+      #puts "ERROR: Incomplete changeset data"
+      #p incomplete
+      #exit
     end
   end
 
@@ -61,6 +61,14 @@ module TestCommon
   end
 
   def verify_changes(changeset_id)
+    for change in @changes
+      geom_changed = geom_changed(change)
+      tags_changed = change['tags'] != change['prev_tags']
+      nodes_changed = change['nodes'] != change['prev_nodes']
+      #puts "changed #{change['el_id']} -- #{geom_changed} #{tags_changed}"
+      assert((geom_changed or tags_changed), "Change doesn't change anything: #{change}")
+    end
+
     for way in find_changes('el_type' => 'W')
       if way['el_action'] == 'MODIFY'
         assert(!way['nodes'].nil?, "nodes should not be nil for change: #{way}")
@@ -74,11 +82,28 @@ module TestCommon
     end
   end
 
+  def geom_changed(change)
+    if change['el_type'] == 'N'
+      return (@conn.exec("SELECT NOT n.geom = n2.geom
+        FROM nodes n
+        LEFT JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
+        WHERE n.id = #{change['el_id']} AND n.version = #{change['el_version']}").getvalue(0, 0) == 't')
+    end
+    if change['el_type'] == 'W'
+      return (@conn.exec("SELECT NOT ST_Equals(OWL_MakeLine(w.nodes, rev.tstamp), OWL_MakeLine(prev_w.nodes, prev.tstamp))
+        FROM way_revisions rev
+        LEFT JOIN way_revisions prev ON (prev.way_id = rev.way_id AND prev.revision = rev.revision - 1)
+        INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
+        LEFT JOIN ways prev_w ON (prev_w.id = prev.way_id AND prev_w.version = prev.way_version)
+        WHERE rev.way_id = #{change['el_id']} AND rev.revision = #{change['el_rev']}").getvalue(0, 0) == 't')
+    end
+  end
+
   def get_changes
     @conn.exec("SELECT *,
         array_length(nodes, 1) AS nodes_len,
         array_length(prev_nodes, 1) AS prev_nodes_len
-      FROM changes").to_a
+      FROM changes c").to_a
   end
 
   def get_tiles
@@ -99,7 +124,7 @@ module TestCommon
       (change_ids - change_ids_from_tiles).collect {|id| @changes_h[id]})
 
     for tile in @tiles
-      # Every change should have an associated geom and prev_geom entry.
+      # Every change should have exactly one associated geom and prev_geom entry.
       assert_equal(tile['change_arr_len'].to_i, tile['geom_arr_len'].to_i)
       assert_equal(tile['change_arr_len'].to_i, tile['prev_geom_arr_len'].to_i)
       changes_arr = pg_parse_array(tile['changes'])
@@ -108,17 +133,15 @@ module TestCommon
       geom_arr = pg_parse_geom_array(tile['geom'])
       prev_geom_arr = pg_parse_geom_array(tile['prev_geom'])
 
-      for geom in geom_arr
-        assert !geom.nil?
+      prev_geom_arr.each_with_index do |geom, index|
+        #assert(geom != geom_arr[index], "geom and prev_geom are the same for tile: #{tile}")
       end
 
-      prev_geom_arr.each_with_index do |geom, index|
-        change = @changes_h[changes_arr[index]]
-        if change['el_version'].to_i != 1 and change['geom_changed'] == 't'
-          #assert(geom != 'NULL', "prev_geom should not be null for change: #{change} and tile: #{tile}")
+      changes_arr.each_with_index do |change_id, index|
+        if @changes_h[change_id]['tags'] == @changes_h[change_id]['prev_tags']
+          assert(geom_arr[index] != prev_geom_arr[index],
+            "Tags did not change so geom should: #{@changes_h[change_id]}\n#{tile}")
         end
-
-        assert(geom != geom_arr[index], "geom and prev_geom are the same for tile: #{tile}")
       end
     end
   end

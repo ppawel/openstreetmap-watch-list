@@ -418,7 +418,7 @@ BEGIN
   first_version := true;
 
   FOR way IN SELECT * FROM ways WHERE id = $1 AND (last_way_tstamp IS NULL OR tstamp > last_way_tstamp) ORDER BY version LOOP
-    RAISE NOTICE 'Way % version %', way.id, way.version;
+    RAISE NOTICE '% -- Way % version %', clock_timestamp(), way.id, way.version;
 
     IF NOT first_version THEN
       FOR rev IN

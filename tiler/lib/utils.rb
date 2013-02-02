@@ -83,7 +83,8 @@ def pg_parse_array(str)
 end
 
 def pg_parse_geom_array(str)
-  eval(str.gsub('{', '[\'').gsub('}', '\']').gsub(':', '\',\''))
+  a = eval(str.gsub('{', '[\'').gsub('}', '\']').gsub(':', '\',\''))
+  a.collect {|v| v == 'NULL' ? nil : v}
 end
 
 def to_postgres_geom_array(geom_arr)

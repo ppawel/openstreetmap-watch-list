@@ -61,7 +61,7 @@ class ChangesetTiler
       return -1 if has_tiles(changeset_id)
     end
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
-      @way_tiler.create_way_tiles(change['el_id'], nil) if change['el_type'] == 'W'
+      @way_tiler.create_way_tiles(change['el_id'], changeset_id) if change['el_type'] == 'W'
     end
     count = @conn.exec_prepared('generate_changeset_tiles', [changeset_id]).cmd_tuples
 
@@ -79,39 +79,6 @@ class ChangesetTiler
     @conn.exec("SELECT OWL_CreateWayRevisions(q.id) FROM (
       SELECT DISTINCT id FROM ways WHERE changeset_id = #{changeset_id} UNION
       SELECT DISTINCT id FROM ways WHERE nodes && (SELECT array_agg(id) FROM nodes WHERE changeset_id = #{changeset_id})) q")
-  end
-
-  def add_change_tile(x, y, zoom, change, geom, prev_geom)
-    if !@tiledata.include?([x, y, zoom])
-      @tiledata[[x, y, zoom]] = {
-        :changes => [change['id'].dup.to_i],
-        :tstamp => change['tstamp'].dup,
-        :geom => [(geom ? @wkb_writer.write_hex(geom) : nil)],
-        :prev_geom => [(prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)]
-      }
-      return
-    end
-
-    @tiledata[[x, y, zoom]][:changes] << change['id'].dup.to_i
-    @tiledata[[x, y, zoom]][:geom] << (geom ? @wkb_writer.write_hex(geom) : nil)
-    @tiledata[[x, y, zoom]][:prev_geom] << (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)
-  end
-
-  def free_tiles
-    @tiledata = {}
-  end
-
-  def create_change_tiles(changeset_id, change, change_id, zoom)
-    if change['el_action'] == 'DELETE'
-      count = create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
-    else
-      count = create_geom_tiles(changeset_id, change, change['geom_obj'], change['geom_obj_prep'], change_id, zoom, false)
-      if change['geom_changed']
-        count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
-      end
-    end
-
-    @@log.debug "  Created #{count} tile(s)"
   end
 
   def create_geom_tiles(changeset_id, change, geom, geom_prep, change_id, zoom, is_prev)
@@ -194,12 +161,13 @@ class ChangesetTiler
           t.y,
           c.id AS change_id,
           t.geom AS geom,
-          CASE WHEN t.geom = prev_t.geom THEN NULL ELSE prev_t.geom END AS prev_geom
+          prev_t.geom AS prev_geom
         FROM changes c
         INNER JOIN tiles t ON (t.el_type = c.el_type AND t.el_id = c.el_id AND t.el_rev = c.el_rev)
         INNER JOIN tiles prev_t ON (prev_t.el_type = c.el_type AND prev_t.el_id = c.el_id AND
           prev_t.el_rev = c.el_rev - 1 AND t.x = prev_t.x AND t.y = prev_t.y)
-        WHERE c.changeset_id = $1 AND c.el_type = 'W'
+        WHERE c.changeset_id = $1 AND c.el_type = 'W' AND
+          (NOT ST_Equals(t.geom, prev_t.geom) OR c.tags != c.prev_tags)
 
           UNION
 

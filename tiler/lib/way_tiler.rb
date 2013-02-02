@@ -65,7 +65,7 @@ class WayTiler
 
     @@log.debug "    tile_count = #{tile_count}, diff_tile_count = #{diff_tile_count}"
 
-    if diff_tile_count and (diff_tile_count < 0.5 * tile_count) #and false
+    if diff_tile_count and (diff_tile_count < 0.5 * tile_count)
       tiles = bbox_to_tiles(@zoom, diff_bbox)
     elsif tile_count < 64
       # Does not make sense to try to reduce small geoms.
@@ -107,7 +107,8 @@ class WayTiler
       "SELECT *, OWL_MakeLine(w.nodes, rev.tstamp) AS geom, OWL_MakeLine(w.nodes, rev.tstamp)::box2d AS bbox
       FROM way_revisions rev
       INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
-      WHERE way_id = $1 AND ($2::int IS NULL OR rev.changeset_id = $2::int)
+      WHERE way_id = $1
+        AND (true or $2::int IS NULL OR rev.changeset_id = $2::int)
       ORDER BY rev.way_id, rev.revision")
 
     @conn.prepare('has_tiles', "SELECT COUNT(*) FROM tiles WHERE el_type = 'W' AND el_id = $1 AND

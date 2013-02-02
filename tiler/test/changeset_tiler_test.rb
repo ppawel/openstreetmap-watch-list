@@ -68,6 +68,14 @@ class ChangesetTilerTest < Test::Unit::TestCase
     assert_equal(1, find_changes('el_type' => 'W', 'el_action' => 'CREATE', 'el_id' => '203008418').size)
   end
 
+  def test_13387349
+    setup_changeset_test(13387349)
+  end
+
+  def test_13394677
+    setup_changeset_test(13394677)
+  end
+
 =begin
   TESTS WITH INCOMPLETE CHANGESET DATA - NEED FULL HISTORY - RE-ENABLE WHEN DATA IS COMPLETE
 
