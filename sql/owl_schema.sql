@@ -113,9 +113,7 @@ CREATE TABLE changes (
   el_rev int,
   el_action action NOT NULL,
   tags hstore NOT NULL,
-  prev_tags hstore,
-  nodes bigint[],
-  prev_nodes bigint[]
+  prev_tags hstore
 );
 
 -- Create a table for generic vector tiles.

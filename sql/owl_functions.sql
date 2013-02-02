@@ -206,9 +206,7 @@ CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
   el_rev int,
   el_action action,
   tags hstore,
-  prev_tags hstore,
-  nodes bigint[],
-  prev_nodes bigint[]
+  prev_tags hstore
 ) AS $$
 
 DECLARE
@@ -248,9 +246,7 @@ BEGIN
       WHEN NOT n.visible THEN 'DELETE'::action
     END AS el_action,
     n.tags,
-    prev.tags AS prev_tags,
-    NULL::bigint[] AS nodes,
-    NULL::bigint[] AS prev_nodes
+    prev.tags AS prev_tags
   FROM nodes n
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
   WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1) AND
@@ -272,8 +268,6 @@ BEGIN
     rev.revision,
     'CREATE',
     w.tags,
-    NULL,
-    w.nodes,
     NULL
   FROM way_revisions rev
   INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
@@ -295,9 +289,7 @@ BEGIN
     rev.revision,
     'MODIFY',
     w.tags,
-    prev_way.tags,
-    w.nodes,
-    prev_way.nodes
+    prev_way.tags
   FROM way_revisions rev
   INNER JOIN way_revisions prev_rev ON (prev_rev.way_id = rev.way_id AND prev_rev.revision = rev.revision - 1)
   INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
@@ -320,9 +312,7 @@ BEGIN
     rev.revision,
     'DELETE',
     w.tags,
-    prev_way.tags,
-    w.nodes,
-    prev_way.nodes
+    prev_way.tags
   FROM way_revisions rev
   INNER JOIN way_revisions prev_rev ON (prev_rev.way_id = rev.way_id AND prev_rev.revision = rev.revision - 1)
   INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)

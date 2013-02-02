@@ -138,7 +138,7 @@ class ChangesetTiler
 
     @conn.prepare('insert_changes', 'INSERT INTO changes
       (changeset_id, tstamp, el_changeset_id, el_type, el_id, el_version, el_rev, el_action,
-        tags, prev_tags, nodes, prev_nodes)
+        tags, prev_tags)
       SELECT * FROM OWL_GenerateChanges($1)')
 
     @conn.prepare('select_changes', "SELECT * FROM changes WHERE changeset_id = $1")

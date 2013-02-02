@@ -64,16 +64,11 @@ module TestCommon
     for change in @changes
       geom_changed = geom_changed(change)
       tags_changed = change['tags'] != change['prev_tags']
-      nodes_changed = change['nodes'] != change['prev_nodes']
       #puts "changed #{change['el_id']} -- #{geom_changed} #{tags_changed}"
       assert((geom_changed or tags_changed), "Change doesn't change anything: #{change}")
     end
 
     for way in find_changes('el_type' => 'W')
-      if way['el_action'] == 'MODIFY'
-        assert(!way['nodes'].nil?, "nodes should not be nil for change: #{way}")
-        assert(!way['prev_nodes'].nil?, "prev_nodes should not be nil for change: #{way}")
-      end
       # There should be at most 2 versions of a way (unless there are more of them in the changeset).
       if way['el_changeset_id'].to_i != changeset_id and way['version'].to_i > 1
         assert_equal(2, find_changes('el_type' => 'W', 'el_id' => way['el_id']).size,
@@ -100,10 +95,7 @@ module TestCommon
   end
 
   def get_changes
-    @conn.exec("SELECT *,
-        array_length(nodes, 1) AS nodes_len,
-        array_length(prev_nodes, 1) AS prev_nodes_len
-      FROM changes c").to_a
+    @conn.exec("SELECT * FROM changes c").to_a
   end
 
   def get_tiles
@@ -138,7 +130,11 @@ module TestCommon
       end
 
       changes_arr.each_with_index do |change_id, index|
-        if @changes_h[change_id]['tags'] == @changes_h[change_id]['prev_tags']
+        change = @changes_h[change_id]
+        if change['el_action'] == 'CREATE'
+          assert(!geom_arr[index].nil?)
+        end
+        if change['tags'] == change['prev_tags']
           assert(geom_arr[index] != prev_geom_arr[index],
             "Tags did not change so geom should: #{@changes_h[change_id]}\n#{tile}")
         end
