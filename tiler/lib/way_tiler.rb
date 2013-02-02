@@ -23,7 +23,10 @@ class WayTiler
 
   def create_way_tiles(way_id, changeset_id = nil)
     revs = @conn.exec_prepared('select_revisions', [way_id, changeset_id]).to_a
+
     @@log.debug "Way #{way_id} (revs = #{revs.size})"
+    @prev = nil
+
     for rev in revs
       if !rev['geom']
         @@log.warn "  version #{rev['way_version']} rev #{rev['revision']} -- NO GEOMETRY"
@@ -33,26 +36,38 @@ class WayTiler
       rev['geom_obj'] = @wkb_reader.read_hex(rev['geom'])
       @@log.debug "  version #{rev['way_version']} rev #{rev['revision']}"
 
-      create_rev_tiles(rev)
+      diff_bbox = nil
+      if @prev and @prev['geom_obj']
+        diff_bbox = envelope_to_bbox(rev['geom_obj'].sym_difference(@prev['geom_obj']).envelope)
+      end
+
+      count = create_rev_tiles(rev, diff_bbox)
+      @@log.debug "    Created #{count} tile(s)"
+
+      @prev['geom_obj'] = nil if @prev
+      @prev = rev
 
       # GC has problems if we don't do this explicitly...
-      rev['geom_obj'] = nil
+      #@prev['geom_obj'] = nil
     end
   end
 
   private
 
-  def create_rev_tiles(rev)
-    return if has_tiles(rev)
+  def create_rev_tiles(rev, diff_bbox)
+    return -1 if has_tiles(rev)
 
     geom = rev['geom_obj']
     geom_prep = rev['geom_obj'].to_prepared
     bbox = box2d_to_bbox(rev['bbox'])
     tile_count = bbox_tile_count(@zoom, bbox)
+    diff_tile_count = bbox_tile_count(@zoom, diff_bbox) if diff_bbox
 
-    @@log.debug "    tile_count = #{tile_count}"
+    @@log.debug "    tile_count = #{tile_count}, diff_tile_count = #{diff_tile_count}"
 
-    if tile_count < 64
+    if diff_tile_count and (diff_tile_count < 0.5 * tile_count) #and false
+      tiles = bbox_to_tiles(@zoom, diff_bbox)
+    elsif tile_count < 64
       # Does not make sense to try to reduce small geoms.
       tiles = bbox_to_tiles(@zoom, bbox)
     else

@@ -52,6 +52,12 @@ def bbox_to_tiles(zoom, bbox)
   tiles
 end
 
+def envelope_to_bbox(envelope)
+  return nil if not envelope.is_a?(Geos::Polygon)
+  ring = envelope.exterior_ring
+  [ring[0].x, ring[0].y, ring[2].x, ring[2].y]
+end
+
 def bbox_tile_count(zoom, bbox)
   tiles = Set.new
   top_left = latlon2tile(bbox[1], bbox[0], zoom)

@@ -61,7 +61,7 @@ class ChangesetTiler
       return -1 if has_tiles(changeset_id)
     end
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
-      @way_tiler.create_way_tiles(change['el_id'], changeset_id) if change['el_type'] == 'W'
+      @way_tiler.create_way_tiles(change['el_id'], nil) if change['el_type'] == 'W'
     end
     count = @conn.exec_prepared('generate_changeset_tiles', [changeset_id]).cmd_tuples
 

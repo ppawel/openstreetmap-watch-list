@@ -41,10 +41,13 @@ module TestCommon
     @conn.put_copy_end
     @conn.exec("SELECT OWL_CreateWayRevisions(w.id) FROM (SELECT DISTINCT id FROM ways) w")
     verify_way_revisions
-    if @conn.exec("SELECT COUNT(*) FROM way_revisions rev
+
+    incomplete = @conn.exec("SELECT * FROM way_revisions rev
         INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
-        WHERE OWL_MakeLine(w.nodes, rev.tstamp) IS NULL").getvalue(0, 0).to_i != 0
+        WHERE OWL_MakeLine(w.nodes, rev.tstamp) IS NULL AND rev.visible AND rev.tstamp > '2007-10-07' ").to_a
+    if not incomplete.empty?
       puts "ERROR: Incomplete changeset data"
+      p incomplete
       exit
     end
   end
