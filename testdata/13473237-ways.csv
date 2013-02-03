@@ -1,0 +1,5 @@
+22703688	1	t	17587	2008-01-26 21:49:08	697237	"created_by"=>"Potlatch 0.6c"	{243533243,243533244,243533245}
+22703688	2	t	17587	2008-01-26 21:49:45	697237	"name"=>"Jerney utca", "highway"=>"residential", "created_by"=>"Potlatch 0.6c"	{243533243,243533244,243533245,243533303}
+22703688	3	t	17587	2008-01-26 21:50:10	697237	"name"=>"Jerney utca", "highway"=>"residential", "created_by"=>"Potlatch 0.6c"	{243533201,243533244,243533245,243533303}
+22703688	4	t	264461	2010-11-06 14:50:34	6302569	"name"=>"Jerney utca", "highway"=>"residential"	{243533201,979008368,979008089,243533244,979008268,979008358,243533245,243533303}
+22703688	5	t	972771	2012-10-12 23:35:10	13473237	"foot"=>"yes", "name"=>"Jerney utca", "lanes"=>"1", "access"=>"yes", "oneway"=>"no", "bicycle"=>"yes", "highway"=>"residential", "surface"=>"asphalt", "maxspeed"=>"50", "sidewalk"=>"both", "motor_vehicle"=>"yes"	{243533201,979008368,979008089,243533244,979008268,979008358,243533245,243533303}

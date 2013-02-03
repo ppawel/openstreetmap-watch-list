@@ -125,8 +125,9 @@ module TestCommon
       geom_arr = pg_parse_geom_array(tile['geom'])
       prev_geom_arr = pg_parse_geom_array(tile['prev_geom'])
 
-      prev_geom_arr.each_with_index do |geom, index|
-        #assert(geom != geom_arr[index], "geom and prev_geom are the same for tile: #{tile}")
+      prev_geom_arr.each_with_index do |prev_geom, index|
+        change = @changes_h[changes_arr[index]]
+        assert(prev_geom != geom_arr[index], "geom and prev_geom are the same for tile: #{tile}")
       end
 
       changes_arr.each_with_index do |change_id, index|

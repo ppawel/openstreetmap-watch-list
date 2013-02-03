@@ -76,6 +76,24 @@ class ChangesetTilerTest < Test::Unit::TestCase
     setup_changeset_test(13394677)
   end
 
+  def test_13477568
+    setup_changeset_test(13477568)
+    for tile in @tiles
+      if (tile['x'].to_i == 36175) and (tile['y'].to_i == 22851)
+        geom_arr = pg_parse_geom_array(tile['geom'])
+        prev_geom_arr = pg_parse_geom_array(tile['prev_geom'])
+        #p @changes_h[30]['tags'] != @changes_h[30]['prev_tags']
+        #p @changes_h[30]
+        #p geom_arr[0]
+        #p prev_geom_arr[0]
+      end
+    end
+  end
+
+  def test_13473237
+    setup_changeset_test(13473237)
+  end
+
 =begin
   TESTS WITH INCOMPLETE CHANGESET DATA - NEED FULL HISTORY - RE-ENABLE WHEN DATA IS COMPLETE
 

@@ -161,7 +161,7 @@ class ChangesetTiler
           t.y,
           c.id AS change_id,
           t.geom AS geom,
-          prev_t.geom AS prev_geom
+          CASE WHEN NOT ST_Equals(t.geom, prev_t.geom) THEN prev_t.geom ELSE NULL END AS prev_geom
         FROM changes c
         INNER JOIN way_tiles t ON (t.way_id = c.el_id AND t.rev = c.el_rev)
         INNER JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1 AND
