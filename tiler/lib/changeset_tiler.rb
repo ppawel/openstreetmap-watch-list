@@ -163,9 +163,9 @@ class ChangesetTiler
           t.geom AS geom,
           prev_t.geom AS prev_geom
         FROM changes c
-        INNER JOIN tiles t ON (t.el_type = c.el_type AND t.el_id = c.el_id AND t.el_rev = c.el_rev)
-        INNER JOIN tiles prev_t ON (prev_t.el_type = c.el_type AND prev_t.el_id = c.el_id AND
-          prev_t.el_rev = c.el_rev - 1 AND t.x = prev_t.x AND t.y = prev_t.y)
+        INNER JOIN way_tiles t ON (t.way_id = c.el_id AND t.rev = c.el_rev)
+        INNER JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1 AND
+          t.x = prev_t.x AND t.y = prev_t.y)
         WHERE c.changeset_id = $1 AND c.el_type = 'W' AND
           (NOT ST_Equals(t.geom, prev_t.geom) OR c.tags != c.prev_tags)
 
@@ -179,9 +179,9 @@ class ChangesetTiler
           t.geom AS geom,
           NULL AS prev_geom
         FROM changes c
-        INNER JOIN tiles t ON (t.el_type = c.el_type AND t.el_id = c.el_id AND t.el_rev = c.el_rev)
-        LEFT JOIN tiles prev_t ON (prev_t.el_type = c.el_type AND prev_t.el_id = c.el_id AND
-          prev_t.el_rev = c.el_rev - 1 AND t.x = prev_t.x AND t.y = prev_t.y)
+        INNER JOIN way_tiles t ON (t.way_id = c.el_id AND t.rev = c.el_rev)
+        LEFT JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1 AND
+          t.x = prev_t.x AND t.y = prev_t.y)
         WHERE c.changeset_id = $1 AND c.el_type = 'W' AND prev_t.x IS NULL
 
           UNION
@@ -194,10 +194,8 @@ class ChangesetTiler
           NULL AS geom,
           prev_t.geom AS prev_geom
         FROM changes c
-        INNER JOIN tiles prev_t ON (prev_t.el_type = c.el_type AND prev_t.el_id = c.el_id AND
-          prev_t.el_rev = c.el_rev - 1)
-        LEFT JOIN tiles t ON (t.el_type = c.el_type AND t.el_id = c.el_id AND t.el_rev = c.el_rev AND
-          t.x = prev_t.x AND t.y = prev_t.y)
+        INNER JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1)
+        LEFT JOIN way_tiles t ON (t.way_id = c.el_id AND t.rev = c.el_rev AND t.x = prev_t.x AND t.y = prev_t.y)
         WHERE c.changeset_id = $1 AND c.el_type = 'W' AND t.x IS NULL
 
           UNION

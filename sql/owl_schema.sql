@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS ways;
 DROP TABLE IF EXISTS way_revisions;
 DROP TABLE IF EXISTS changes;
-DROP TABLE IF EXISTS tiles;
+DROP TABLE IF EXISTS way_tiles;
 DROP TABLE IF EXISTS changeset_tiles;
 DROP TABLE IF EXISTS changesets;
 DROP TABLE IF EXISTS relation_members;
@@ -116,12 +116,11 @@ CREATE TABLE changes (
   prev_tags hstore
 );
 
--- Create a table for generic vector tiles.
-CREATE TABLE tiles (
-  el_type element_type NOT NULL,
-  el_id bigint NOT NULL,
-  el_version int NOT NULL,
-  el_rev int NOT NULL,
+-- Holds tiles for way revisions.
+CREATE TABLE way_tiles (
+  way_id bigint NOT NULL,
+  version int NOT NULL,
+  rev int NOT NULL,
   changeset_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   x int NOT NULL,

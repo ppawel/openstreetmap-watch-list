@@ -65,7 +65,7 @@ class WayTiler
 
     @@log.debug "    tile_count = #{tile_count}, diff_tile_count = #{diff_tile_count}"
 
-    if diff_tile_count and (diff_tile_count < 0.5 * tile_count)
+    if diff_tile_count and (diff_tile_count < 0.5 * tile_count) and false
       tiles = bbox_to_tiles(@zoom, diff_bbox)
     elsif tile_count < 64
       # Does not make sense to try to reduce small geoms.
@@ -111,12 +111,11 @@ class WayTiler
         AND (true or $2::int IS NULL OR rev.changeset_id = $2::int)
       ORDER BY rev.way_id, rev.revision")
 
-    @conn.prepare('has_tiles', "SELECT COUNT(*) FROM tiles WHERE el_type = 'W' AND el_id = $1 AND
-      el_version = $2 AND el_rev = $3")
+    @conn.prepare('has_tiles', "SELECT COUNT(*) FROM way_tiles WHERE way_id = $1 AND version = $2 AND rev = $3")
 
     @conn.prepare('insert_way_tile',
-      "INSERT INTO tiles (el_type, el_id, el_version, el_rev, tstamp, changeset_id, x, y, geom) VALUES
-        ('W', $1, $2, $3, $4, $5, $6, $7, $8)")
+      "INSERT INTO way_tiles (way_id, version, rev, tstamp, changeset_id, x, y, geom) VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8)")
   end
 end
 
