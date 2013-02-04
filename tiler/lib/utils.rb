@@ -20,12 +20,18 @@ def latlon2tile(lat_deg, lon_deg, zoom)
 end
 
 # Translated to Ruby rom http://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
-def tile2latlon(xtile, ytile, zoom)
+def tile2latlon(x, y, zoom)
   n = 2.0 ** zoom
-  lon_deg = xtile / n * 360.0 - 180.0
-  lat_rad = Math.atan(Math.sinh(Math::PI * (1 - 2 * ytile / n.to_f)))
+  lon_deg = x / n * 360.0 - 180.0
+  lat_rad = Math.atan(Math.sinh(Math::PI * (1 - 2 * y / n.to_f)))
   lat_deg = degrees(lat_rad)
   return lat_deg, lon_deg
+end
+
+def tile2bbox(x, y, zoom)
+  lat1, lon1 = tile2latlon(x, y, zoom)
+  lat2, lon2 = tile2latlon(x + 1, y + 1, zoom)
+  [lon1, lat1, lon2, lat2]
 end
 
 ##

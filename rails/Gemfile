@@ -6,3 +6,4 @@ gem 'json'
 
 gem 'pg'
 gem 'activerecord-postgresql-adapter'
+gem 'ffi-geos'

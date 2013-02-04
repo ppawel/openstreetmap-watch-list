@@ -1,8 +1,10 @@
+require 'utils'
+
 ##
 # Implements OWL API operations.
 # See: http://wiki.openstreetmap.org/wiki/OWL_(OpenStreetMap_Watch_List)/API
 #
-class ApiController < ApplicationController
+class ChangesetApiController < ApplicationController
   include ApiHelper
 
   def changesets_tile_json
