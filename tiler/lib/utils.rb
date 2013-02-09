@@ -46,16 +46,21 @@ end
 #
 def bbox_to_tiles(zoom, bbox)
   tiles = Set.new
-  top_left = latlon2tile(bbox[1], bbox[0], zoom)
-  bottom_right = latlon2tile(bbox[3], bbox[2], zoom)
-  min_y = [top_left[1], bottom_right[1]].min
-  max_y = [top_left[1], bottom_right[1]].max
-  (top_left[0]..bottom_right[0]).each do |x|
-    (min_y..max_y).each do |y|
+  bounds = bbox_bound_tiles(zoom, bbox)
+  (bounds[0][0]..bounds[1][0]).each do |x|
+    (bounds[0][1]..bounds[1][1]).each do |y|
       tiles << [x, y]
     end
   end
   tiles
+end
+
+def bbox_bound_tiles(zoom, bbox)
+  top_left = latlon2tile(bbox[1], bbox[0], zoom)
+  bottom_right = latlon2tile(bbox[3], bbox[2], zoom)
+  min_y = [top_left[1], bottom_right[1]].min
+  max_y = [top_left[1], bottom_right[1]].max
+  [[top_left[0], min_y], [bottom_right[0], max_y]]
 end
 
 def envelope_to_bbox(envelope)

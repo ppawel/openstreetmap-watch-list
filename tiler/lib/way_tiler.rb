@@ -22,6 +22,7 @@ class WayTiler
   end
 
   def create_way_tiles(way_id, changeset_id = nil)
+    ensure_way_revisions(way_id)
     revs = @conn.exec_prepared('select_revisions', [way_id, changeset_id]).to_a
 
     @@log.debug "Way #{way_id} (revs = #{revs.size})"
@@ -57,6 +58,7 @@ class WayTiler
   def create_rev_tiles(rev, diff_bbox)
     return -1 if has_tiles(rev)
 
+    count = 0
     geom = rev['geom_obj']
     geom_prep = rev['geom_obj'].to_prepared
     bbox = box2d_to_bbox(rev['bbox'])
@@ -65,8 +67,14 @@ class WayTiler
 
     @@log.debug "    tile_count = #{tile_count}, diff_tile_count = #{diff_tile_count}"
 
-    if diff_tile_count and (diff_tile_count < 0.5 * tile_count) and false
+    if diff_tile_count and (diff_tile_count < 0.5 * tile_count)
+      bounds = bbox_bound_tiles(@zoom, diff_bbox)
       tiles = bbox_to_tiles(@zoom, diff_bbox)
+      count = @conn.exec("INSERT INTO way_tiles
+        SELECT way_id, version, #{rev['revision']}, changeset_id, tstamp, x, y, geom
+        FROM way_tiles WHERE way_id = #{rev['way_id']} AND version = #{rev['way_version']} AND
+          rev = #{rev['revision'].to_i - 1} AND NOT (x >= #{bounds[0][0]} AND x <= #{bounds[1][0]} AND
+          y >= #{bounds[0][1]} AND y <= #{bounds[1][1]})").cmd_tuples
     elsif tile_count < 64
       # Does not make sense to try to reduce small geoms.
       tiles = bbox_to_tiles(@zoom, bbox)
@@ -78,7 +86,6 @@ class WayTiler
 
     @@log.debug "    Processing #{tiles.size} tile(s)..."
 
-    count = 0
     for tile in tiles
       x, y = tile[0], tile[1]
       tile_geom = get_tile_geom(x, y, @zoom)
@@ -100,6 +107,10 @@ class WayTiler
 
   def has_tiles(rev)
     @conn.exec_prepared('has_tiles', [rev['way_id'], rev['way_version'], rev['revision']]).getvalue(0, 0).to_i > 0
+  end
+
+  def ensure_way_revisions(way_id)
+    @conn.exec("SELECT OWL_CreateWayRevisions(#{way_id})")
   end
 
   def setup_prepared_statements
