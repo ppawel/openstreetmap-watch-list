@@ -30,12 +30,12 @@ class WayTiler
 
     for rev in revs
       if !rev['geom']
-        @@log.warn "  version #{rev['way_version']} rev #{rev['revision']} -- NO GEOMETRY"
+        @@log.warn "  version #{rev['version']} rev #{rev['rev']} -- NO GEOMETRY"
         next
       end
 
       rev['geom_obj'] = @wkb_reader.read_hex(rev['geom'])
-      @@log.debug "  version #{rev['way_version']} rev #{rev['revision']}"
+      @@log.debug "  version #{rev['version']} rev #{rev['rev']}"
 
       diff_bbox = nil
       if @prev and @prev['geom_obj']
@@ -71,9 +71,9 @@ class WayTiler
       bounds = bbox_bound_tiles(@zoom, diff_bbox)
       tiles = bbox_to_tiles(@zoom, diff_bbox)
       count = @conn.exec("INSERT INTO way_tiles
-        SELECT way_id, version, #{rev['revision']}, changeset_id, tstamp, x, y, geom
-        FROM way_tiles WHERE way_id = #{rev['way_id']} AND version = #{rev['way_version']} AND
-          rev = #{rev['revision'].to_i - 1} AND NOT (x >= #{bounds[0][0]} AND x <= #{bounds[1][0]} AND
+        SELECT way_id, version, #{rev['rev']}, changeset_id, tstamp, x, y, geom
+        FROM way_tiles WHERE way_id = #{rev['way_id']} AND version = #{rev['version']} AND
+          rev = #{rev['rev'].to_i - 1} AND NOT (x >= #{bounds[0][0]} AND x <= #{bounds[1][0]} AND
           y >= #{bounds[0][1]} AND y <= #{bounds[1][1]})").cmd_tuples
     elsif tile_count < 64
       # Does not make sense to try to reduce small geoms.
@@ -86,7 +86,7 @@ class WayTiler
 
     @@log.debug "    Processing #{tiles.size} tile(s)..."
 
-    for tile in tiles
+    tiles.each_with_index do |tile, index|
       x, y = tile[0], tile[1]
       tile_geom = get_tile_geom(x, y, @zoom)
 
@@ -96,17 +96,21 @@ class WayTiler
         insert_tile(rev, x, y, intersection)
         count += 1
       end
+
+      if index % 1000 == 0
+        @@log.debug "    i = #{index}, created tiles = #{count}"
+      end
     end
     count
   end
 
   def insert_tile(rev, x, y, geom)
-    @conn.exec_prepared('insert_way_tile', [rev['way_id'], rev['way_version'], rev['revision'], rev['tstamp'],
+    @conn.exec_prepared('insert_way_tile', [rev['way_id'], rev['version'], rev['rev'], rev['tstamp'],
       rev['changeset_id'], x, y, @wkb_writer.write_hex(geom)])
   end
 
   def has_tiles(rev)
-    @conn.exec_prepared('has_tiles', [rev['way_id'], rev['way_version'], rev['revision']]).getvalue(0, 0).to_i > 0
+    @conn.exec_prepared('has_tiles', [rev['way_id'], rev['version'], rev['rev']]).getvalue(0, 0).to_i > 0
   end
 
   def ensure_way_revisions(way_id)
@@ -115,12 +119,17 @@ class WayTiler
 
   def setup_prepared_statements
     @conn.prepare('select_revisions',
-      "SELECT *, OWL_MakeLine(w.nodes, rev.tstamp) AS geom, OWL_MakeLine(w.nodes, rev.tstamp)::box2d AS bbox
-      FROM way_revisions rev
-      INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
-      WHERE way_id = $1
-        AND (true or $2::int IS NULL OR rev.changeset_id = $2::int)
-      ORDER BY rev.way_id, rev.revision")
+      "SELECT q.*, q.line::box2d AS bbox,
+        CASE WHEN geometrytype(st_makevalid(q.line)) = 'LINESTRING' AND st_isclosed(q.line) and st_issimple(q.line) and st_isvalid(q.line) THEN st_forcerhr(st_makepolygon(q.line)) ELSE q.line END AS geom
+      FROM (
+        SELECT
+          OWL_MakeLine(w.nodes, rev.tstamp) AS line,
+          rev.*
+        FROM way_revisions rev
+        INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
+        WHERE way_id = $1
+          AND (true or $2::int IS NULL OR rev.changeset_id = $2::int)) q
+      ORDER BY q.way_id, q.rev")
 
     @conn.prepare('has_tiles', "SELECT COUNT(*) FROM way_tiles WHERE way_id = $1 AND version = $2 AND rev = $3")
 

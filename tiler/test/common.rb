@@ -43,7 +43,7 @@ module TestCommon
     verify_way_revisions
 
     incomplete = @conn.exec("SELECT * FROM way_revisions rev
-        INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
+        INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
         WHERE OWL_MakeLine(w.nodes, rev.tstamp) IS NULL AND rev.visible AND rev.tstamp > '2007-10-07' ").to_a
     if not incomplete.empty?
       #puts "ERROR: Incomplete changeset data"
@@ -53,9 +53,9 @@ module TestCommon
   end
 
   def verify_way_revisions
-    @conn.exec("SELECT * FROM way_revisions ORDER BY way_id, way_version, revision").to_a.each_cons(2) do |rev1, rev2|
+    @conn.exec("SELECT * FROM way_revisions ORDER BY way_id, version, rev").to_a.each_cons(2) do |rev1, rev2|
       next if rev1['way_id'] != rev2['way_id']
-      assert(rev1['way_version'].to_i <= rev2['way_version'].to_i)
+      assert(rev1['version'].to_i <= rev2['version'].to_i)
       assert(rev1['revision'].to_i <= rev2['revision'].to_i, "Wrong revision order:\n#{rev1}\n#{rev2}")
     end
   end
@@ -87,10 +87,10 @@ module TestCommon
     if change['el_type'] == 'W'
       return (@conn.exec("SELECT NOT ST_Equals(OWL_MakeLine(w.nodes, rev.tstamp), OWL_MakeLine(prev_w.nodes, prev.tstamp))
         FROM way_revisions rev
-        LEFT JOIN way_revisions prev ON (prev.way_id = rev.way_id AND prev.revision = rev.revision - 1)
-        INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
-        LEFT JOIN ways prev_w ON (prev_w.id = prev.way_id AND prev_w.version = prev.way_version)
-        WHERE rev.way_id = #{change['el_id']} AND rev.revision = #{change['el_rev']}").getvalue(0, 0) == 't')
+        LEFT JOIN way_revisions prev ON (prev.way_id = rev.way_id AND prev.rev = rev.rev - 1)
+        INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
+        LEFT JOIN ways prev_w ON (prev_w.id = prev.way_id AND prev_w.version = prev.version)
+        WHERE rev.way_id = #{change['el_id']} AND rev.rev = #{change['el_rev']}").getvalue(0, 0) == 't')
     end
   end
 

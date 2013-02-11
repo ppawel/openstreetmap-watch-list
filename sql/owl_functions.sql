@@ -265,13 +265,13 @@ BEGIN
     'W'::element_type AS type,
     w.id,
     w.version,
-    rev.revision,
+    rev.rev,
     'CREATE',
     w.tags,
     NULL
   FROM way_revisions rev
-  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
-  WHERE rev.changeset_id = $1 AND rev.revision = 1;
+  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
+  WHERE rev.changeset_id = $1 AND rev.rev = 1;
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Created ways done (%)', clock_timestamp(), row_count;
@@ -286,14 +286,14 @@ BEGIN
     'W'::element_type AS type,
     w.id,
     w.version,
-    rev.revision,
+    rev.rev,
     'MODIFY',
     w.tags,
     prev_way.tags
   FROM way_revisions rev
-  INNER JOIN way_revisions prev_rev ON (prev_rev.way_id = rev.way_id AND prev_rev.revision = rev.revision - 1)
-  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
-  INNER JOIN ways prev_way ON (prev_way.id = prev_rev.way_id AND prev_way.version = prev_rev.way_version)
+  INNER JOIN way_revisions prev_rev ON (prev_rev.way_id = rev.way_id AND prev_rev.rev = rev.rev - 1)
+  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
+  INNER JOIN ways prev_way ON (prev_way.id = prev_rev.way_id AND prev_way.version = prev_rev.version)
   WHERE rev.changeset_id = $1 AND rev.visible;
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
@@ -309,14 +309,14 @@ BEGIN
     'W'::element_type AS type,
     w.id,
     w.version,
-    rev.revision,
+    rev.rev,
     'DELETE',
     w.tags,
     prev_way.tags
   FROM way_revisions rev
-  INNER JOIN way_revisions prev_rev ON (prev_rev.way_id = rev.way_id AND prev_rev.revision = rev.revision - 1)
-  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.way_version)
-  INNER JOIN ways prev_way ON (prev_way.id = prev_rev.way_id AND prev_way.version = prev_rev.way_version)
+  INNER JOIN way_revisions prev_rev ON (prev_rev.way_id = rev.way_id AND prev_rev.rev = rev.rev - 1)
+  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
+  INNER JOIN ways prev_way ON (prev_way.id = prev_rev.way_id AND prev_way.version = prev_rev.version)
   WHERE rev.changeset_id = $1 AND NOT rev.visible;
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
@@ -421,14 +421,14 @@ BEGIN
           ORDER BY tstamp
       LOOP
         current_revision := current_revision + 1;
-        INSERT INTO way_revisions (way_id, way_version, revision, user_id, tstamp, changeset_id, visible)
+        INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
         VALUES ($1, way.version - 1, current_revision, rev.user_id, rev.tstamp, rev.changeset_id, prev_way.visible);
       END LOOP;
     END IF;
 
     current_revision := current_revision + 1;
 
-    INSERT INTO way_revisions (way_id, way_version, revision, user_id, tstamp, changeset_id, visible)
+    INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
     VALUES ($1, way.version, current_revision, way.user_id, way.tstamp, way.changeset_id, way.visible);
 
     prev_way := way;
@@ -447,7 +447,7 @@ BEGIN
       ORDER BY tstamp
   LOOP
     current_revision := current_revision + 1;
-    INSERT INTO way_revisions (way_id, way_version, revision, user_id, tstamp, changeset_id, visible)
+    INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
     VALUES ($1, prev_way.version, current_revision, rev.user_id, rev.tstamp, rev.changeset_id, prev_way.visible);
   END LOOP;
 END;

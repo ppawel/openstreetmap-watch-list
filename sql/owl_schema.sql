@@ -66,8 +66,8 @@ CREATE TABLE ways (
 CREATE TABLE way_revisions (
   id bigserial NOT NULL,
   way_id bigint NOT NULL,
-  way_version int NOT NULL,
-  revision int NOT NULL,
+  version int NOT NULL,
+  rev int NOT NULL,
   visible boolean NOT NULL,
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
