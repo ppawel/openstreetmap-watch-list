@@ -16,7 +16,8 @@ class MapApiController < ApplicationController
         SELECT ST_Transform(ST_SetSRID('LINESTRING(#{tile_bbox[0]} #{tile_bbox[1]},
           #{tile_bbox[2]} #{tile_bbox[3]})'::geometry, 4326), 900913)::box2d g
       )
-      (SELECT DISTINCT ON (w.id, t.x, t.y) ST_AsGeoJSON(ST_TransScale(ST_Transform(geom, 900913),
+      (SELECT DISTINCT ON (w.id, t.x, t.y) ST_AsGeoJSON(ST_TransScale(ST_Transform(
+        CASE WHEN geometrytype(st_makevalid(geom)) = 'LINESTRING' AND st_isclosed(geom) and st_issimple(geom) and st_isvalid(geom) THEN st_forcerhr(st_makepolygon(geom)) ELSE geom END, 900913),
         (SELECT -ST_XMin(g) FROM tile_bbox),
         (SELECT -ST_YMin(g) FROM tile_bbox),
         (SELECT 10000 / (ST_XMax(g) - ST_XMin(g)) FROM tile_bbox),
@@ -34,11 +35,13 @@ class MapApiController < ApplicationController
         (SELECT 10000 / (ST_XMax(g) - ST_XMin(g)) FROM tile_bbox),
         (SELECT 10000 / (ST_YMax(g) - ST_YMin(g)) FROM tile_bbox)), 0) AS geojson,
         n.tags
-      FROM nodes n
-      WHERE geom && (SELECT ST_Transform(ST_Setsrid(g, 900913), 4326) FROM tile_bbox)
-        AND n.tags != ''::hstore
+      FROM (SELECT DISTINCT ON (id) id, visible, geom, tags, version
+            FROM nodes
+            WHERE geom && (SELECT ST_Transform(ST_Setsrid(g, 900913), 4326) FROM tile_bbox) AND tags != ''::hstore
+            ORDER BY id, version DESC) n
+      WHERE n.visible
       ORDER BY n.id, n.version DESC)
-      LIMIT 10000
+      --LIMIT 10000
       ").to_a
 
     geojson = []
