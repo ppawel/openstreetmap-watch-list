@@ -372,8 +372,8 @@ BEGIN
   SELECT
   $1,
   MAX(tstamp),
-  x/subtiles_per_tile,
-  y/subtiles_per_tile,
+  x/subtiles_per_tile * subtiles_per_tile,
+  y/subtiles_per_tile * subtiles_per_tile,
   $3,
   CASE
     WHEN $3 >= 14 THEN array_accum(geom)

@@ -1,10 +1,13 @@
 module ApiHelper
   def get_xyz(params)
-    return params[:x].to_i, params[:y].to_i, params[:zoom].to_i
+    zoom = params[:zoom].to_i
+    return params[:x].to_i * 2 ** (16 - zoom), params[:y].to_i * 2 ** (16 - zoom), zoom
   end
 
   def get_range(params)
-    return params[:zoom].to_i, params[:x1].to_i, params[:y1].to_i, params[:x2].to_i, params[:y2].to_i
+    zoom = params[:zoom].to_i
+    return zoom, params[:x1].to_i * 2 ** (16 - zoom), params[:y1].to_i * 2 ** (16 - zoom),
+      params[:x2].to_i * 2 ** (16 - zoom), params[:y2].to_i * 2 ** (16 - zoom)
   end
 
   def get_limit_sql(params)
