@@ -42,7 +42,9 @@ CREATE TABLE changesets (
 CREATE TABLE nodes (
   id bigint NOT NULL,
   version int NOT NULL,
+  rev int NOT NULL,
   visible boolean NOT NULL,
+  current boolean NOT NULL,
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   changeset_id bigint NOT NULL,
@@ -55,6 +57,7 @@ CREATE TABLE ways (
   id bigint NOT NULL,
   version int NOT NULL,
   visible boolean NOT NULL,
+  current boolean NOT NULL,
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   changeset_id bigint NOT NULL,
@@ -78,7 +81,9 @@ CREATE TABLE way_revisions (
 CREATE TABLE relations (
   id bigint NOT NULL,
   version int NOT NULL,
+  rev int NOT NULL,
   visible boolean NOT NULL,
+  current boolean NOT NULL,
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   changeset_id bigint NOT NULL,

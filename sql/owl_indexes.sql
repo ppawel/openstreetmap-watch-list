@@ -19,6 +19,9 @@ CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
 -- Used by the changeset API to locate tiles by specific tile or tile range.
 CREATE INDEX idx_changeset_tiles_xyz ON changeset_tiles USING btree (zoom, x, y);
 
+-- Used by way tiler.
+CREATE INDEX idx_way_revisions_way_id ON way_revisions USING btree (way_id);
+
 -- Used during replication to select latest objects.
-CREATE INDEX idx_nodes_tstamp ON nodes USING btree (tstamp);
-CREATE INDEX idx_ways_tstamp ON ways USING btree (tstamp);
+--CREATE INDEX idx_nodes_tstamp ON nodes USING btree (tstamp);
+--CREATE INDEX idx_ways_tstamp ON ways USING btree (tstamp);
