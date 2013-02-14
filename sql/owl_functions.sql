@@ -403,18 +403,22 @@ DECLARE
   way record;
 
 BEGIN
+  -- Select all versions of all nodes that have ever been part of the way.
+  CREATE TEMPORARY TABLE _way_nodes ON COMMIT DROP AS
+  SELECT * FROM nodes WHERE id IN (SELECT unnest(nodes) FROM ways WHERE id = $1);
+
   last_way_tstamp := (SELECT MAX(tstamp) FROM way_revisions WHERE way_id = $1);
   current_revision := 0;
   first_version := true;
 
   FOR way IN SELECT * FROM ways WHERE id = $1 AND (last_way_tstamp IS NULL OR tstamp > last_way_tstamp) ORDER BY version LOOP
-    RAISE NOTICE '% -- Way % version %', clock_timestamp(), way.id, way.version;
+    RAISE NOTICE '% -- Way % version % (rev = %)', clock_timestamp(), way.id, way.version, current_revision;
 
     IF NOT first_version THEN
       FOR rev IN
           SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id
-          FROM nodes n
-          INNER JOIN nodes n2 ON (n.id = n2.id AND n.version = n2.version + 1)
+          FROM _way_nodes n
+          INNER JOIN _way_nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
           WHERE n.id IN (SELECT unnest(prev_way.nodes)) AND n.tstamp > prev_way.tstamp AND n.tstamp < way.tstamp
             AND NOT n.geom = n2.geom AND (last_way_tstamp IS NULL OR n.tstamp > last_way_tstamp)
           GROUP BY n.changeset_id, n.user_id
@@ -439,8 +443,8 @@ BEGIN
 
   FOR rev IN
       SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id
-      FROM nodes n
-      INNER JOIN nodes n2 ON (n.id = n2.id AND n.version = n2.version + 1)
+      FROM _way_nodes n
+      INNER JOIN _way_nodes n2 ON (n2.id = n.id AND n2.version = n2.version - 1)
       WHERE n.id IN (SELECT unnest(prev_way.nodes)) AND n.tstamp > prev_way.tstamp AND n.tstamp <= NOW()
         AND NOT n.geom = n2.geom AND (last_way_tstamp IS NULL OR n.tstamp > last_way_tstamp)
       GROUP BY n.changeset_id, n.user_id
@@ -450,5 +454,7 @@ BEGIN
     INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
     VALUES ($1, prev_way.version, current_revision, rev.user_id, rev.tstamp, rev.changeset_id, prev_way.visible);
   END LOOP;
+
+  DROP TABLE _way_nodes;
 END;
 $$ LANGUAGE plpgsql;
