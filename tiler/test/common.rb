@@ -21,6 +21,7 @@ module TestCommon
       :user => $config['username'], :password => $config['password'])
     exec_sql_file('../../sql/owl_schema.sql')
     exec_sql_file('../../sql/owl_constraints.sql')
+    exec_sql_file('../../sql/owl_indexes.sql')
     exec_sql_file('../../sql/owl_functions.sql')
   end
 
@@ -39,9 +40,10 @@ module TestCommon
       @conn.put_copy_data(line)
     end
     @conn.put_copy_end
+    @conn.exec("VACUUM ANALYZE")
     @conn.exec("SELECT OWL_CreateWayRevisions(w.id) FROM (SELECT DISTINCT id FROM ways) w")
     verify_way_revisions
-
+=begin
     incomplete = @conn.exec("SELECT * FROM way_revisions rev
         INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
         WHERE OWL_MakeLine(w.nodes, rev.tstamp) IS NULL AND rev.visible AND rev.tstamp > '2007-10-07' ").to_a
@@ -50,6 +52,7 @@ module TestCommon
       #p incomplete
       #exit
     end
+=end
   end
 
   def verify_way_revisions
