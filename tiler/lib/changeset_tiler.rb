@@ -60,9 +60,14 @@ class ChangesetTiler
     else
       return -1 if has_tiles(changeset_id)
     end
-    for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
-      @way_tiler.create_way_tiles(change['el_id'], changeset_id) if change['el_type'] == 'W'
+
+    @@log.debug "Generating way tiles..."
+
+    for row in @conn.exec_prepared('select_way_ids', [changeset_id]).to_a
+      @way_tiler.create_way_tiles(row['el_id'].to_i, changeset_id)
     end
+
+    @@log.debug "Generating changeset tiles..."
     count = @conn.exec_prepared('generate_changeset_tiles', [changeset_id]).cmd_tuples
 
     @@log.debug "Aggregating tiles..."
@@ -141,7 +146,7 @@ class ChangesetTiler
         tags, prev_tags)
       SELECT * FROM OWL_GenerateChanges($1)')
 
-    @conn.prepare('select_changes', "SELECT * FROM changes WHERE changeset_id = $1")
+    @conn.prepare('select_way_ids', "SELECT DISTINCT el_id FROM changes WHERE changeset_id = $1 AND el_type = 'W'")
 
     @conn.prepare('generate_changeset_tiles',
       "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
@@ -207,16 +212,18 @@ class ChangesetTiler
           q.change_id AS change_id,
           q.geom,
           CASE WHEN q.geom = q.prev_geom OR t_x != prev_t_x OR t_y != prev_t_y THEN NULL ELSE prev_geom END AS prev_geom
-        FROM (SELECT n.tstamp, n.geom, prev_n.geom AS prev_geom,
-            (SELECT x FROM OWL_LatLonToTile(16, n.geom)) AS t_x,
-            (SELECT y FROM OWL_LatLonToTile(16, n.geom)) AS t_y,
-            (SELECT x FROM OWL_LatLonToTile(16, prev_n.geom)) AS prev_t_x,
-            (SELECT y FROM OWL_LatLonToTile(16, prev_n.geom)) AS prev_t_y,
+        FROM (
+          SELECT n.tstamp, n.geom, prev_n.geom AS prev_geom,
+            (SELECT x FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(n.geom) THEN n.geom ELSE NULL END)) AS t_x,
+            (SELECT y FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(n.geom) THEN n.geom ELSE NULL END)) AS t_y,
+            (SELECT x FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(prev_n.geom) THEN prev_n.geom ELSE NULL END)) AS prev_t_x,
+            (SELECT y FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(prev_n.geom) THEN prev_n.geom ELSE NULL END)) AS prev_t_y,
             c.id AS change_id
           FROM changes c
           INNER JOIN nodes n ON (n.id = c.el_id AND n.version = c.el_version)
           INNER JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.version = c.el_version - 1)
           WHERE c.changeset_id = $1 AND c.el_type = 'N') q
+        WHERE q.t_x IS NOT NULL
 
           UNION
 
@@ -227,17 +234,19 @@ class ChangesetTiler
           q.change_id AS change_id,
           q.geom,
           CASE WHEN q.geom = q.prev_geom OR t_x != prev_t_x OR t_y != prev_t_y THEN NULL ELSE prev_geom END AS prev_geom
-        FROM (SELECT n.tstamp, n.geom, prev_n.geom AS prev_geom,
-            (SELECT x FROM OWL_LatLonToTile(16, n.geom)) AS t_x,
-            (SELECT y FROM OWL_LatLonToTile(16, n.geom)) AS t_y,
-            (SELECT x FROM OWL_LatLonToTile(16, prev_n.geom)) AS prev_t_x,
-            (SELECT y FROM OWL_LatLonToTile(16, prev_n.geom)) AS prev_t_y,
+        FROM (
+          SELECT n.tstamp, n.geom, prev_n.geom AS prev_geom,
+            (SELECT x FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(n.geom) THEN n.geom ELSE NULL END)) AS t_x,
+            (SELECT y FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(n.geom) THEN n.geom ELSE NULL END)) AS t_y,
+            (SELECT x FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(prev_n.geom) THEN prev_n.geom ELSE NULL END)) AS prev_t_x,
+            (SELECT y FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(prev_n.geom) THEN prev_n.geom ELSE NULL END)) AS prev_t_y,
             c.id AS change_id
           FROM changes c
           LEFT JOIN nodes n ON (n.id = c.el_id AND n.version = c.el_version)
           LEFT JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.version = c.el_version - 1)
           WHERE c.changeset_id = $1 AND c.el_type = 'N' AND (n.tstamp IS NULL OR prev_n.tstamp IS NULL) AND
             (n.tstamp IS NOT NULL OR prev_n.tstamp IS NOT NULL)) q
+        WHERE q.t_x IS NOT NULL
       ) q
       GROUP BY q.x, q.y")
   end

@@ -22,10 +22,13 @@ class WayTiler
   end
 
   def create_way_tiles(way_id, changeset_id = nil)
-    ensure_way_revisions(way_id)
-    revs = @conn.exec_prepared('select_revisions', [way_id, changeset_id]).to_a
+    @@log.debug "Way #{way_id}"
 
-    @@log.debug "Way #{way_id} (revs = #{revs.size})"
+    ensure_way_revisions(way_id)
+    @@log.debug "  revisions ensured"
+    revs = @conn.exec_prepared('select_revisions', [way_id]).to_a
+    @@log.debug "  revisions count = #{revs.size}"
+
     @prev = nil
 
     for rev in revs
@@ -51,6 +54,8 @@ class WayTiler
       # GC has problems if we don't do this explicitly...
       #@prev['geom_obj'] = nil
     end
+
+    @@log.debug "Done"
   end
 
   private
@@ -120,15 +125,19 @@ class WayTiler
   def setup_prepared_statements
     @conn.prepare('select_revisions',
       "SELECT q.*, q.line::box2d AS bbox,
-        CASE WHEN geometrytype(st_makevalid(q.line)) = 'LINESTRING' AND st_isclosed(q.line) and st_issimple(q.line) and st_isvalid(q.line) THEN st_forcerhr(st_makepolygon(q.line)) ELSE q.line END AS geom
+        CASE
+          WHEN GeometryType(ST_MakeValid(q.line)) = 'LINESTRING' AND ST_IsClosed(q.line) AND ST_IsSimple(q.line)
+            AND ST_IsValid(q.line)
+          THEN  ST_ForceRHR(ST_MakePolygon(q.line))
+          ELSE q.line
+        END AS geom
       FROM (
         SELECT
           OWL_MakeLine(w.nodes, rev.tstamp) AS line,
           rev.*
         FROM way_revisions rev
         INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
-        WHERE way_id = $1
-          AND (true or $2::int IS NULL OR rev.changeset_id = $2::int)) q
+        WHERE way_id = $1) q
       ORDER BY q.way_id, q.rev")
 
     @conn.prepare('has_tiles', "SELECT COUNT(*) FROM way_tiles WHERE way_id = $1 AND version = $2 AND rev = $3")
