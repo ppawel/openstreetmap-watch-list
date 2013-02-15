@@ -207,8 +207,8 @@ class ChangesetTiler
 
         SELECT
           q.tstamp,
-          q.t_x,
-          q.t_y,
+          CASE WHEN q.t_x IS NOT NULL THEN q.t_x ELSE q.prev_t_x END,
+          CASE WHEN q.t_y IS NOT NULL THEN q.t_y ELSE q.prev_t_y END,
           q.change_id AS change_id,
           q.geom,
           CASE WHEN q.geom = q.prev_geom OR t_x != prev_t_x OR t_y != prev_t_y THEN NULL ELSE prev_geom END AS prev_geom
@@ -221,9 +221,9 @@ class ChangesetTiler
             c.id AS change_id
           FROM changes c
           INNER JOIN nodes n ON (n.id = c.el_id AND n.version = c.el_version)
-          INNER JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.version = c.el_version - 1)
+          INNER JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.rev = n.rev - 1)
           WHERE c.changeset_id = $1 AND c.el_type = 'N') q
-        WHERE q.t_x IS NOT NULL
+        --WHERE q.t_x IS NOT NULL
 
           UNION
 
@@ -243,7 +243,7 @@ class ChangesetTiler
             c.id AS change_id
           FROM changes c
           LEFT JOIN nodes n ON (n.id = c.el_id AND n.version = c.el_version)
-          LEFT JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.version = c.el_version - 1)
+          LEFT JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.rev = n.rev - 1)
           WHERE c.changeset_id = $1 AND c.el_type = 'N' AND (n.tstamp IS NULL OR prev_n.tstamp IS NULL) AND
             (n.tstamp IS NOT NULL OR prev_n.tstamp IS NOT NULL)) q
         WHERE q.t_x IS NOT NULL

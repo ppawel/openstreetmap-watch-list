@@ -13,7 +13,7 @@ class ChangesetTilerTest < Test::Unit::TestCase
   # Tag changes in Zagreb and Budapest place nodes.
   def test_12917265
     setup_changeset_test(12917265)
-    assert_equal(14, find_changes('el_type' => 'N').size)
+    assert_equal(6, find_changes('el_type' => 'N').size)
     #assert_equal(3, @tiles.size)
   end
 
@@ -104,6 +104,7 @@ class ChangesetTilerTest < Test::Unit::TestCase
 
   def test_13258073
     setup_changeset_test(13258073)
+    assert_equal(1, find_changes('el_type' => 'N', 'el_id' => '420302052', 'el_action' => 'DELETE').size)
   end
 
   def test_14429223_deleted_ways
@@ -115,7 +116,7 @@ class ChangesetTilerTest < Test::Unit::TestCase
     setup_changeset_test(11193918)
     assert_equal(2, find_changes('el_type' => 'N').size)
     assert_equal(1, find_changes('el_id' => '1703304298').size)
-    assert_equal(7, find_changes('el_type' => 'W').size)
+    assert_equal(10, find_changes('el_type' => 'W').size)
   end
 
   def test_13018562
@@ -148,6 +149,7 @@ class ChangesetTilerTest < Test::Unit::TestCase
   def test_14530383_forest_with_small_change_and_multiple_changes_of_one_object
     setup_changeset_test(14530383)
     forest_change = find_changes('el_type' => 'W', 'el_id' => '161116311', 'el_version' => '3')
+    p forest_change
     assert_equal(1, forest_change.size)
     forest_tile = @tiles.find {|tile| tile['changes'].include?(forest_change[0]['id'])}
     # Tile geom should not include the whole forest (it was a bug once).
