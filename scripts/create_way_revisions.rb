@@ -13,12 +13,8 @@ $config = YAML.load_file('../rails/config/database.yml')['development']
   :user => $config['username'], :password => $config['password'])
 
 i = 0
-@conn.exec("SELECT DISTINCT id FROM ways").to_a.each_slice(LIMIT) do |ids|
-  @conn.transaction do |c|
-    for id in ids.collect {|row| row['id'].to_i}
-      @conn.exec("SELECT OWL_CreateWayRevisions(#{id})")
-    end
-  end
-  puts LIMIT * (i + 1)
+while true do
+  @conn.exec("SELECT OWL_CreateWayRevisions(id) FROM ways ORDER BY id DESC LIMIT #{LIMIT} OFFSET #{i * LIMIT} ")
   i += 1
+  puts "---- #{LIMIT * i}"
 end
