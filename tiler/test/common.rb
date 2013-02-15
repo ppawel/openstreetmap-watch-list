@@ -64,6 +64,8 @@ module TestCommon
   end
 
   def verify_changes(changeset_id)
+    assert(@changes.size > 0, 'NO CHANGES?!')
+
     for change in @changes
       geom_changed = geom_changed(change)
       tags_changed = change['tags'] != change['prev_tags']

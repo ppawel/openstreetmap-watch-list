@@ -94,9 +94,6 @@ class ChangesetTilerTest < Test::Unit::TestCase
     setup_changeset_test(13473237)
   end
 
-=begin
-  TESTS WITH INCOMPLETE CHANGESET DATA - NEED FULL HISTORY - RE-ENABLE WHEN DATA IS COMPLETE
-
   def test_14699204
     setup_changeset_test(14699204)
   end
@@ -146,7 +143,6 @@ class ChangesetTilerTest < Test::Unit::TestCase
     # traffic_signals changed position - should be a change for that.
     changes = find_changes('el_type' => 'N', 'el_id' => '244942711')
     assert_equal(1, changes.size)
-    assert_equal('t', changes[0]['geom_changed'])
   end
 
   def test_14530383_forest_with_small_change_and_multiple_changes_of_one_object
@@ -160,5 +156,8 @@ class ChangesetTilerTest < Test::Unit::TestCase
     # Now let's test way 174644591 which has 5 revisions in this changeset.
     assert_equal(4, find_changes('el_type' => 'W', 'el_action' => 'DELETE').size)
   end
-=end
+
+  def test_18915_empty_geomcollection_error
+    setup_changeset_test(18915)
+  end
 end

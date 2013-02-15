@@ -26,7 +26,7 @@ class WayTiler
 
     ensure_way_revisions(way_id)
     @@log.debug "  revisions ensured"
-    revs = @conn.exec_prepared('select_revisions', [way_id]).to_a
+    revs = @conn.exec_prepared('select_revisions', [way_id, changeset_id]).to_a
     @@log.debug "  revisions count = #{revs.size}"
 
     @prev = nil
@@ -54,8 +54,6 @@ class WayTiler
       # GC has problems if we don't do this explicitly...
       #@prev['geom_obj'] = nil
     end
-
-    @@log.debug "Done"
   end
 
   private
@@ -136,8 +134,9 @@ class WayTiler
           OWL_MakeLine(w.nodes, rev.tstamp) AS line,
           rev.*
         FROM way_revisions rev
+        LEFT JOIN way_revisions prev ON (prev.way_id = rev.way_id AND prev.rev = rev.rev + 1)
         INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
-        WHERE way_id = $1) q
+        WHERE rev.way_id = $1 AND (rev.changeset_id = $2 OR prev.changeset_id = $2)) q
       ORDER BY q.way_id, q.rev")
 
     @conn.prepare('has_tiles', "SELECT COUNT(*) FROM way_tiles WHERE way_id = $1 AND version = $2 AND rev = $3")
