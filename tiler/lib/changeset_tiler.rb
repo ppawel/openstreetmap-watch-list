@@ -26,9 +26,11 @@ class ChangesetTiler
     tile_count = nil
     @@log.debug "mem = #{memory_usage} (before)"
 
-    ensure_way_revisions(changeset_id)
     @conn.transaction do |c|
-      generate_changes(changeset_id) if options[:changes] or !has_changes(changeset_id)
+      if options[:changes] or !has_changes(changeset_id)
+        ensure_way_revisions(changeset_id)
+        generate_changes(changeset_id)
+      end
       tile_count = do_generate(zoom, changeset_id, options)
     end
     @@log.debug "mem = #{memory_usage} (after)"
