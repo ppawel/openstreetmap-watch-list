@@ -248,7 +248,7 @@ BEGIN
     n.tags,
     prev.tags AS prev_tags
   FROM nodes n
-  LEFT JOIN nodes prev ON (prev.id = n.id AND prev.rev = n.rev - 1)
+  LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
   WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1) AND
     (n.tags - ARRAY['created_by', 'source'] != ''::hstore OR prev.tags - ARRAY['created_by', 'source'] != ''::hstore);
 
@@ -414,7 +414,7 @@ BEGIN
       FOR rev IN
           SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id
           FROM nodes n
-          INNER JOIN nodes n2 ON (n2.id = n.id AND n2.rev = n.rev - 1)
+          INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
           WHERE n.id IN (SELECT unnest(prev_way.nodes)) AND n.tstamp > prev_way.tstamp AND n.tstamp < way.tstamp
             AND NOT n.geom = n2.geom AND (last_way_tstamp IS NULL OR n.tstamp > last_way_tstamp)
           GROUP BY n.changeset_id, n.user_id
@@ -439,7 +439,7 @@ BEGIN
   FOR rev IN
       SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id
       FROM nodes n
-      INNER JOIN nodes n2 ON (n2.id = n.id AND n2.rev = n.rev - 1)
+      INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
       WHERE n.id IN (SELECT unnest(prev_way.nodes)) AND n.tstamp > prev_way.tstamp
         AND NOT n.geom = n2.geom AND (last_way_tstamp IS NULL OR n.tstamp > last_way_tstamp)
       GROUP BY n.changeset_id, n.user_id
