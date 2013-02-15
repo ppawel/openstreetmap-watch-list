@@ -1,5 +1,6 @@
 require 'logging'
 require 'utils'
+require 'geos_utils'
 require 'ffi-geos'
 require 'way_tiler'
 
