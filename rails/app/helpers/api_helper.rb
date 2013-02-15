@@ -1,7 +1,6 @@
 module ApiHelper
   def get_xyz(params)
-    zoom = params[:zoom].to_i
-    return params[:x].to_i * 2 ** (16 - zoom), params[:y].to_i * 2 ** (16 - zoom), zoom
+    return params[:x].to_i, params[:y].to_i, params[:zoom].to_i
   end
 
   def get_range(params)
