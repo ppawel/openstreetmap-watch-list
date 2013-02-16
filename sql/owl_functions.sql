@@ -250,7 +250,8 @@ BEGIN
   FROM nodes n
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
   WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1) AND
-    (n.tags - ARRAY['created_by', 'source'] != ''::hstore OR prev.tags - ARRAY['created_by', 'source'] != ''::hstore);
+    (n.tags - ARRAY['created_by', 'source'] != ''::hstore OR prev.tags - ARRAY['created_by', 'source'] != ''::hstore) AND
+    (NOT n.geom = prev.geom OR n.tags != prev.tags);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Nodes done (%)', clock_timestamp(), row_count;
@@ -402,6 +403,9 @@ BEGIN
   last_way_tstamp := (SELECT MAX(tstamp) FROM way_revisions WHERE way_id = $1);
 
   RAISE NOTICE '% -- Creating revisions for way % [last = %]', clock_timestamp(), $1, last_way_tstamp;
+
+  SET enable_mergejoin = off;
+  SET enable_hashjoin = off;
 
   WITH way_versions AS (
     SELECT w.tstamp AS t1, next.tstamp AS t2, w.visible, w.version, w.changeset_id, w.user_id, w.nodes
