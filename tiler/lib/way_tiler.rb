@@ -97,11 +97,13 @@ class WayTiler
       if geom_prep.intersects?(tile_geom)
         intersection = geom.intersection(tile_geom)
         intersection.srid = 4326
-        insert_tile(rev, x, y, intersection)
-        count += 1
+        if !intersection.empty?
+          insert_tile(rev, x, y, intersection)
+          count += 1
+        end
       end
 
-      if index % 1000 == 0
+      if index > 0 and index % 1000 == 0
         @@log.debug "    i = #{index}, created tiles = #{count}"
       end
     end
