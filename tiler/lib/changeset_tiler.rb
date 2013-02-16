@@ -67,7 +67,7 @@ class ChangesetTiler
     @@log.debug "Generating way tiles..."
 
     for row in @conn.exec_prepared('select_way_ids', [changeset_id]).to_a
-      @way_tiler.create_way_tiles(row['el_id'].to_i, changeset_id)
+      @way_tiler.create_way_tiles(row['el_id'].to_i, changeset_id, false)
     end
 
     @@log.debug "Generating changeset tiles..."

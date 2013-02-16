@@ -22,11 +22,14 @@ class WayTiler
     setup_prepared_statements
   end
 
-  def create_way_tiles(way_id, changeset_id = nil)
+  def create_way_tiles(way_id, changeset_id = nil, ensure_revisions = true)
     @@log.debug "Way #{way_id}"
 
-    ensure_way_revisions(way_id)
-    @@log.debug "  revisions ensured"
+    if ensure_revisions
+      ensure_way_revisions(way_id)
+      @@log.debug "  revisions ensured"
+    end
+
     revs = @conn.exec_prepared('select_revisions', [way_id, changeset_id]).to_a
     @@log.debug "  revisions count = #{revs.size}"
 
