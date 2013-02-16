@@ -6,6 +6,7 @@ module TestCommon
     puts "setup_changeset_test(#{id})"
     setup_db
     load_changeset(id)
+    verify_way_revisions
     @tiler = Tiler::ChangesetTiler.new(@conn)
     @tiler.generate(16, id, {:retile => true, :changes => true})
     @changes = get_changes
@@ -42,24 +43,14 @@ module TestCommon
     @conn.put_copy_end
     @conn.exec("VACUUM ANALYZE")
     @conn.exec("SELECT OWL_CreateWayRevisions(w.id) FROM (SELECT DISTINCT id FROM ways) w")
-    verify_way_revisions
-=begin
-    incomplete = @conn.exec("SELECT * FROM way_revisions rev
-        INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
-        WHERE OWL_MakeLine(w.nodes, rev.tstamp) IS NULL AND rev.visible AND rev.tstamp > '2007-10-07' ").to_a
-    if not incomplete.empty?
-      #puts "ERROR: Incomplete changeset data"
-      #p incomplete
-      #exit
-    end
-=end
   end
 
   def verify_way_revisions
-    @conn.exec("SELECT * FROM way_revisions ORDER BY way_id, version, rev").to_a.each_cons(2) do |rev1, rev2|
+    @conn.exec("SELECT * FROM way_revisions ORDER BY way_id, rev").to_a.each_cons(2) do |rev1, rev2|
       next if rev1['way_id'] != rev2['way_id']
-      assert(rev1['version'].to_i <= rev2['version'].to_i)
+      assert(rev1['version'].to_i <= rev2['version'].to_i, "Wrong revision tstamp:\n#{rev1}\n#{rev2}")
       assert(rev1['revision'].to_i <= rev2['revision'].to_i, "Wrong revision order:\n#{rev1}\n#{rev2}")
+      assert(rev1['tstamp'] < rev2['tstamp'], "Newer revision has older or equal timestamp:\n#{rev1}\n#{rev2}")
     end
   end
 
@@ -91,6 +82,7 @@ module TestCommon
     end
     if change['el_type'] == 'W'
       return (@conn.exec("SELECT NOT ST_Equals(OWL_MakeLine(w.nodes, rev.tstamp), OWL_MakeLine(prev_w.nodes, prev.tstamp))
+          OR OWL_MakeLine(prev_w.nodes, prev.tstamp) IS NULL
         FROM way_revisions rev
         LEFT JOIN way_revisions prev ON (prev.way_id = rev.way_id AND prev.rev = rev.rev - 1)
         INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)

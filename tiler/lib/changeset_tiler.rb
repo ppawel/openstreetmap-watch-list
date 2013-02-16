@@ -180,6 +180,20 @@ class ChangesetTiler
           UNION
 
         SELECT
+          prev_t.tstamp,
+          prev_t.x,
+          prev_t.y,
+          c.id AS change_id,
+          NULL AS geom,
+          prev_t.geom AS prev_geom
+        FROM changes c
+        INNER JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1)
+        LEFT JOIN way_tiles t ON (t.way_id = c.el_id AND t.rev = c.el_rev AND t.x = prev_t.x AND t.y = prev_t.y)
+        WHERE c.changeset_id = $1 AND c.el_type = 'W' AND t.x IS NULL
+
+          UNION
+
+        SELECT
           t.tstamp,
           t.x,
           t.y,
@@ -191,20 +205,6 @@ class ChangesetTiler
         LEFT JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1 AND
           t.x = prev_t.x AND t.y = prev_t.y)
         WHERE c.changeset_id = $1 AND c.el_type = 'W' AND prev_t.x IS NULL
-
-          UNION
-
-        SELECT
-          prev_t.tstamp,
-          prev_t.x,
-          prev_t.y,
-          c.id AS change_id,
-          NULL AS geom,
-          prev_t.geom AS prev_geom
-        FROM changes c
-        INNER JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1)
-        LEFT JOIN way_tiles t ON (t.way_id = c.el_id AND t.rev = c.el_rev AND t.x = prev_t.x AND t.y = prev_t.y)
-        WHERE c.changeset_id = $1 AND c.el_type = 'W' AND t.x IS NULL
 
           UNION
 

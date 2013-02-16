@@ -28,4 +28,4 @@ CREATE INDEX idx_way_revisions_way_id ON way_revisions USING btree (way_id);
 --CREATE INDEX idx_ways_tstamp ON ways USING btree (tstamp);
 
 -- Used by the vector tiles API.
-CREATE INDEX idx_nodes_geom ON nodes USING gist (geom);
+CREATE INDEX idx_nodes_geom ON nodes USING gist (geom) WHERE visible AND current;

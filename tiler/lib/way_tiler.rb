@@ -125,9 +125,9 @@ class WayTiler
     @conn.prepare('select_revisions',
       "SELECT q.*, q.line::box2d AS bbox,
         CASE
-          WHEN GeometryType(ST_MakeValid(q.line)) = 'LINESTRING' AND ST_IsClosed(q.line) AND ST_IsSimple(q.line)
-            AND ST_IsValid(q.line)
-          THEN  ST_ForceRHR(ST_MakePolygon(q.line))
+          WHEN ST_IsValid(q.line) AND GeometryType(ST_MakeValid(q.line)) = 'LINESTRING' AND ST_IsClosed(q.line) AND
+            ST_IsSimple(q.line)
+          THEN ST_ForceRHR(ST_MakePolygon(q.line))
           ELSE q.line
         END AS geom
       FROM (

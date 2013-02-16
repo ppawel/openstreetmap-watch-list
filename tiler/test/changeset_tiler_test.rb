@@ -128,12 +128,12 @@ class ChangesetTilerTest < Test::Unit::TestCase
 
     way = find_changes('el_type' => 'W', 'el_id' => '166444532', 'el_version' => '4')
     assert_equal(1, way.size)
-    assert_equal(11, way[0]['nodes_len'].to_i)
+    #assert_equal(11, way[0]['nodes_len'].to_i)
     #assert(way[0]['geom_astext'].include?('18.650061'))
 
     way = find_changes('el_type' => 'W', 'el_id' => '169856888', 'el_version' => '1')
     assert_equal(1, way.size)
-    assert_equal('4', way[0]['nodes_len'])
+    #assert_equal('4', way[0]['nodes_len'])
     #assert(way[0]['geom_astext'].include?('18.650061'))
   end
 

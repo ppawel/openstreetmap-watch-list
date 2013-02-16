@@ -54,12 +54,12 @@ BEGIN
       SELECT DISTINCT ON (id) id, geom
       FROM nodes n
       WHERE n.id IN (SELECT unnest($1))
-      AND tstamp <= $2
-      ORDER BY id, tstamp DESC) q ON (q.id = x.node_id)
-    );
+      AND tstamp <= $2 and visible--AND ST_X(geom) != 'NaN'
+      ORDER BY id, tstamp DESC) q ON (q.id = x.node_id));
 
   -- Now check if the linestring has exactly the right number of points.
   IF ST_NumPoints(way_geom) != array_length($1, 1) THEN
+    --raise notice '% %', ST_NumPoints(way_geom), array_length($1, 1);
     RETURN NULL;
   END IF;
 
@@ -294,7 +294,7 @@ BEGIN
   INNER JOIN way_revisions prev_rev ON (prev_rev.way_id = rev.way_id AND prev_rev.rev = rev.rev - 1)
   INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
   INNER JOIN ways prev_way ON (prev_way.id = prev_rev.way_id AND prev_way.version = prev_rev.version)
-  WHERE rev.changeset_id = $1 AND rev.visible;
+  WHERE rev.changeset_id = $1 AND rev.visible AND (rev.version = prev_rev.version OR w.tags != prev_way.tags OR w.nodes != prev_way.nodes);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Modified ways done (%)', clock_timestamp(), row_count;
@@ -396,58 +396,58 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION OWL_CreateWayRevisions(bigint) RETURNS void AS $$
 DECLARE
   last_way_tstamp timestamp without time zone;
-  first_version boolean;
-  current_revision int;
-  rev record;
-  prev_way record;
-  way record;
+  row_count int;
 
 BEGIN
   last_way_tstamp := (SELECT MAX(tstamp) FROM way_revisions WHERE way_id = $1);
-  current_revision := 0;
-  first_version := true;
 
-  FOR way IN SELECT * FROM ways WHERE id = $1 AND (last_way_tstamp IS NULL OR tstamp > last_way_tstamp) ORDER BY version LOOP
-    RAISE NOTICE '% -- Way % version % (rev = %)', clock_timestamp(), way.id, way.version, current_revision;
+  RAISE NOTICE '% -- Creating revisions for way % [last = %]', clock_timestamp(), $1, last_way_tstamp;
 
-    IF NOT first_version THEN
-      FOR rev IN
-          SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id
-          FROM nodes n
-          INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
-          WHERE n.id IN (SELECT unnest(prev_way.nodes)) AND n.tstamp > prev_way.tstamp AND n.tstamp < way.tstamp
-            AND NOT n.geom = n2.geom AND (last_way_tstamp IS NULL OR n.tstamp > last_way_tstamp)
-          GROUP BY n.changeset_id, n.user_id
-          ORDER BY tstamp
-      LOOP
-        current_revision := current_revision + 1;
-        INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
-        VALUES ($1, way.version - 1, current_revision, rev.user_id, rev.tstamp, rev.changeset_id, prev_way.visible);
-      END LOOP;
-    END IF;
+  WITH way_versions AS (
+    SELECT w.tstamp AS t1, next.tstamp AS t2, w.visible, w.version, w.changeset_id, w.user_id, w.nodes
+    FROM ways w
+    --LEFT JOIN ways next ON (next.id = w.id AND next.version = w.version + 1)
+    LEFT JOIN ways next ON (next.id = w.id AND next.version = (SELECT version FROM ways WHERE id = $1 AND version > w.version ORDER BY version LIMIT 1))
+    WHERE w.id = $1),
 
-    current_revision := current_revision + 1;
+  revs AS (
+    SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id, wv.version, wv.visible
+    FROM nodes n
+    INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
+    INNER JOIN way_versions wv ON (n.tstamp > wv.t1 AND (t2 IS NULL OR n.tstamp < wv.t2) AND n.id IN (SELECT unnest(wv.nodes)))
+    WHERE n.id IN (SELECT unnest(nodes) FROM ways WHERE id = $1) AND NOT n.geom = n2.geom
+      AND (last_way_tstamp IS NULL OR n.tstamp > last_way_tstamp)
+    GROUP BY n.changeset_id, n.user_id, wv.version, wv.visible)
 
-    INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
-    VALUES ($1, way.version, current_revision, way.user_id, way.tstamp, way.changeset_id, way.visible);
+  INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
+  SELECT
+    $1,
+    q.version,
+    row_number() OVER (ORDER BY q.tstamp),
+    q.user_id,
+    q.tstamp,
+    q.changeset_id,
+    q.visible
+  FROM
+    (SELECT
+      version,
+      user_id,
+      t1 AS tstamp,
+      changeset_id,
+      visible
+    FROM way_versions
+      UNION
+    SELECT
+      version,
+      user_id,
+      tstamp,
+      changeset_id,
+      visible
+    FROM revs) q
+  WHERE last_way_tstamp IS NULL OR q.tstamp > last_way_tstamp
+  ORDER BY q.tstamp;
 
-    prev_way := way;
-    first_version := false;
-  END LOOP;
-
-  SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO prev_way;
-  FOR rev IN
-      SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id
-      FROM nodes n
-      INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
-      WHERE n.id IN (SELECT unnest(prev_way.nodes)) AND n.tstamp > prev_way.tstamp
-        AND NOT n.geom = n2.geom AND (last_way_tstamp IS NULL OR n.tstamp > last_way_tstamp)
-      GROUP BY n.changeset_id, n.user_id
-      ORDER BY tstamp
-  LOOP
-    current_revision := current_revision + 1;
-    INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
-    VALUES ($1, prev_way.version, current_revision, rev.user_id, rev.tstamp, rev.changeset_id, prev_way.visible);
-  END LOOP;
+  GET DIAGNOSTICS row_count = ROW_COUNT;
+  RAISE NOTICE '% -- Created % revision(s)', clock_timestamp(), row_count;
 END;
 $$ LANGUAGE plpgsql;
