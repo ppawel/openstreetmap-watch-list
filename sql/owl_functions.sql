@@ -469,7 +469,7 @@ BEGIN
       RETURN NEXT rev;
     END IF;
 
-    IF row.type = 'N' AND last_way.nodes && row.nodes THEN
+    IF row.type = 'N' AND last_way.nodes && row.nodes AND row.tstamp > last_way.tstamp THEN
       rev := ($1,last_way.version,rev_count,last_way.visible,row.user_id,row.tstamp,row.changeset_id);
       RETURN NEXT rev;
     END IF;
