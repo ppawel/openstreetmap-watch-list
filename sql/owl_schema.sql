@@ -49,7 +49,7 @@ CREATE TABLE nodes (
   tstamp timestamp without time zone NOT NULL,
   changeset_id bigint NOT NULL,
   tags hstore NOT NULL,
-  geom geometry(POINT, 4326) NOT NULL
+  geom geometry(POINT, 4326)
 );
 
 -- Create a table for ways.

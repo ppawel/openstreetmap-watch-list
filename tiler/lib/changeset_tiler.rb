@@ -84,7 +84,7 @@ class ChangesetTiler
   end
 
   def ensure_way_revisions(changeset_id)
-    @conn.exec("SELECT OWL_CreateWayRevisions(q.id) FROM (
+    @conn.exec("SELECT OWL_CreateWayRevisions(q.id, true) FROM (
       SELECT DISTINCT id FROM ways WHERE changeset_id = #{changeset_id} UNION
       SELECT DISTINCT id FROM ways WHERE nodes && (SELECT array_agg(id) FROM nodes WHERE changeset_id = #{changeset_id})) q")
   end

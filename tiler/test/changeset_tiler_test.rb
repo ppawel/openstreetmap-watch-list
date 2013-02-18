@@ -162,4 +162,8 @@ class ChangesetTilerTest < Test::Unit::TestCase
   def test_18915_empty_geomcollection_error
     setup_changeset_test(18915)
   end
+
+  def test_nan
+    setup_changeset_test(14863424)
+  end
 end

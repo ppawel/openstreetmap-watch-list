@@ -391,79 +391,32 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
---
--- OWL_CreateWayRevisions
---
+---
+--- OWL_CreateWayRevisions
+---
 CREATE OR REPLACE FUNCTION OWL_CreateWayRevisions(bigint, boolean) RETURNS void AS $$
+  INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
+  SELECT * FROM OWL_GenerateWayRevisions($1, $2)
+$$ LANGUAGE sql;
+
+---
+--- OWL_GenerateWayRevisions
+---
+CREATE OR REPLACE FUNCTION OWL_GenerateWayRevisions(bigint, boolean) RETURNS table
+  (_way_id bigint, _version int, _rev int, _user_id int, _tstamp timestamp without time zone, _changeset_id int, _visible boolean)
+AS $$
 DECLARE
   last_rev_tstamp timestamp without time zone;
-  row_count int;
 
 BEGIN
   last_rev_tstamp := (SELECT MAX(tstamp) FROM way_revisions WHERE way_id = $1);
 
-  RAISE NOTICE '% -- Creating revisions for way % [last = %]', clock_timestamp(), $1, last_rev_tstamp;
+  RAISE NOTICE '% -- Generating revisions for way % [last = %]', clock_timestamp(), $1, last_rev_tstamp;
 
   IF last_rev_tstamp IS NOT NULL AND NOT $2 THEN
     RETURN;
   END IF;
 
-  SET enable_mergejoin = off;
-  SET enable_hashjoin = off;
-
-  WITH way_versions AS (
-    SELECT w.tstamp AS t1, next.tstamp AS t2, w.visible, w.version, w.changeset_id, w.user_id, w.nodes
-    FROM ways w
-    --LEFT JOIN ways next ON (next.id = w.id AND next.version = w.version + 1)
-    LEFT JOIN ways next ON (next.id = w.id AND next.version = (SELECT version FROM ways WHERE id = $1 AND version > w.version ORDER BY version LIMIT 1))
-    WHERE w.id = $1),
-
-  revs AS (
-    SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id, wv.version, wv.visible
-    FROM nodes n
-    INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
-    INNER JOIN way_versions wv ON (n.tstamp > wv.t1 AND (t2 IS NULL OR n.tstamp < wv.t2) AND n.id IN (SELECT unnest(wv.nodes)))
-    WHERE n.id IN (SELECT unnest(nodes) FROM ways WHERE id = $1) AND NOT n.geom = n2.geom
-      AND (last_rev_tstamp IS NULL OR n.tstamp > last_rev_tstamp)
-    GROUP BY n.changeset_id, n.user_id, wv.version, wv.visible)
-
-  INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
-  SELECT
-    $1,
-    q.version,
-    row_number() OVER (ORDER BY q.tstamp),
-    q.user_id,
-    q.tstamp,
-    q.changeset_id,
-    q.visible
-  FROM
-    (SELECT
-      version,
-      user_id,
-      t1 AS tstamp,
-      changeset_id,
-      visible
-    FROM way_versions
-      UNION
-    SELECT
-      version,
-      user_id,
-      tstamp,
-      changeset_id,
-      visible
-    FROM revs) q
-  WHERE last_rev_tstamp IS NULL OR q.tstamp > last_rev_tstamp
-  ORDER BY q.tstamp;
-
-  GET DIAGNOSTICS row_count = ROW_COUNT;
-  RAISE NOTICE '% -- Created % revision(s)', clock_timestamp(), row_count;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION OWL_CreateWayRevisions2(bigint) RETURNS table
-(_way_id bigint, _version int, _rev int, _user_id int, _tstamp timestamp without time zone, _changeset_id int, _visible boolean)
-AS $$
-BEGIN
   SET enable_mergejoin = off;
   SET enable_hashjoin = off;
 
@@ -479,7 +432,8 @@ BEGIN
     FROM nodes n
     INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
     INNER JOIN way_versions wv ON (n.tstamp > wv.t1 AND (t2 IS NULL OR n.tstamp < wv.t2) AND n.id IN (SELECT unnest(wv.nodes)))
-    WHERE n.id IN (SELECT unnest(nodes) FROM ways WHERE id = $1) AND NOT n.geom = n2.geom
+    WHERE n.id IN (SELECT unnest(nodes) FROM way_versions) AND NOT n.geom = n2.geom AND n.visible
+      AND (last_rev_tstamp IS NULL OR n.tstamp > last_rev_tstamp)
     GROUP BY n.changeset_id, n.user_id, wv.version, wv.visible)
 
   SELECT
@@ -506,6 +460,7 @@ BEGIN
       changeset_id,
       visible
     FROM revs) q
+  WHERE last_rev_tstamp IS NULL OR q.tstamp > last_rev_tstamp
   ORDER BY q.tstamp);
 END;
 $$ LANGUAGE plpgsql;
