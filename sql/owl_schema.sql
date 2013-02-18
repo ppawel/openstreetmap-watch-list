@@ -67,7 +67,6 @@ CREATE TABLE ways (
 
 -- Create a table for ways revisions.
 CREATE TABLE way_revisions (
-  id bigserial NOT NULL,
   way_id bigint NOT NULL,
   version int NOT NULL,
   rev int NOT NULL,
@@ -75,6 +74,7 @@ CREATE TABLE way_revisions (
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
   changeset_id bigint NOT NULL
+  --geom geometry(GEOMETRY, 4326) NOT NULL
 );
 
 -- Create a table for relations.
