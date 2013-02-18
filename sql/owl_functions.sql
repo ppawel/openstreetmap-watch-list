@@ -386,13 +386,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
----
---- OWL_CreateWayRevisions
----
-CREATE OR REPLACE FUNCTION OWL_CreateWayRevisions(bigint, boolean) RETURNS void AS $$
-  INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
-  SELECT * FROM OWL_GenerateWayRevisions($1, $2)
-$$ LANGUAGE sql;
+
 
 ---
 --- OWL_GenerateWayRevisions
@@ -459,3 +453,11 @@ BEGIN
   ORDER BY q.tstamp);
 END;
 $$ LANGUAGE plpgsql;
+
+---
+--- OWL_CreateWayRevisions
+---
+CREATE OR REPLACE FUNCTION OWL_CreateWayRevisions(bigint, boolean) RETURNS void AS $$
+  INSERT INTO way_revisions (way_id, version, rev, user_id, tstamp, changeset_id, visible)
+  SELECT * FROM OWL_GenerateWayRevisions($1, $2)
+$$ LANGUAGE sql;

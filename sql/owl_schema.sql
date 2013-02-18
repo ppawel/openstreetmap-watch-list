@@ -2,7 +2,7 @@
 
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS ways;
-DROP TABLE IF EXISTS way_revisions;
+DROP TABLE IF EXISTS way_revisions CASCADE;
 DROP TABLE IF EXISTS changes;
 DROP TABLE IF EXISTS way_tiles;
 DROP TABLE IF EXISTS changeset_tiles;
