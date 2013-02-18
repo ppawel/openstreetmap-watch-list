@@ -54,21 +54,15 @@ BEGIN
       SELECT DISTINCT ON (id) id, geom
       FROM nodes n
       WHERE n.id IN (SELECT unnest($1))
-      AND tstamp <= $2 and visible--AND ST_X(geom) != 'NaN'
+      AND tstamp <= $2 AND visible--AND ST_X(geom) != 'NaN'
       ORDER BY id, tstamp DESC) q ON (q.id = x.node_id));
 
   -- Now check if the linestring has exactly the right number of points.
   IF ST_NumPoints(way_geom) != array_length($1, 1) THEN
-    --raise notice '% %', ST_NumPoints(way_geom), array_length($1, 1);
     RETURN NULL;
   END IF;
 
-  -- Invalid way geometry - convert to a single point.
-  IF ST_NumPoints(way_geom) = 1 THEN
-    way_geom := ST_PointN(way_geom, 1);
-  END IF;
-
-  RETURN way_geom;
+  RETURN ST_MakeValid(way_geom);
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 

@@ -19,6 +19,7 @@ class WayTiler
     @wkt_reader = Geos::WktReader.new
     @wkb_writer = Geos::WkbWriter.new
     @wkb_writer.include_srid = true
+    @wkt_writer = Geos::WktWriter.new
     setup_prepared_statements
   end
 
@@ -103,6 +104,8 @@ class WayTiler
         if !intersection.empty?
           insert_tile(rev, x, y, intersection)
           count += 1
+        else
+          @@log.warn "    Empty tile: #{tile} #{@wkt_writer.write(tile_geom)}\n#{@wkt_writer.write(geom_prep)}"
         end
       end
 
@@ -130,8 +133,7 @@ class WayTiler
     @conn.prepare('select_revisions',
       "SELECT q.*, q.line::box2d AS bbox,
         CASE
-          WHEN ST_IsValid(q.line) AND GeometryType(ST_MakeValid(q.line)) = 'LINESTRING' AND ST_IsClosed(q.line) AND
-            ST_IsSimple(q.line)
+          WHEN GeometryType(q.line) = 'LINESTRING' AND ST_IsClosed(q.line) AND ST_IsSimple(q.line)
           THEN ST_ForceRHR(ST_MakePolygon(q.line))
           ELSE q.line
         END AS geom
