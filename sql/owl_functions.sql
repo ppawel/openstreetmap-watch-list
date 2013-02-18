@@ -243,9 +243,10 @@ BEGIN
     prev.tags AS prev_tags
   FROM nodes n
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
-  WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1) AND
+  WHERE n.changeset_id = $1 AND
     (n.tags - ARRAY['created_by', 'source'] != ''::hstore OR prev.tags - ARRAY['created_by', 'source'] != ''::hstore) AND
-    (NOT n.geom = prev.geom OR n.tags != prev.tags);
+    (prev.geom IS NULL OR
+      (NOT ST_Equals(n.geom, prev.geom) OR n.tags != prev.tags));
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Nodes done (%)', clock_timestamp(), row_count;
