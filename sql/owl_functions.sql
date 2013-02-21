@@ -393,11 +393,14 @@ CREATE OR REPLACE FUNCTION OWL_GenerateWayRevisions(bigint, boolean) RETURNS SET
 DECLARE
   last_rev_tstamp timestamp without time zone;
   row record;
+  last_node record;
   last_way record;
   rev way_revisions%rowtype;
   rev_count int;
 
 BEGIN
+  SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_node;
+  last_way := NULL;
   last_rev_tstamp := (SELECT MAX(tstamp) FROM way_revisions WHERE way_id = $1);
 
   RAISE NOTICE '% -- Generating revisions for way % [last = %]', clock_timestamp(), $1, last_rev_tstamp;
@@ -412,21 +415,21 @@ BEGIN
   rev_count := 1;
 
   FOR row IN (WITH way_versions AS (
-    SELECT w.tstamp AS t1, next.tstamp AS t2, w.visible, w.version, w.changeset_id, w.user_id, w.nodes
+    SELECT w.tstamp, w.visible, w.version, w.changeset_id, w.user_id, w.nodes
     FROM ways w
     --LEFT JOIN ways next ON (next.id = w.id AND next.version = w.version + 1)
-    LEFT JOIN ways next ON (next.id = w.id AND next.version = (SELECT version FROM ways WHERE id = $1 AND version > w.version ORDER BY version LIMIT 1))
+    --LEFT JOIN ways next ON (next.id = w.id AND next.version = (SELECT version FROM ways WHERE id = $1 AND version > w.version ORDER BY version LIMIT 1))
     WHERE w.id = $1),
 
   revs AS (
-    SELECT MAX(n.tstamp) AS tstamp, n.changeset_id, n.user_id, array_agg(n.id) AS nodes--, wv.version, wv.visible, wv.nodes
+    SELECT n.tstamp, n.changeset_id, n.user_id, array_agg(n.id) AS nodes--, wv.version, wv.visible, wv.nodes
     FROM nodes n
     INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
     --INNER JOIN way_versions wv ON (n.tstamp > wv.t1 AND (t2 IS NULL OR n.tstamp < wv.t2) AND n.id IN (SELECT unnest(wv.nodes)))
     WHERE n.id IN (SELECT unnest(nodes) FROM way_versions) AND NOT n.geom = n2.geom AND n.visible
       AND (last_rev_tstamp IS NULL OR n.tstamp > last_rev_tstamp)
-      AND n.tstamp >= (SELECT MIN(t1) FROM way_versions)
-    GROUP BY n.changeset_id, n.user_id)--, wv.version, wv.visible, wv.nodes)
+      AND n.tstamp >= (SELECT MIN(tstamp) FROM way_versions)
+    GROUP BY n.tstamp, n.changeset_id, n.user_id, n.id)--, wv.version, wv.visible, wv.nodes)
 
   SELECT
     $1,
@@ -444,7 +447,7 @@ BEGIN
       'W' AS type,
       version,
       user_id,
-      t1 AS tstamp,
+      tstamp,
       changeset_id,
       visible,
       nodes
@@ -453,29 +456,47 @@ BEGIN
     SELECT
       'N' AS type,
       NULL,--version,
-      user_id,
-      tstamp,
-      changeset_id,
+      revs.user_id,
+      revs.tstamp,
+      revs.changeset_id,
       true,--visible,
       revs.nodes
     FROM revs) q
   WHERE last_rev_tstamp IS NULL OR q.tstamp > last_rev_tstamp
   ORDER BY q.tstamp, q.type DESC) LOOP
-    --raise notice '--- %', row;
-
     IF row.type = 'W' THEN
+      IF last_node.tstamp IS NOT NULL THEN
+        rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id);
+        rev_count := rev_count + 1;
+        SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_node;
+        --raise notice 'AAAAAAAAAAAAAAAAa -- %', rev;
+        RETURN NEXT rev;
+      END IF;
+
       last_way := row;
       rev := ($1,row.version,rev_count,row.visible,row.user_id,row.tstamp,row.changeset_id);
+      rev_count := rev_count + 1;
+      --raise notice '-- %', rev;
       RETURN NEXT rev;
     END IF;
 
     IF row.type = 'N' AND last_way.nodes && row.nodes AND row.tstamp > last_way.tstamp THEN
-      rev := ($1,last_way.version,rev_count,last_way.visible,row.user_id,row.tstamp,row.changeset_id);
-      RETURN NEXT rev;
+      IF last_node.tstamp IS NOT NULL AND (row.tstamp - INTERVAL '5 seconds' > last_node.tstamp OR
+          last_node.changeset_id != row.changeset_id) THEN
+        rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id);
+        rev_count := rev_count + 1;
+        --raise notice 'BBBBBBBBBBBBBB -- %', rev;
+        RETURN NEXT rev;
+      END IF;
+      last_node := row;
     END IF;
-
-    rev_count := rev_count + 1;
   END LOOP;
+
+  IF last_node.tstamp IS NOT NULL THEN
+    rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id);
+    RETURN NEXT rev;
+  END IF;
+
 END;
 $$ LANGUAGE plpgsql;
 
