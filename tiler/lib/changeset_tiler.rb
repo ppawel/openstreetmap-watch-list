@@ -26,7 +26,6 @@ class ChangesetTiler
     tile_count = nil
     @@log.debug "mem = #{memory_usage} (before)"
 
-
     if options[:changes] or !has_changes(changeset_id)
       @conn.transaction do |c|
         ensure_way_revisions(changeset_id)
@@ -34,12 +33,7 @@ class ChangesetTiler
       end
     end
 
-    @conn.transaction do |c|
-      tile_count = do_generate(zoom, changeset_id, options)
-    end
-
-    @@log.debug "mem = #{memory_usage} (after)"
-    tile_count
+    do_generate(zoom, changeset_id, options)
   end
 
   ##
@@ -69,10 +63,12 @@ class ChangesetTiler
       return -1 if has_tiles(changeset_id)
     end
 
-    @@log.debug "Generating way tiles..."
+    @conn.transaction do |c|
+      @@log.debug "Generating way tiles..."
 
-    for row in @conn.exec_prepared('select_way_ids', [changeset_id]).to_a
-      @way_tiler.create_way_tiles(row['el_id'].to_i, changeset_id, false)
+      for row in @conn.exec_prepared('select_way_ids', [changeset_id]).to_a
+        @way_tiler.create_way_tiles(row['el_id'].to_i, changeset_id, false)
+      end
     end
 
     @@log.debug "Generating changeset tiles..."
