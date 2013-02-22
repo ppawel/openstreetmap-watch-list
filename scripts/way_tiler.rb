@@ -18,5 +18,6 @@ ARGF.each_line do |way_id|
   @conn.transaction do |c|
     @way_tiler.create_way_tiles(way_id.to_i)
   end
+  i += 1
   puts "---- #{i}" if i % 1000
 end
