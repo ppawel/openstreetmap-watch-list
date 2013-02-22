@@ -122,7 +122,7 @@ class WayTiler
   end
 
   def has_tiles(rev)
-    @conn.exec_prepared('has_tiles', [rev['way_id'], rev['version'], rev['rev']]).getvalue(0, 0).to_i > 0
+    @conn.exec_prepared('has_tiles', [rev['way_id'], rev['rev']]).getvalue(0, 0).to_i > 0
   end
 
   def ensure_way_revisions(way_id)
@@ -144,10 +144,11 @@ class WayTiler
         FROM way_revisions rev
         LEFT JOIN way_revisions prev ON (prev.way_id = rev.way_id AND prev.rev = rev.rev + 1)
         INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
-        WHERE rev.way_id = $1 AND ($2::int IS NULL OR rev.changeset_id = $2 OR prev.changeset_id = $2)) q
+        WHERE rev.way_id = $1 AND ($2::int IS NULL OR rev.changeset_id = $2 OR prev.changeset_id = $2) AND
+          NOT EXISTS (SELECT 1 FROM way_tiles wt WHERE wt.way_id = rev.way_id AND wt.rev = rev.rev LIMIT 1)) q
       ORDER BY q.way_id, q.rev")
 
-    @conn.prepare('has_tiles', "SELECT COUNT(*) FROM way_tiles WHERE way_id = $1 AND version = $2 AND rev = $3")
+    @conn.prepare('has_tiles', "SELECT COUNT(*) FROM way_tiles WHERE way_id = $1 AND rev = $2")
 
     @conn.prepare('insert_way_tile',
       "INSERT INTO way_tiles (way_id, version, rev, tstamp, changeset_id, x, y, geom) VALUES

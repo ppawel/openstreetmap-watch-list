@@ -54,7 +54,7 @@ BEGIN
       SELECT DISTINCT ON (id) id, geom
       FROM nodes n
       WHERE n.id IN (SELECT unnest($1))
-      AND tstamp <= $2 AND visible--AND ST_X(geom) != 'NaN'
+      AND tstamp <= $2 AND visible
       ORDER BY id, tstamp DESC) q ON (q.id = x.node_id));
 
   -- Now check if the linestring has exactly the right number of points.
@@ -400,15 +400,16 @@ DECLARE
   created_count int;
 
 BEGIN
+  IF NOT $2 AND EXISTS (SELECT 1 FROM way_revisions WHERE way_id = $1 LIMIT 1) THEN
+    RETURN;
+  END IF;
+
   SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_node;
   SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO last_way;
-  SELECT * FROM way_revisions WHERE way_id = $1 ORDER BY rev DESC LIMIT 1 INTO last_rev;
 
   RAISE NOTICE '% -- Generating revisions for way % [last = %]', clock_timestamp(), $1, last_rev.tstamp;
 
-  IF last_rev.tstamp IS NOT NULL AND NOT $2 THEN
-    RETURN;
-  END IF;
+  SELECT * FROM way_revisions WHERE way_id = $1 ORDER BY rev DESC LIMIT 1 INTO last_rev;
 
   SET enable_mergejoin = off;
   SET enable_hashjoin = off;
