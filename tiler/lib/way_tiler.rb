@@ -77,7 +77,11 @@ class WayTiler
 
     @@log.debug "    tile_count = #{tile_count}, diff_tile_count = #{diff_tile_count}, same_geom = #{same_geom}"
 
-    if same_geom
+    if tile_count
+      tile = bbox_to_tiles(@zoom, bbox).to_a[0]
+      insert_tile(rev, tile[0], tile[1], geom)
+      return 1
+    elsif same_geom
       return @conn.exec("INSERT INTO way_tiles
         SELECT way_id, version, #{rev['rev']}, changeset_id, tstamp, x, y, geom
         FROM way_tiles WHERE way_id = #{rev['way_id']} AND rev = #{rev['rev'].to_i - 1}").cmd_tuples
