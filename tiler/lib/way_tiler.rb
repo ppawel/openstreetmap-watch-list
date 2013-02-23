@@ -46,11 +46,13 @@ class WayTiler
       @@log.debug "  version #{rev['version']} rev #{rev['rev']}"
 
       diff_bbox = nil
+      same_geom = false
       if @prev and @prev['geom_obj']
-        diff_bbox = envelope_to_bbox(rev['geom_obj'].sym_difference(@prev['geom_obj']).envelope)
+        same_geom = rev['geom_obj'].equals?(@prev['geom_obj'])
+        diff_bbox = envelope_to_bbox(rev['geom_obj'].sym_difference(@prev['geom_obj']).envelope) if not same_geom
       end
 
-      count = create_rev_tiles(rev, diff_bbox)
+      count = create_rev_tiles(rev, diff_bbox, same_geom)
       @@log.debug "    Created #{count} tile(s)"
 
       @prev['geom_obj'] = nil if @prev
@@ -63,7 +65,7 @@ class WayTiler
 
   private
 
-  def create_rev_tiles(rev, diff_bbox)
+  def create_rev_tiles(rev, diff_bbox, same_geom)
     return -1 if has_tiles(rev)
 
     count = 0
@@ -73,16 +75,19 @@ class WayTiler
     tile_count = bbox_tile_count(@zoom, bbox)
     diff_tile_count = bbox_tile_count(@zoom, diff_bbox) if diff_bbox
 
-    @@log.debug "    tile_count = #{tile_count}, diff_tile_count = #{diff_tile_count}"
+    @@log.debug "    tile_count = #{tile_count}, diff_tile_count = #{diff_tile_count}, same_geom = #{same_geom}"
 
-    if diff_tile_count and (diff_tile_count < 0.5 * tile_count)
+    if same_geom
+      return @conn.exec("INSERT INTO way_tiles
+        SELECT way_id, version, #{rev['rev']}, changeset_id, tstamp, x, y, geom
+        FROM way_tiles WHERE way_id = #{rev['way_id']} AND rev = #{rev['rev'].to_i - 1}").cmd_tuples
+    elsif diff_tile_count and (diff_tile_count < 0.5 * tile_count)
       bounds = bbox_bound_tiles(@zoom, diff_bbox)
       tiles = bbox_to_tiles(@zoom, diff_bbox)
       count = @conn.exec("INSERT INTO way_tiles
         SELECT way_id, version, #{rev['rev']}, changeset_id, tstamp, x, y, geom
-        FROM way_tiles WHERE way_id = #{rev['way_id']} AND version = #{rev['version']} AND
-          rev = #{rev['rev'].to_i - 1} AND NOT (x >= #{bounds[0][0]} AND x <= #{bounds[1][0]} AND
-          y >= #{bounds[0][1]} AND y <= #{bounds[1][1]})").cmd_tuples
+        FROM way_tiles WHERE way_id = #{rev['way_id']} AND rev = #{rev['rev'].to_i - 1} AND
+        NOT (x >= #{bounds[0][0]} AND x <= #{bounds[1][0]} AND y >= #{bounds[0][1]} AND y <= #{bounds[1][1]})").cmd_tuples
     elsif tile_count < 64
       # Does not make sense to try to reduce small geoms.
       tiles = bbox_to_tiles(@zoom, bbox)

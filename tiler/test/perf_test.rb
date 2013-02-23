@@ -14,7 +14,7 @@ class TilerTest < Test::Unit::TestCase
     setup_changeset_test(10822980)
     assert_equal(48043, @tiles.size)
   end
-=begin
+
   def test_lots_of_tiles
     setup_changeset_test(8146963)
     assert_equal(2396, @tiles.size)
@@ -32,5 +32,4 @@ class TilerTest < Test::Unit::TestCase
   def test_memory
     setup_changeset_test(3519977)
   end
-=end
 end

@@ -166,4 +166,8 @@ class ChangesetTilerTest < Test::Unit::TestCase
   def test_nan
     setup_changeset_test(14863424)
   end
+
+  def test_collection
+    setup_changeset_test(14836474)
+  end
 end
