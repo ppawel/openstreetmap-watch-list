@@ -18,6 +18,11 @@ class WayRevisionsTest < Test::Unit::TestCase
     @conn.exec("SELECT OWL_CreateWayRevisions(w.id, true) FROM (SELECT DISTINCT id FROM ways) w")
   end
 
+  def test_14846964
+    setup_way_revisions_test(14846964)
+    assert_equal(8, @revisions[140391675].size)
+  end
+
   def setup_way_revisions_test(id)
     setup_db
     load_changeset(id)
