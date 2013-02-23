@@ -77,7 +77,7 @@ class WayTiler
 
     @@log.debug "    tile_count = #{tile_count}, diff_tile_count = #{diff_tile_count}, same_geom = #{same_geom}"
 
-    if tile_count
+    if tile_count == 1
       tile = bbox_to_tiles(@zoom, bbox).to_a[0]
       insert_tile(rev, tile[0], tile[1], geom)
       return 1

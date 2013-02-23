@@ -32,4 +32,8 @@ class TilerTest < Test::Unit::TestCase
   def test_memory
     setup_changeset_test(3519977)
   end
+
+  def test_oom
+    setup_changeset_test(14806915)
+  end
 end
