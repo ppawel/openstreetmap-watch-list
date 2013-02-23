@@ -170,13 +170,13 @@ class ChangesetTiler
           t.y,
           c.id AS change_id,
           t.geom AS geom,
-          CASE WHEN NOT ST_Equals(t.geom, prev_t.geom) THEN prev_t.geom ELSE NULL END AS prev_geom
+          CASE WHEN ST_AsText(t.geom) != ST_AsText(prev_t.geom) THEN prev_t.geom ELSE NULL END AS prev_geom
         FROM changes c
         INNER JOIN way_tiles t ON (t.way_id = c.el_id AND t.rev = c.el_rev)
         INNER JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1 AND
           t.x = prev_t.x AND t.y = prev_t.y)
         WHERE c.changeset_id = $1 AND c.el_type = 'W' AND
-          (NOT ST_Equals(t.geom, prev_t.geom) OR c.tags != c.prev_tags)
+          (ST_AsText(t.geom) != ST_AsText(prev_t.geom) OR c.tags != c.prev_tags)
 
           UNION
 
@@ -227,7 +227,6 @@ class ChangesetTiler
           INNER JOIN nodes n ON (n.id = c.el_id AND n.version = c.el_version)
           INNER JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.rev = n.rev - 1)
           WHERE c.changeset_id = $1 AND c.el_type = 'N') q
-        --WHERE q.t_x IS NOT NULL
 
           UNION
 
