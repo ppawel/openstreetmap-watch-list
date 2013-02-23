@@ -267,7 +267,7 @@ BEGIN
     NULL
   FROM way_revisions rev
   INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
-  WHERE rev.changeset_id = $1 AND rev.rev = 1;
+  WHERE rev.changeset_id = $1 AND rev.rev = 1 AND rev.version = 1;
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Created ways done (%)', clock_timestamp(), row_count;
@@ -398,6 +398,7 @@ DECLARE
   rev way_revisions%rowtype;
   rev_count int;
   created_count int;
+  last_changeset_id int;
 
 BEGIN
   IF NOT $2 AND EXISTS (SELECT 1 FROM way_revisions WHERE way_id = $1 LIMIT 1) THEN
@@ -414,6 +415,7 @@ BEGIN
   SET enable_mergejoin = off;
   SET enable_hashjoin = off;
 
+  last_changeset_id := NULL;
   created_count := 0;
   rev_count := (SELECT CASE WHEN last_rev.tstamp IS NULL THEN 1 ELSE last_rev.rev + 1 END);
 
@@ -423,24 +425,24 @@ BEGIN
     WHERE w.id = $1),
 
   revs AS (
-    SELECT n.tstamp, n.changeset_id, n.user_id, array_agg(n.id) AS nodes--, wv.version, wv.visible, wv.nodes
+    SELECT date_trunc('second', n.tstamp) AS tstamp, n.changeset_id, n.user_id, array_agg(n.id) AS nodes--, wv.version, wv.visible, wv.nodes
     FROM nodes n
     INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
     WHERE n.id IN (SELECT unnest(nodes) FROM way_versions) AND NOT n.geom = n2.geom AND n.visible
       AND (last_rev.tstamp IS NULL OR n.tstamp > last_rev.tstamp)
       AND n.tstamp >= (SELECT MIN(tstamp) FROM way_versions)
-    GROUP BY n.tstamp, n.changeset_id, n.user_id, n.id)--, wv.version, wv.visible, wv.nodes)
+    GROUP BY date_trunc('second', n.tstamp), n.changeset_id, n.user_id)--, wv.version, wv.visible, wv.nodes)
 
   SELECT
     $1,
     q.version,
     row_number() OVER (ORDER BY q.tstamp)::int,
     q.visible,
-    q.user_id::int,
+    q.user_id::bigint,
     q.tstamp,
-    q.changeset_id::int,
+    q.changeset_id::bigint,
     q.type,
-    q.nodes
+    q.nodes::bigint[]
   FROM
     (SELECT
       'W' AS type,
@@ -460,43 +462,60 @@ BEGIN
       revs.changeset_id,
       true,--visible,
       revs.nodes
-    FROM revs) q
+    FROM revs
+      UNION
+    SELECT
+      'END' AS type,
+      NULL,--version,
+      -1,
+      NULL,
+      -1,
+      true,--visible,
+      ARRAY[]::bigint[]) q
   WHERE last_rev.tstamp IS NULL OR q.tstamp > last_rev.tstamp
-  ORDER BY q.tstamp, q.type DESC) LOOP
+  ORDER BY q.tstamp NULLS LAST, q.type DESC) LOOP
     --RAISE NOTICE '%', row;
-    IF row.type = 'W' THEN
+
+    IF last_changeset_id IS NOT NULL AND row.changeset_id != last_changeset_id THEN
       IF last_node.tstamp IS NOT NULL THEN
         rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id);
         rev_count := rev_count + 1;
-        SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_node;
         created_count := created_count + 1;
+        SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
         RETURN NEXT rev;
-      END IF;
-
-      last_way := row;
-      rev := ($1,row.version,rev_count,row.visible,row.user_id,row.tstamp,row.changeset_id);
-      rev_count := rev_count + 1;
-      created_count := created_count + 1;
-      RETURN NEXT rev;
-    END IF;
-
-    IF row.type = 'N' AND last_way.nodes && row.nodes AND row.tstamp > last_way.tstamp THEN
-      IF last_node.tstamp IS NOT NULL AND (row.tstamp - INTERVAL '5 seconds' > last_node.tstamp OR
-          last_node.changeset_id != row.changeset_id) THEN
-        rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id);
+      ELSIF last_way.changeset_id = last_changeset_id THEN
+        rev := ($1,last_way.version,rev_count,last_way.visible,last_way.user_id,last_way.tstamp,last_way.changeset_id);
         rev_count := rev_count + 1;
         created_count := created_count + 1;
         RETURN NEXT rev;
       END IF;
-      last_node := row;
-    END IF;
-  END LOOP;
 
-  IF last_node.tstamp IS NOT NULL THEN
-    rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id);
-    created_count := created_count + 1;
-    RETURN NEXT rev;
-  END IF;
+      IF row.type = 'W' THEN
+        last_way := row;
+      ELSE
+        IF last_way.nodes && row.nodes THEN
+          last_node := row;
+        END IF;
+      END IF;
+    ELSE
+      IF row.type = 'W' THEN
+        IF last_node.tstamp IS NOT NULL THEN
+          rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id);
+          rev_count := rev_count + 1;
+          created_count := created_count + 1;
+          RETURN NEXT rev;
+        END IF;
+        SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
+        last_way := row;
+      ELSE
+        IF last_way.nodes && row.nodes THEN
+          last_node := row;
+        END IF;
+      END IF;
+    END IF;
+
+    last_changeset_id := row.changeset_id;
+  END LOOP;
 
   RAISE NOTICE '% --   Created % revision(s)', clock_timestamp(), created_count;
 END;

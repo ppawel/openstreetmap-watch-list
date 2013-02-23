@@ -48,14 +48,21 @@ module TestCommon
   def verify_way_revisions
     @conn.exec("SELECT * FROM way_revisions ORDER BY way_id, rev").to_a.each_cons(2) do |rev1, rev2|
       next if rev1['way_id'] != rev2['way_id']
-      #if rev2['way_id'].to_i == 14797290
-      #  p rev1
-      #  p rev2
-      #end
+      if rev2['way_id'].to_i == 30644353
+        p rev1
+        p rev2
+      end
       assert(rev1['version'].to_i <= rev2['version'].to_i, "Wrong revision tstamp:\n#{rev1}\n#{rev2}")
       assert(rev1['revision'].to_i <= rev2['revision'].to_i, "Wrong revision order:\n#{rev1}\n#{rev2}")
       assert(rev1['tstamp'] < rev2['tstamp'], "Newer revision has older or equal timestamp:\n#{rev1}\n#{rev2}")
     end
+
+    revs =  @conn.exec("SELECT way_id, changeset_id, version, COUNT(*) AS count
+        FROM way_revisions rev
+        GROUP BY way_id, changeset_id, version
+        HAVING COUNT(*) > 1").to_a
+
+    assert_equal(0, revs.size, "There are too many revisions for some ways: #{revs}")
   end
 
   def verify_changes(changeset_id)
