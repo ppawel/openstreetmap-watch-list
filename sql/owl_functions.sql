@@ -391,6 +391,7 @@ $$ LANGUAGE plpgsql;
 ---
 CREATE OR REPLACE FUNCTION OWL_GenerateWayRevisions(bigint, boolean) RETURNS SETOF way_revisions AS $$
 DECLARE
+  node_row record;
   row record;
   last_node record;
   last_way record;
@@ -399,6 +400,7 @@ DECLARE
   rev_count int;
   created_count int;
   last_changeset_id int;
+  go boolean;
 
 BEGIN
   IF NOT $2 AND EXISTS (SELECT 1 FROM way_revisions WHERE way_id = $1 LIMIT 1) THEN
@@ -406,6 +408,7 @@ BEGIN
   END IF;
 
   SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_node;
+  --SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_way;
   SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO last_way;
 
   RAISE NOTICE '% -- Generating revisions for way % [last = %]', clock_timestamp(), $1, last_rev.tstamp;
@@ -418,6 +421,12 @@ BEGIN
   last_changeset_id := NULL;
   created_count := 0;
   rev_count := (SELECT CASE WHEN last_rev.tstamp IS NULL THEN 1 ELSE last_rev.rev + 1 END);
+  go := false;
+
+  CREATE TEMPORARY TABLE node_geom (
+    id bigint PRIMARY KEY,
+    geom geometry(GEOMETRY, 4326)
+  );
 
   FOR row IN (WITH way_versions AS (
     SELECT w.tstamp, w.visible, w.version, w.changeset_id, w.user_id, w.nodes
@@ -425,12 +434,13 @@ BEGIN
     WHERE w.id = $1),
 
   revs AS (
-    SELECT date_trunc('second', n.tstamp) AS tstamp, n.changeset_id, n.user_id, array_agg(n.id) AS nodes--, wv.version, wv.visible, wv.nodes
+    SELECT date_trunc('second', n.tstamp) AS tstamp, n.changeset_id, n.user_id, array_agg(n.id) AS nodes,
+      array_agg(n.geom) AS geom
     FROM nodes n
     INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
-    WHERE n.id IN (SELECT unnest(nodes) FROM way_versions) AND NOT n.geom = n2.geom AND n.visible
+    WHERE n.id IN (SELECT unnest(nodes) FROM way_versions) AND n.visible --AND NOT n.geom = n2.geom AND n.visible
       AND (last_rev.tstamp IS NULL OR n.tstamp > last_rev.tstamp)
-      AND n.tstamp >= (SELECT MIN(tstamp) FROM way_versions)
+      --AND n.tstamp >= (SELECT MIN(tstamp) FROM way_versions)
     GROUP BY date_trunc('second', n.tstamp), n.changeset_id, n.user_id)--, wv.version, wv.visible, wv.nodes)
 
   SELECT
@@ -442,7 +452,8 @@ BEGIN
     q.tstamp,
     q.changeset_id::bigint,
     q.type,
-    q.nodes::bigint[]
+    q.nodes::bigint[],
+    q.geom
   FROM
     (SELECT
       'W' AS type,
@@ -451,7 +462,8 @@ BEGIN
       tstamp,
       changeset_id,
       visible,
-      nodes
+      nodes,
+      NULL AS geom
     FROM way_versions
       UNION
     SELECT
@@ -461,7 +473,8 @@ BEGIN
       revs.tstamp,
       revs.changeset_id,
       true,--visible,
-      revs.nodes
+      revs.nodes,
+      revs.geom
     FROM revs
       UNION
     SELECT
@@ -471,10 +484,30 @@ BEGIN
       NULL,
       -1,
       true,--visible,
-      ARRAY[]::bigint[]) q
+      ARRAY[]::bigint[],
+      NULL AS geom) q
   WHERE last_rev.tstamp IS NULL OR q.tstamp > last_rev.tstamp
   ORDER BY q.tstamp NULLS LAST, q.type DESC) LOOP
     --RAISE NOTICE '%', row;
+
+    IF row.type = 'N' THEN
+      FOR node_row IN (SELECT x.id, q.geom FROM (SELECT row_number() OVER () AS seq, id FROM unnest(row.nodes) id) x
+        INNER JOIN (SELECT row_number() OVER () AS seq, n AS geom FROM unnest(row.geom) n) q ON (q.seq = x.seq))
+      LOOP
+        --RAISE NOTICE '%', node_row;
+        IF EXISTS (SELECT 1 FROM node_geom n WHERE n.id = node_row.id) THEN
+          UPDATE node_geom SET geom = node_row.geom WHERE id = node_row.id;
+        ELSE
+          INSERT INTO node_geom VALUES (node_row.id, node_row.geom);
+        END IF;
+      END LOOP;
+    ELSE
+      go := true;
+    END IF;
+
+    IF NOT go THEN
+      CONTINUE;
+    END IF;
 
     IF last_changeset_id IS NOT NULL AND row.changeset_id != last_changeset_id THEN
       IF last_node.tstamp IS NOT NULL THEN
@@ -516,6 +549,8 @@ BEGIN
 
     last_changeset_id := row.changeset_id;
   END LOOP;
+
+  DROP TABLE node_geom;
 
   RAISE NOTICE '% --   Created % revision(s)', clock_timestamp(), created_count;
 END;
