@@ -148,7 +148,7 @@ class WayTiler
         END AS geom
       FROM (
         SELECT
-          OWL_MakeLine(w.nodes, rev.tstamp) AS line,
+          rev.geom AS line, --OWL_MakeLine(w.nodes, rev.tstamp) AS line,
           rev.*
         FROM way_revisions rev
         LEFT JOIN way_revisions prev ON (prev.way_id = rev.way_id AND prev.rev = rev.rev + 1)

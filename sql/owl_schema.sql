@@ -73,8 +73,8 @@ CREATE TABLE way_revisions (
   visible boolean NOT NULL,
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
-  changeset_id bigint NOT NULL
-  --geom geometry(GEOMETRY, 4326) NOT NULL
+  changeset_id bigint NOT NULL,
+  geom geometry(GEOMETRY, 4326)
 );
 
 -- Create a table for relations.

@@ -66,6 +66,28 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
+CREATE OR REPLACE FUNCTION OWL_MakeLineFromTmpNodes(bigint[]) RETURNS geometry(GEOMETRY, 4326) AS $$
+DECLARE
+  way_geom geometry(GEOMETRY, 4326);
+
+BEGIN
+  way_geom := (SELECT ST_MakeLine(q.geom ORDER BY x.seq)
+    FROM (SELECT row_number() OVER () AS seq, n AS node_id FROM unnest($1) n) x
+    INNER JOIN (
+      SELECT id, geom
+      FROM _tmp_nodes n
+      WHERE n.id IN (SELECT unnest($1))) q ON (q.id = x.node_id));
+
+  -- Now check if the linestring has exactly the right number of points.
+  IF ST_NumPoints(way_geom) != array_length($1, 1) THEN
+    --raise notice '--------------- %, %', $1, (select array_agg(id) from _tmp_nodes);
+    RETURN NULL;
+  END IF;
+
+  RETURN ST_MakeValid(way_geom);
+END;
+$$ LANGUAGE plpgsql VOLATILE;
+
 --
 -- OWL_MakeMinimalLine
 --
@@ -396,17 +418,20 @@ DECLARE
   last_node record;
   last_way record;
   last_rev way_revisions%rowtype;
+  last_inserted_rev way_revisions%rowtype;
   rev way_revisions%rowtype;
   rev_count int;
   created_count int;
   last_changeset_id int;
   go boolean;
+  rev_geom geometry(GEOMETRY, 4326);
 
 BEGIN
   IF NOT $2 AND EXISTS (SELECT 1 FROM way_revisions WHERE way_id = $1 LIMIT 1) THEN
     RETURN;
   END IF;
 
+  SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_inserted_rev;
   SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_node;
   --SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_way;
   SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO last_way;
@@ -423,7 +448,7 @@ BEGIN
   rev_count := (SELECT CASE WHEN last_rev.tstamp IS NULL THEN 1 ELSE last_rev.rev + 1 END);
   go := false;
 
-  CREATE TEMPORARY TABLE node_geom (
+  CREATE TEMPORARY TABLE _tmp_nodes (
     id bigint PRIMARY KEY,
     geom geometry(GEOMETRY, 4326)
   );
@@ -437,7 +462,7 @@ BEGIN
     SELECT date_trunc('second', n.tstamp) AS tstamp, n.changeset_id, n.user_id, array_agg(n.id) AS nodes,
       array_agg(n.geom) AS geom
     FROM nodes n
-    INNER JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
+    LEFT JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
     WHERE n.id IN (SELECT unnest(nodes) FROM way_versions) AND n.visible --AND NOT n.geom = n2.geom AND n.visible
       AND (last_rev.tstamp IS NULL OR n.tstamp > last_rev.tstamp)
       --AND n.tstamp >= (SELECT MIN(tstamp) FROM way_versions)
@@ -495,10 +520,10 @@ BEGIN
         INNER JOIN (SELECT row_number() OVER () AS seq, n AS geom FROM unnest(row.geom) n) q ON (q.seq = x.seq))
       LOOP
         --RAISE NOTICE '%', node_row;
-        IF EXISTS (SELECT 1 FROM node_geom n WHERE n.id = node_row.id) THEN
-          UPDATE node_geom SET geom = node_row.geom WHERE id = node_row.id;
+        IF EXISTS (SELECT 1 FROM _tmp_nodes n WHERE n.id = node_row.id) THEN
+          UPDATE _tmp_nodes SET geom = node_row.geom WHERE id = node_row.id;
         ELSE
-          INSERT INTO node_geom VALUES (node_row.id, node_row.geom);
+          INSERT INTO _tmp_nodes VALUES (node_row.id, node_row.geom);
         END IF;
       END LOOP;
     ELSE
@@ -511,16 +536,21 @@ BEGIN
 
     IF last_changeset_id IS NOT NULL AND row.changeset_id != last_changeset_id THEN
       IF last_node.tstamp IS NOT NULL THEN
-        rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id);
-        rev_count := rev_count + 1;
-        created_count := created_count + 1;
-        SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
-        RETURN NEXT rev;
+        rev_geom := OWL_MakeLineFromTmpNodes(last_way.nodes);
+        IF rev_geom IS NULL OR (rev_geom IS NOT NULL AND rev.geom IS NULL) OR (rev.geom IS NOT NULL AND rev_geom IS NOT NULL AND NOT rev.geom = rev_geom) THEN
+          rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id,rev_geom);
+          rev_count := rev_count + 1;
+          created_count := created_count + 1;
+          SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
+          RETURN NEXT rev;
+          --raise notice 'added 1 %', rev;
+        END IF;
       ELSIF last_way.changeset_id = last_changeset_id THEN
-        rev := ($1,last_way.version,rev_count,last_way.visible,last_way.user_id,last_way.tstamp,last_way.changeset_id);
+        rev := ($1,last_way.version,rev_count,last_way.visible,last_way.user_id,last_way.tstamp,last_way.changeset_id,OWL_MakeLineFromTmpNodes(last_way.nodes));
         rev_count := rev_count + 1;
         created_count := created_count + 1;
         RETURN NEXT rev;
+        --raise notice 'added 2 %', rev;
       END IF;
 
       IF row.type = 'W' THEN
@@ -533,10 +563,14 @@ BEGIN
     ELSE
       IF row.type = 'W' THEN
         IF last_node.tstamp IS NOT NULL THEN
-          rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id);
-          rev_count := rev_count + 1;
-          created_count := created_count + 1;
-          RETURN NEXT rev;
+          rev_geom := OWL_MakeLineFromTmpNodes(last_way.nodes);
+          IF rev_geom IS NULL OR (rev_geom IS NOT NULL AND rev.geom IS NULL) OR (rev.geom IS NOT NULL AND rev_geom IS NOT NULL AND NOT rev.geom = rev_geom) THEN
+            rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id,rev_geom);
+            rev_count := rev_count + 1;
+            created_count := created_count + 1;
+            RETURN NEXT rev;
+            --raise notice 'added 3 %', rev;
+          END IF;
         END IF;
         SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
         last_way := row;
@@ -550,7 +584,7 @@ BEGIN
     last_changeset_id := row.changeset_id;
   END LOOP;
 
-  DROP TABLE node_geom;
+  DROP TABLE _tmp_nodes;
 
   RAISE NOTICE '% --   Created % revision(s)', clock_timestamp(), created_count;
 END;

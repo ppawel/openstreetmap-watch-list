@@ -46,23 +46,36 @@ module TestCommon
   end
 
   def verify_way_revisions
-    @conn.exec("SELECT * FROM way_revisions ORDER BY way_id, rev").to_a.each_cons(2) do |rev1, rev2|
-      next if rev1['way_id'] != rev2['way_id']
-      if rev2['way_id'].to_i == 30644353
-        p rev1
-        p rev2
-      end
-      assert(rev1['version'].to_i <= rev2['version'].to_i, "Wrong revision tstamp:\n#{rev1}\n#{rev2}")
-      assert(rev1['revision'].to_i <= rev2['revision'].to_i, "Wrong revision order:\n#{rev1}\n#{rev2}")
-      assert(rev1['tstamp'] < rev2['tstamp'], "Newer revision has older or equal timestamp:\n#{rev1}\n#{rev2}")
-    end
-
-    revs =  @conn.exec("SELECT way_id, changeset_id, version, COUNT(*) AS count
+    duplicate_revs =  @conn.exec("SELECT way_id, changeset_id, version, COUNT(*) AS count
         FROM way_revisions rev
         GROUP BY way_id, changeset_id, version
         HAVING COUNT(*) > 1").to_a
 
-    assert_equal(0, revs.size, "There are too many revisions for some ways: #{revs}")
+    assert_equal(0, duplicate_revs.size, "There are too many revisions for some ways: #{duplicate_revs}")
+
+    @revisions = {}
+    for rev in @conn.exec("SELECT rev.*, w.tags
+        FROM way_revisions rev
+        INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
+        ORDER BY way_id, rev.version, rev.rev").to_a
+      @revisions[rev['way_id'].to_i] ||= []
+      @revisions[rev['way_id'].to_i] << rev
+    end
+
+    for way_subs in @revisions.values
+      way_subs.each_cons(2) do |rev1, rev2|
+        next if rev1['way_id'] != rev2['way_id']
+        #assert((rev1['visible'] == 'f' or !rev1['geom'].nil?), "Visible revision geometry should not be null: #{rev1}")
+        assert(rev1['version'].to_i <= rev2['version'].to_i, "Wrong revision tstamp:\n#{rev1}\n#{rev2}")
+        assert(rev1['revision'].to_i <= rev2['revision'].to_i, "Wrong revision order:\n#{rev1}\n#{rev2}")
+        assert(rev1['tstamp'] < rev2['tstamp'], "Newer revision has older or equal timestamp:\n#{rev1}\n#{rev2}")
+        assert((
+          (rev1['version'] != rev2['version']) or
+          (rev1['nodes'] != rev2['nodes']) or
+          (rev1['tags'] != rev2['tags']) or
+          (rev1['geom'] != rev2['geom'] or rev1['geom'].nil?)), "Revisions are the same:\n#{rev1}\n#{rev2}")
+      end
+    end
   end
 
   def verify_changes(changeset_id)
