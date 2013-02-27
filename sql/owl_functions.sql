@@ -419,6 +419,7 @@ DECLARE
   last_way record;
   last_rev way_revisions%rowtype;
   last_inserted_rev way_revisions%rowtype;
+  last_row record;
   rev way_revisions%rowtype;
   rev_count int;
   created_count int;
@@ -433,8 +434,10 @@ BEGIN
 
   SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_inserted_rev;
   SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_node;
+  SELECT NULL::bigint[] AS nodes, NULL::int AS changeset_id INTO last_way;
+  SELECT NULL::text AS type INTO last_row;
   --SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_way;
-  SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO last_way;
+  --SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO last_way;
 
   RAISE NOTICE '% -- Generating revisions for way % [last = %]', clock_timestamp(), $1, last_rev.tstamp;
 
@@ -512,7 +515,7 @@ BEGIN
       ARRAY[]::bigint[],
       NULL AS geom) q
   WHERE last_rev.tstamp IS NULL OR q.tstamp > last_rev.tstamp
-  ORDER BY q.tstamp NULLS LAST, q.type DESC) LOOP
+  ORDER BY q.tstamp NULLS LAST, q.type) LOOP
     --RAISE NOTICE '%', row;
 
     IF row.type = 'N' THEN
@@ -530,21 +533,24 @@ BEGIN
       go := true;
     END IF;
 
-    IF NOT go THEN
+    IF (row.type != 'END') AND row.visible AND ((NOT go) OR (last_way.nodes IS NOT NULL AND NOT last_way.nodes && row.nodes)) THEN
       CONTINUE;
     END IF;
 
     IF last_changeset_id IS NOT NULL AND row.changeset_id != last_changeset_id THEN
       IF last_node.tstamp IS NOT NULL THEN
         rev_geom := OWL_MakeLineFromTmpNodes(last_way.nodes);
-        IF rev_geom IS NULL OR (rev_geom IS NOT NULL AND rev.geom IS NULL) OR (rev.geom IS NOT NULL AND rev_geom IS NOT NULL AND NOT rev.geom = rev_geom) THEN
+
+        IF rev.tstamp IS NULL OR last_way.version != rev.version OR (NOT rev.geom = rev_geom) THEN
           rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id,rev_geom);
           rev_count := rev_count + 1;
           created_count := created_count + 1;
-          SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
           RETURN NEXT rev;
           --raise notice 'added 1 %', rev;
+        --ELSE
+          --raise notice 'not adding 1 % %', rev_geom, rev.geom;
         END IF;
+        SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
       ELSIF last_way.changeset_id = last_changeset_id THEN
         rev := ($1,last_way.version,rev_count,last_way.visible,last_way.user_id,last_way.tstamp,last_way.changeset_id,OWL_MakeLineFromTmpNodes(last_way.nodes));
         rev_count := rev_count + 1;
@@ -552,33 +558,38 @@ BEGIN
         RETURN NEXT rev;
         --raise notice 'added 2 %', rev;
       END IF;
-
-      IF row.type = 'W' THEN
-        last_way := row;
-      ELSE
-        IF last_way.nodes && row.nodes THEN
-          last_node := row;
-        END IF;
-      END IF;
     ELSE
       IF row.type = 'W' THEN
         IF last_node.tstamp IS NOT NULL THEN
           rev_geom := OWL_MakeLineFromTmpNodes(last_way.nodes);
-          IF rev_geom IS NULL OR (rev_geom IS NOT NULL AND rev.geom IS NULL) OR (rev.geom IS NOT NULL AND rev_geom IS NOT NULL AND NOT rev.geom = rev_geom) THEN
+          IF rev.tstamp IS NULL OR last_way.version != rev.version OR (NOT rev.geom = rev_geom) THEN
             rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id,rev_geom);
             rev_count := rev_count + 1;
             created_count := created_count + 1;
             RETURN NEXT rev;
             --raise notice 'added 3 %', rev;
+          ELSE
+            --raise notice 'not adding 3 % %', rev_geom, rev.geom;
           END IF;
         END IF;
         SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
-        last_way := row;
-      ELSE
-        IF last_way.nodes && row.nodes THEN
-          last_node := row;
+
+        IF last_row.type IS NOT NULL AND last_row.type = 'W' THEN
+          rev := ($1,last_row.version,rev_count,last_row.visible,last_row.user_id,last_row.tstamp,last_row.changeset_id,OWL_MakeLineFromTmpNodes(last_row.nodes));
+          rev_count := rev_count + 1;
+          created_count := created_count + 1;
+          RETURN NEXT rev;
+          --raise notice 'added 4 %', rev;
         END IF;
       END IF;
+    END IF;
+
+    IF row.type = 'W' THEN
+      last_way := row;
+      last_row := row;
+    ELSE
+      last_node := row;
+      last_row := row;
     END IF;
 
     last_changeset_id := row.changeset_id;
