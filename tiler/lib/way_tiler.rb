@@ -85,7 +85,7 @@ class WayTiler
       return @conn.exec("INSERT INTO way_tiles
         SELECT way_id, version, #{rev['rev']}, changeset_id, tstamp, x, y, geom
         FROM way_tiles WHERE way_id = #{rev['way_id']} AND rev = #{rev['rev'].to_i - 1}").cmd_tuples
-    elsif diff_tile_count and (diff_tile_count < 0.5 * tile_count)
+    elsif diff_tile_count and (diff_tile_count < 0.90 * tile_count)
       bounds = bbox_bound_tiles(@zoom, diff_bbox)
       tiles = bbox_to_tiles(@zoom, diff_bbox)
       count = @conn.exec("INSERT INTO way_tiles
