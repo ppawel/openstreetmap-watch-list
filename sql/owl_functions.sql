@@ -606,3 +606,17 @@ BEGIN
   INSERT INTO way_revisions SELECT * FROM OWL_GenerateWayRevisions($1);
 END;
 $$ LANGUAGE plpgsql;
+
+---
+--- OWL_UpdateWayRevisions
+---
+CREATE OR REPLACE FUNCTION OWL_UpdateWayRevisions(bigint) RETURNS void AS $$
+DECLARE
+  last_rev int;
+BEGIN
+  SELECT MAX(rev) FROM way_revisions WHERE way_id = $1 INTO last_rev;
+  INSERT INTO way_revisions
+  SELECT * FROM OWL_GenerateWayRevisions($1) r
+  WHERE last_rev IS NULL OR r.rev > last_rev;
+END;
+$$ LANGUAGE plpgsql;

@@ -65,9 +65,8 @@ class ChangesetTiler
 
     @conn.transaction do |c|
       @@log.debug "Generating way tiles..."
-
       for row in @conn.exec_prepared('select_way_ids', [changeset_id]).to_a
-        @way_tiler.create_way_tiles(row['el_id'].to_i, changeset_id, false)
+        @way_tiler.create_way_tiles(row['el_id'].to_i, nil, false)
       end
     end
 
@@ -89,7 +88,7 @@ class ChangesetTiler
   end
 
   def ensure_way_revisions(changeset_id)
-    @conn.exec("SELECT OWL_CreateWayRevisions(q.id, false) FROM (
+    @conn.exec("SELECT OWL_UpdateWayRevisions(q.id) FROM (
       SELECT DISTINCT id FROM ways WHERE changeset_id = #{changeset_id} UNION
       SELECT DISTINCT id FROM ways WHERE nodes && (SELECT array_agg(id) FROM nodes WHERE changeset_id = #{changeset_id})) q")
   end

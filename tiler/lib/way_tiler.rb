@@ -135,7 +135,7 @@ class WayTiler
   end
 
   def ensure_way_revisions(way_id)
-    @conn.exec("SELECT OWL_CreateWayRevisions(#{way_id}, false)")
+    @conn.exec("SELECT OWL_UpdateWayRevisions(#{way_id})")
   end
 
   def setup_prepared_statements
