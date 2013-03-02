@@ -411,14 +411,12 @@ $$ LANGUAGE plpgsql;
 ---
 --- OWL_GenerateWayRevisions
 ---
-CREATE OR REPLACE FUNCTION OWL_GenerateWayRevisions(bigint, boolean) RETURNS SETOF way_revisions AS $$
+CREATE OR REPLACE FUNCTION OWL_GenerateWayRevisions(bigint) RETURNS SETOF way_revisions AS $$
 DECLARE
   node_row record;
   row record;
   last_node record;
   last_way record;
-  last_rev way_revisions%rowtype;
-  last_inserted_rev way_revisions%rowtype;
   last_row record;
   rev way_revisions%rowtype;
   rev_count int;
@@ -428,27 +426,18 @@ DECLARE
   rev_geom geometry(GEOMETRY, 4326);
 
 BEGIN
-  IF NOT $2 AND EXISTS (SELECT 1 FROM way_revisions WHERE way_id = $1 LIMIT 1) THEN
-    RETURN;
-  END IF;
-
-  SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_inserted_rev;
-  SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_node;
-  SELECT NULL::bigint[] AS nodes, NULL::int AS changeset_id INTO last_way;
+  SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
+  SELECT NULL::bigint[] AS nodes INTO last_way;
   SELECT NULL::text AS type INTO last_row;
-  --SELECT NULL::timestamp without time zone AS tstamp, NULL::int AS changeset_id INTO last_way;
-  --SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO last_way;
 
-  RAISE NOTICE '% -- Generating revisions for way % [last = %]', clock_timestamp(), $1, last_rev.tstamp;
-
-  SELECT * FROM way_revisions WHERE way_id = $1 ORDER BY rev DESC LIMIT 1 INTO last_rev;
+  RAISE NOTICE '% -- Generating revisions for way %', clock_timestamp(), $1;
 
   SET enable_mergejoin = off;
   SET enable_hashjoin = off;
 
   last_changeset_id := NULL;
   created_count := 0;
-  rev_count := (SELECT CASE WHEN last_rev.tstamp IS NULL THEN 1 ELSE last_rev.rev + 1 END);
+  rev_count := 1;
   go := false;
 
   CREATE TEMPORARY TABLE _tmp_nodes (
@@ -466,10 +455,8 @@ BEGIN
       array_agg(n.geom) AS geom
     FROM nodes n
     LEFT JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
-    WHERE n.id IN (SELECT unnest(nodes) FROM way_versions) AND n.visible --AND NOT n.geom = n2.geom AND n.visible
-      AND (last_rev.tstamp IS NULL OR n.tstamp > last_rev.tstamp)
-      --AND n.tstamp >= (SELECT MIN(tstamp) FROM way_versions)
-    GROUP BY date_trunc('second', n.tstamp), n.changeset_id, n.user_id)--, wv.version, wv.visible, wv.nodes)
+    WHERE n.id IN (SELECT unnest(nodes) FROM way_versions) AND n.visible
+    GROUP BY date_trunc('second', n.tstamp), n.changeset_id, n.user_id)
 
   SELECT
     $1,
@@ -514,29 +501,30 @@ BEGIN
       true,--visible,
       ARRAY[]::bigint[],
       NULL AS geom) q
-  WHERE last_rev.tstamp IS NULL OR q.tstamp > last_rev.tstamp
   ORDER BY q.tstamp NULLS LAST, q.type) LOOP
     --RAISE NOTICE '%', row;
 
-    IF row.type = 'N' THEN
-      FOR node_row IN (SELECT x.id, q.geom FROM (SELECT row_number() OVER () AS seq, id FROM unnest(row.nodes) id) x
-        INNER JOIN (SELECT row_number() OVER () AS seq, n AS geom FROM unnest(row.geom) n) q ON (q.seq = x.seq))
-      LOOP
-        --RAISE NOTICE '%', node_row;
-        IF EXISTS (SELECT 1 FROM _tmp_nodes n WHERE n.id = node_row.id) THEN
-          UPDATE _tmp_nodes SET geom = node_row.geom WHERE id = node_row.id;
-        ELSE
-          INSERT INTO _tmp_nodes VALUES (node_row.id, node_row.geom);
-        END IF;
-      END LOOP;
-    ELSE
-      go := true;
+    IF NOT go THEN
+      IF row.type = 'N' THEN
+        FOR node_row IN (SELECT x.id, q.geom FROM (SELECT row_number() OVER () AS seq, id FROM unnest(row.nodes) id) x
+          INNER JOIN (SELECT row_number() OVER () AS seq, n AS geom FROM unnest(row.geom) n) q ON (q.seq = x.seq))
+        LOOP
+          IF EXISTS (SELECT 1 FROM _tmp_nodes n WHERE n.id = node_row.id) THEN
+            UPDATE _tmp_nodes SET geom = node_row.geom WHERE id = node_row.id;
+          ELSE
+            INSERT INTO _tmp_nodes VALUES (node_row.id, node_row.geom);
+          END IF;
+        END LOOP;
+      ELSE
+        go := true;
+      END IF;
     END IF;
 
-    IF (row.type != 'END') AND row.visible AND ((NOT go) OR (last_way.nodes IS NOT NULL AND NOT last_way.nodes && row.nodes)) THEN
+    IF (row.type != 'END') AND row.visible AND ((NOT go)) THEN
       CONTINUE;
     END IF;
 
+    IF row.type IN ('END', 'W') OR (row.type = 'N' AND last_way.nodes && row.nodes) THEN
     IF last_changeset_id IS NOT NULL AND row.changeset_id != last_changeset_id THEN
       IF last_node.tstamp IS NOT NULL THEN
         rev_geom := OWL_MakeLineFromTmpNodes(last_way.nodes);
@@ -546,9 +534,6 @@ BEGIN
           rev_count := rev_count + 1;
           created_count := created_count + 1;
           RETURN NEXT rev;
-          --raise notice 'added 1 %', rev;
-        --ELSE
-          --raise notice 'not adding 1 % %', rev_geom, rev.geom;
         END IF;
         SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
       ELSIF last_way.changeset_id = last_changeset_id THEN
@@ -556,7 +541,6 @@ BEGIN
         rev_count := rev_count + 1;
         created_count := created_count + 1;
         RETURN NEXT rev;
-        --raise notice 'added 2 %', rev;
       END IF;
     ELSE
       IF row.type = 'W' THEN
@@ -567,9 +551,6 @@ BEGIN
             rev_count := rev_count + 1;
             created_count := created_count + 1;
             RETURN NEXT rev;
-            --raise notice 'added 3 %', rev;
-          ELSE
-            --raise notice 'not adding 3 % %', rev_geom, rev.geom;
           END IF;
         END IF;
         SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
@@ -579,7 +560,6 @@ BEGIN
           rev_count := rev_count + 1;
           created_count := created_count + 1;
           RETURN NEXT rev;
-          --raise notice 'added 4 %', rev;
         END IF;
       END IF;
     END IF;
@@ -593,6 +573,20 @@ BEGIN
     END IF;
 
     last_changeset_id := row.changeset_id;
+
+    END IF;
+
+    IF row.type = 'N' THEN
+      FOR node_row IN (SELECT x.id, q.geom FROM (SELECT row_number() OVER () AS seq, id FROM unnest(row.nodes) id) x
+        INNER JOIN (SELECT row_number() OVER () AS seq, n AS geom FROM unnest(row.geom) n) q ON (q.seq = x.seq))
+      LOOP
+        IF EXISTS (SELECT 1 FROM _tmp_nodes n WHERE n.id = node_row.id) THEN
+          UPDATE _tmp_nodes SET geom = node_row.geom WHERE id = node_row.id;
+        ELSE
+          INSERT INTO _tmp_nodes VALUES (node_row.id, node_row.geom);
+        END IF;
+      END LOOP;
+    END IF;
   END LOOP;
 
   DROP TABLE _tmp_nodes;
@@ -605,5 +599,10 @@ $$ LANGUAGE plpgsql;
 --- OWL_CreateWayRevisions
 ---
 CREATE OR REPLACE FUNCTION OWL_CreateWayRevisions(bigint, boolean) RETURNS void AS $$
-  INSERT INTO way_revisions SELECT * FROM OWL_GenerateWayRevisions($1, $2)
-$$ LANGUAGE sql;
+BEGIN
+  IF $2 AND EXISTS (SELECT 1 FROM way_revisions WHERE way_id = $1 LIMIT 1) THEN
+    RETURN;
+  END IF;
+  INSERT INTO way_revisions SELECT * FROM OWL_GenerateWayRevisions($1);
+END;
+$$ LANGUAGE plpgsql;
