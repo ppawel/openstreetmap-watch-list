@@ -77,12 +77,7 @@ DECLARE
   way_geom geometry(GEOMETRY, 4326);
 
 BEGIN
-  way_geom := (SELECT ST_MakeLine(q.geom ORDER BY x.seq)
-    FROM (SELECT row_number() OVER () AS seq, n AS node_id FROM unnest($1) n) x
-    INNER JOIN (
-      SELECT id, geom
-      FROM _tmp_nodes n
-      WHERE n.id IN (SELECT unnest($1))) q ON (q.id = x.node_id));
+  way_geom := (SELECT ST_MakeLine(geom ORDER BY seq) FROM _tmp_current_nodes);
 
   -- Now check if the linestring has exactly the right number of points.
   IF ST_NumPoints(way_geom) != array_length($1, 1) THEN
@@ -447,6 +442,12 @@ BEGIN
     geom geometry(GEOMETRY, 4326)
   );
 
+  CREATE TEMPORARY TABLE IF NOT EXISTS _tmp_current_nodes (
+    id bigint,
+    seq int,
+    geom geometry(GEOMETRY, 4326)
+  );
+
   FOR row IN (WITH way_versions AS (
     SELECT w.tstamp, w.visible, w.version, w.changeset_id, w.user_id, w.nodes
     FROM ways w
@@ -518,6 +519,11 @@ BEGIN
           END IF;
         END LOOP;
       ELSE
+        TRUNCATE _tmp_current_nodes;
+        INSERT INTO _tmp_current_nodes
+        SELECT node_id, x.seq, n.geom
+        FROM (SELECT row_number() OVER () AS seq, n AS node_id FROM unnest(row.nodes) n) x
+        INNER JOIN _tmp_nodes n ON (n.id = x.node_id);
         go := true;
       END IF;
     END IF;
@@ -580,14 +586,22 @@ BEGIN
       LOOP
         IF EXISTS (SELECT 1 FROM _tmp_nodes n WHERE n.id = node_row.id) THEN
           UPDATE _tmp_nodes SET geom = node_row.geom WHERE id = node_row.id;
+          UPDATE _tmp_current_nodes SET geom = node_row.geom WHERE id = node_row.id;
         ELSE
           INSERT INTO _tmp_nodes VALUES (node_row.id, node_row.geom);
         END IF;
       END LOOP;
+    ELSE
+      TRUNCATE _tmp_current_nodes;
+      INSERT INTO _tmp_current_nodes
+      SELECT node_id, x.seq, n.geom
+      FROM (SELECT row_number() OVER () AS seq, n AS node_id FROM unnest(row.nodes) n) x
+      INNER JOIN _tmp_nodes n ON (n.id = x.node_id);
     END IF;
   END LOOP;
 
   TRUNCATE _tmp_nodes;
+  TRUNCATE _tmp_current_nodes;
 END;
 $$ LANGUAGE plpgsql;
 

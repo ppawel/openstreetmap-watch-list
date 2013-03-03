@@ -49,9 +49,14 @@ class WayRevisionsTest < Test::Unit::TestCase
     #assert_equal('2013-02-22 23:40:37', @revisions[42877534][-1]['tstamp'])
   end
 
-  def setup_way_revisions_test(id)
+  def test_15227387
+    setup_way_revisions_test(15227387, false)
+    @conn.exec("SELECT OWL_UpdateWayRevisions(68482404)")
+  end
+
+  def setup_way_revisions_test(id, update_revs = true)
     setup_db
-    load_changeset(id)
+    load_changeset(id, update_revs)
     verify_way_revisions
   end
 end

@@ -31,7 +31,7 @@ module TestCommon
     @conn.exec(File.open(file).read)
   end
 
-  def load_changeset(id)
+  def load_changeset(id, update_revs = true)
     @conn.exec("COPY nodes FROM STDIN;")
     File.open("../../testdata/#{id}-nodes.csv").read.each_line do |line|
       @conn.put_copy_data(line)
@@ -43,7 +43,7 @@ module TestCommon
     end
     @conn.put_copy_end
     @conn.exec("VACUUM ANALYZE")
-    @conn.exec("SELECT OWL_UpdateWayRevisions(w.id) FROM (SELECT DISTINCT id FROM ways) w")
+    @conn.exec("SELECT OWL_UpdateWayRevisions(w.id) FROM (SELECT DISTINCT id FROM ways) w") if update_revs
   end
 
   def verify_way_revisions
