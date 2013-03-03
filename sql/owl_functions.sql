@@ -440,7 +440,7 @@ BEGIN
   rev_count := 1;
   go := false;
 
-  CREATE TEMPORARY TABLE _tmp_nodes (
+  CREATE TEMPORARY TABLE IF NOT EXISTS _tmp_nodes (
     id bigint PRIMARY KEY,
     geom geometry(GEOMETRY, 4326)
   );
@@ -589,7 +589,7 @@ BEGIN
     END IF;
   END LOOP;
 
-  DROP TABLE _tmp_nodes;
+  TRUNCATE _tmp_nodes;
 
   RAISE NOTICE '% --   Created % revision(s)', clock_timestamp(), created_count;
 END;
