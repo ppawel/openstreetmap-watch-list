@@ -612,18 +612,30 @@ DECLARE
   last_way record;
   last_node_tstamp timestamp without time zone;
   row_count int;
+  generate_needed boolean;
 BEGIN
   SET client_min_messages = 'WARNING';
-
   RAISE WARNING '% -- Updating revisions for way %', clock_timestamp(), $1;
 
-  SELECT tstamp, rev FROM way_revisions WHERE way_id = $1 ORDER BY rev DESC LIMIT 1 INTO last_rev;
-  SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO last_way;
-  last_node_tstamp := (SELECT MAX(n.tstamp) FROM nodes n
-    INNER JOIN nodes prev_n ON (prev_n.id = n.id AND prev_n.version = n.version - 1)
-    WHERE n.id IN (SELECT unnest(last_way.nodes)) AND NOT n.geom = prev_n.geom);
+  generate_needed := false;
 
-  IF last_rev.tstamp IS NULL OR (last_way.tstamp > last_rev.tstamp OR last_node_tstamp > last_rev.tstamp) THEN
+  SELECT tstamp, rev FROM way_revisions WHERE way_id = $1 ORDER BY rev DESC LIMIT 1 INTO last_rev;
+
+  IF last_rev.tstamp IS NULL THEN
+    generate_needed := true;
+  ELSE
+    SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO last_way;
+    IF last_way.tstamp IS NOT NULL AND last_way.tstamp > last_rev.tstamp THEN
+      generate_needed := true;
+    ELSE
+      last_node_tstamp := (SELECT MAX(n.tstamp) FROM nodes n
+        INNER JOIN nodes prev_n ON (prev_n.id = n.id AND prev_n.version = n.version - 1)
+        WHERE n.id IN (SELECT unnest(last_way.nodes)) AND NOT n.geom = prev_n.geom);
+      generate_needed := (last_node_tstamp IS NOT NULL AND last_node_tstamp > last_rev.tstamp);
+    END IF;
+  END IF;
+
+  IF generate_needed THEN
     INSERT INTO way_revisions
     SELECT * FROM OWL_GenerateWayRevisions($1) r
     WHERE last_rev IS NULL OR r.rev > last_rev.rev;
