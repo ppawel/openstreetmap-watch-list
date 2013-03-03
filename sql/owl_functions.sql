@@ -618,11 +618,20 @@ $$ LANGUAGE plpgsql;
 ---
 CREATE OR REPLACE FUNCTION OWL_UpdateWayRevisions(bigint) RETURNS void AS $$
 DECLARE
-  last_rev int;
+  last_rev record;
+  last_way record;
+  last_node_tstamp timestamp without time zone;
 BEGIN
-  SELECT MAX(rev) FROM way_revisions WHERE way_id = $1 INTO last_rev;
-  INSERT INTO way_revisions
-  SELECT * FROM OWL_GenerateWayRevisions($1) r
-  WHERE last_rev IS NULL OR r.rev > last_rev;
+  SELECT tstamp, rev FROM way_revisions WHERE way_id = $1 ORDER BY rev DESC LIMIT 1 INTO last_rev;
+  SELECT * FROM ways WHERE id = $1 INTO last_way;
+  last_node_tstamp := (SELECT MAX(tstamp) FROM nodes WHERE id IN (SELECT unnest(last_way.nodes)));
+
+  --raise notice '% % %', last_rev, last_way, last_node_tstamp;
+
+  IF last_rev.tstamp IS NULL OR (last_way.tstamp > last_rev.tstamp OR last_node_tstamp > last_rev.tstamp) THEN
+    INSERT INTO way_revisions
+    SELECT * FROM OWL_GenerateWayRevisions($1) r
+    WHERE last_rev IS NULL OR r.rev > last_rev.rev;
+  END IF;
 END;
 $$ LANGUAGE plpgsql;

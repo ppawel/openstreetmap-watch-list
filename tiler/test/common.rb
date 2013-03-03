@@ -42,7 +42,7 @@ module TestCommon
     end
     @conn.put_copy_end
     @conn.exec("VACUUM ANALYZE")
-    @conn.exec("SELECT OWL_CreateWayRevisions(w.id, false) FROM (SELECT DISTINCT id FROM ways) w")
+    @conn.exec("SELECT OWL_UpdateWayRevisions(w.id) FROM (SELECT DISTINCT id FROM ways) w")
   end
 
   def verify_way_revisions
