@@ -22,6 +22,7 @@ changeset_ids = ARGF.each_line.collect {|line| line.to_i}
 
 conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
   :user => $config['username'], :password => $config['password'])
+conn.set_error_verbosity(0)
 tiler = Tiler::ChangesetTiler.new(conn)
 
 changeset_ids.each_with_index do |changeset_id, count|

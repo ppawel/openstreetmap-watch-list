@@ -20,6 +20,7 @@ module TestCommon
     $config = YAML.load_file('../../rails/config/database.yml')['test']
     @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
       :user => $config['username'], :password => $config['password'])
+    @conn.set_error_verbosity(0)
     exec_sql_file('../../sql/owl_schema.sql')
     exec_sql_file('../../sql/owl_constraints.sql')
     exec_sql_file('../../sql/owl_indexes.sql')

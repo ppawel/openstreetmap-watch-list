@@ -426,7 +426,6 @@ DECLARE
   last_row record;
   rev way_revisions%rowtype;
   rev_count int;
-  created_count int;
   last_changeset_id int;
   go boolean;
   rev_geom geometry(GEOMETRY, 4326);
@@ -436,13 +435,10 @@ BEGIN
   SELECT NULL::bigint[] AS nodes INTO last_way;
   SELECT NULL::text AS type INTO last_row;
 
-  RAISE NOTICE '% -- Generating revisions for way %', clock_timestamp(), $1;
-
   SET enable_mergejoin = off;
   SET enable_hashjoin = off;
 
   last_changeset_id := NULL;
-  created_count := 0;
   rev_count := 1;
   go := false;
 
@@ -538,14 +534,12 @@ BEGIN
         IF rev.tstamp IS NULL OR last_way.version != rev.version OR (NOT rev.geom = rev_geom) THEN
           rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id,rev_geom);
           rev_count := rev_count + 1;
-          created_count := created_count + 1;
           RETURN NEXT rev;
         END IF;
         SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
       ELSIF last_way.changeset_id = last_changeset_id THEN
         rev := ($1,last_way.version,rev_count,last_way.visible,last_way.user_id,last_way.tstamp,last_way.changeset_id,OWL_MakeLineFromTmpNodes(last_way.nodes));
         rev_count := rev_count + 1;
-        created_count := created_count + 1;
         RETURN NEXT rev;
       END IF;
     ELSE
@@ -555,7 +549,6 @@ BEGIN
           IF rev.tstamp IS NULL OR last_way.version != rev.version OR (NOT rev.geom = rev_geom) THEN
             rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id,rev_geom);
             rev_count := rev_count + 1;
-            created_count := created_count + 1;
             RETURN NEXT rev;
           END IF;
         END IF;
@@ -564,7 +557,6 @@ BEGIN
         IF last_row.type IS NOT NULL AND last_row.type = 'W' THEN
           rev := ($1,last_row.version,rev_count,last_row.visible,last_row.user_id,last_row.tstamp,last_row.changeset_id,OWL_MakeLineFromTmpNodes(last_row.nodes));
           rev_count := rev_count + 1;
-          created_count := created_count + 1;
           RETURN NEXT rev;
         END IF;
       END IF;
@@ -596,8 +588,6 @@ BEGIN
   END LOOP;
 
   TRUNCATE _tmp_nodes;
-
-  RAISE NOTICE '% --   Created % revision(s)', clock_timestamp(), created_count;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -621,17 +611,26 @@ DECLARE
   last_rev record;
   last_way record;
   last_node_tstamp timestamp without time zone;
+  row_count int;
 BEGIN
-  SELECT tstamp, rev FROM way_revisions WHERE way_id = $1 ORDER BY rev DESC LIMIT 1 INTO last_rev;
-  SELECT * FROM ways WHERE id = $1 INTO last_way;
-  last_node_tstamp := (SELECT MAX(tstamp) FROM nodes WHERE id IN (SELECT unnest(last_way.nodes)));
+  SET client_min_messages = 'WARNING';
 
-  --raise notice '% % %', last_rev, last_way, last_node_tstamp;
+  RAISE WARNING '% -- Updating revisions for way %', clock_timestamp(), $1;
+
+  SELECT tstamp, rev FROM way_revisions WHERE way_id = $1 ORDER BY rev DESC LIMIT 1 INTO last_rev;
+  SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO last_way;
+  last_node_tstamp := (SELECT MAX(n.tstamp) FROM nodes n
+    INNER JOIN nodes prev_n ON (prev_n.id = n.id AND prev_n.version = n.version - 1)
+    WHERE n.id IN (SELECT unnest(last_way.nodes)) AND NOT n.geom = prev_n.geom);
 
   IF last_rev.tstamp IS NULL OR (last_way.tstamp > last_rev.tstamp OR last_node_tstamp > last_rev.tstamp) THEN
     INSERT INTO way_revisions
     SELECT * FROM OWL_GenerateWayRevisions($1) r
     WHERE last_rev IS NULL OR r.rev > last_rev.rev;
+    GET DIAGNOSTICS row_count = ROW_COUNT;
+    RAISE WARNING '% -- Inserted % revision(s)', clock_timestamp(), row_count;
+  ELSE
+    RAISE WARNING '% -- Nothing to do!', clock_timestamp();
   END IF;
 END;
 $$ LANGUAGE plpgsql;
