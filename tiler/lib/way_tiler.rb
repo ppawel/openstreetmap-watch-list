@@ -142,17 +142,21 @@ class WayTiler
     @conn.prepare('select_revisions',
       "SELECT q.*, q.line::box2d AS bbox,
         CASE
-          WHEN GeometryType(q.line) = 'LINESTRING' AND ST_IsClosed(q.line) AND ST_IsSimple(q.line)
+          WHEN GeometryType(q.line) = 'LINESTRING' AND ST_IsClosed(q.line) AND ST_IsSimple(q.line) AND
+            (OWL_IsPolygon(q.tags) OR OWL_IsPolygon(q.prev_tags))
           THEN ST_ForceRHR(ST_MakePolygon(q.line))
           ELSE q.line
         END AS geom
       FROM (
         SELECT
           rev.geom AS line, --OWL_MakeLine(w.nodes, rev.tstamp) AS line,
-          rev.*
+          rev.*,
+          w.tags,
+          prev_w.tags AS prev_tags
         FROM way_revisions rev
         LEFT JOIN way_revisions prev ON (prev.way_id = rev.way_id AND prev.rev = rev.rev + 1)
         INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
+        LEFT JOIN ways prev_w ON (prev_w.id = rev.way_id AND prev_w.version = prev.version)
         WHERE rev.way_id = $1 AND ($2::int IS NULL OR rev.changeset_id = $2 OR prev.changeset_id = $2) AND
           NOT EXISTS (SELECT 1 FROM way_tiles wt WHERE wt.way_id = rev.way_id AND wt.rev = rev.rev LIMIT 1)) q
       ORDER BY q.way_id, q.rev")

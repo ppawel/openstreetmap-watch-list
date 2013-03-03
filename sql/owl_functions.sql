@@ -33,6 +33,12 @@ as $FUNCTION$
     );
 $FUNCTION$;
 
+CREATE OR REPLACE FUNCTION OWL_IsPolygon(hstore) RETURNS boolean AS
+$$
+  SELECT $1 IS NOT NULL AND
+    ($1 ? 'area' OR $1 ? 'landuse' OR $1 ? 'leisure' OR $1 ? 'amenity' OR $1 ? 'building')
+$$ LANGUAGE sql IMMUTABLE;
+
 --
 -- OWL_MakeLine
 --
