@@ -179,7 +179,7 @@ class ChangesetTiler
         INNER JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1 AND
           t.x = prev_t.x AND t.y = prev_t.y)
         WHERE c.changeset_id = $1 AND c.el_type = 'W' AND
-          (ST_AsText(t.geom) != ST_AsText(prev_t.geom) OR c.tags != c.prev_tags)
+          (c.tags != c.prev_tags OR ((t.geom = prev_t.geom) IS NOT TRUE))
 
           UNION
 
