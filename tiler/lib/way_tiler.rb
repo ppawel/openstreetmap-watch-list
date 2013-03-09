@@ -149,7 +149,7 @@ class WayTiler
         END AS geom
       FROM (
         SELECT
-          rev.geom AS line, --OWL_MakeLine(w.nodes, rev.tstamp) AS line,
+          rev.geom AS line,
           rev.*,
           w.tags,
           prev_w.tags AS prev_tags
@@ -158,7 +158,8 @@ class WayTiler
         INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
         LEFT JOIN ways prev_w ON (prev_w.id = rev.way_id AND prev_w.version = prev.version)
         WHERE rev.way_id = $1 AND ($2::int IS NULL OR rev.changeset_id = $2 OR prev.changeset_id = $2) AND
-          NOT EXISTS (SELECT 1 FROM way_tiles wt WHERE wt.way_id = rev.way_id AND wt.rev = rev.rev LIMIT 1)) q
+          NOT EXISTS (SELECT 1 FROM way_tiles wt WHERE wt.way_id = rev.way_id AND wt.rev = rev.rev LIMIT 1) AND
+          rev.geom IS NOT NULL) q
       ORDER BY q.way_id, q.rev")
 
     @conn.prepare('has_tiles', "SELECT COUNT(*) FROM way_tiles WHERE way_id = $1 AND rev = $2")
