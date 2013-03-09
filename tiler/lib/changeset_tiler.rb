@@ -70,9 +70,10 @@ class ChangesetTiler
       end
     end
 
-    count = @conn.transaction do |c|
+    count = nil
+    @conn.transaction do |c|
       @@log.debug "Generating changeset tiles..."
-      @conn.exec_prepared('generate_changeset_tiles', [changeset_id]).cmd_tuples
+      count = @conn.exec_prepared('generate_changeset_tiles', [changeset_id]).cmd_tuples
     end
 
     @@log.debug "Aggregating tiles..."
