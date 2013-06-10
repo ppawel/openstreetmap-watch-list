@@ -8,20 +8,13 @@ CREATE INDEX idx_ways_nodes_id ON ways USING gin (nodes);
 CREATE INDEX idx_nodes_changeset_id ON nodes USING btree (changeset_id);
 CREATE INDEX idx_relations_changeset_id ON relations USING btree (changeset_id);
 CREATE INDEX idx_ways_changeset_id ON ways USING btree (changeset_id);
-CREATE INDEX idx_way_revisions_changeset_id ON way_revisions USING btree (changeset_id);
 
 -- Used for selecting nodes (by id) for a specific way when constructing way geometry.
 CREATE INDEX idx_nodes_node_id ON nodes USING btree (id);
 
--- Used by the tiler for selecting changes to be tiled for given changeset id.
-CREATE INDEX idx_changes_changeset_id ON changes USING btree (changeset_id);
-
 -- Used by the changeset API to locate tiles by specific tile or tile range.
 CREATE INDEX idx_changeset_tiles_xyz ON changeset_tiles USING btree (zoom, x, y);
 CREATE INDEX idx_changeset_tiles_xcyz ON changeset_tiles USING btree (zoom, changeset_id, x, y);
-
--- Used by way tiler.
-CREATE INDEX idx_way_revisions_way_id ON way_revisions USING btree (way_id);
 
 -- Used during replication to select latest objects.
 --CREATE INDEX idx_nodes_tstamp ON nodes USING btree (tstamp);

@@ -213,26 +213,45 @@ $$ LANGUAGE sql IMMUTABLE;
 --
 -- OWL_GenerateChanges
 --
-CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS TABLE (
-  changeset_id bigint,
-  tstamp timestamp without time zone,
-  el_changeset_id bigint,
-  el_type element_type,
-  el_id bigint,
-  el_version int,
-  el_rev int,
-  el_action action,
-  tags hstore,
-  prev_tags hstore
-) AS $$
-
+CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS change[] AS $$
 DECLARE
   min_tstamp timestamp without time zone;
   max_tstamp timestamp without time zone;
+  moved_nodes_ids bigint[];
   row_count int;
 
 BEGIN
   RAISE NOTICE '% -- Generating changes for changeset %', clock_timestamp(), $1;
+
+  CREATE TEMPORARY TABLE _tmp_changeset_nodes ON COMMIT DROP AS
+  SELECT
+    $1,
+    n.tstamp,
+    n.changeset_id,
+    'N'::element_type AS type,
+    n.id,
+    n.version,
+    CASE
+      WHEN n.version = 1 THEN 'CREATE'::action
+      WHEN n.version > 1 AND n.visible THEN 'MODIFY'::action
+      WHEN NOT n.visible THEN 'DELETE'::action
+    END AS el_action,
+    NOT OWL_Equals(n.geom, prev.geom) AS geom_changed,
+    n.tags != prev.tags AS tags_changed,
+    NULL::boolean AS nodes_changed,
+    NULL::boolean AS members_changed,
+    CASE WHEN NOT n.visible THEN NULL ELSE n.geom END AS geom,
+    CASE WHEN NOT n.visible OR NOT OWL_Equals(n.geom, prev.geom) THEN prev.geom ELSE NULL END AS prev_geom,
+    n.tags,
+    prev.tags AS prev_tags,
+    NULL::bigint[] AS nodes,
+    NULL::bigint[] AS prev_nodes
+  FROM nodes n
+  LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
+  WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1);
+
+  CREATE TEMPORARY TABLE _tmp_moved_nodes ON COMMIT DROP AS
+  SELECT * FROM _tmp_changeset_nodes n WHERE n.version > 1 AND n.geom_changed AND n.el_action != 'DELETE';
 
   SELECT MAX(x.tstamp), MIN(x.tstamp) - INTERVAL '1 second'
   INTO max_tstamp, min_tstamp
@@ -242,34 +261,19 @@ BEGIN
     WHERE n.changeset_id = $1
     UNION
     SELECT w.tstamp
-    FROM way_revisions w
+    FROM ways w
     WHERE w.changeset_id = $1
   ) x;
+
+  moved_nodes_ids := (SELECT array_agg(id) FROM _tmp_moved_nodes);
 
   RAISE NOTICE '% --   Prepared data (min = %, max = %)', clock_timestamp(), min_tstamp, max_tstamp;
 
   CREATE TEMPORARY TABLE _tmp_result ON COMMIT DROP AS
-  SELECT
-    $1,
-    n.tstamp,
-    n.changeset_id,
-    'N'::element_type AS type,
-    n.id,
-    n.version,
-    NULL::int,
-    CASE
-      WHEN n.version = 1 THEN 'CREATE'::action
-      WHEN n.version > 1 AND n.visible THEN 'MODIFY'::action
-      WHEN NOT n.visible THEN 'DELETE'::action
-    END AS el_action,
-    n.tags,
-    prev.tags AS prev_tags
-  FROM nodes n
-  LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
-  WHERE n.changeset_id = $1 AND
-    (n.tags - ARRAY['created_by', 'source'] != ''::hstore OR prev.tags - ARRAY['created_by', 'source'] != ''::hstore) AND
-    (prev.geom IS NULL OR
-      (NOT ST_Equals(n.geom, prev.geom) OR n.tags != prev.tags));
+  SELECT *
+  FROM _tmp_changeset_nodes n
+  WHERE (n.el_action IN ('CREATE', 'DELETE') OR n.tags_changed OR n.geom_changed) AND
+    (OWL_RemoveTags(n.tags) != ''::hstore OR OWL_RemoveTags(n.prev_tags) != ''::hstore);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Nodes done (%)', clock_timestamp(), row_count;
@@ -284,13 +288,22 @@ BEGIN
     'W'::element_type AS type,
     w.id,
     w.version,
-    rev.rev,
     'CREATE',
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    w.geom,
+    NULL,
     w.tags,
+    NULL,
+    w.nodes,
     NULL
-  FROM way_revisions rev
-  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
-  WHERE rev.changeset_id = $1 AND rev.rev = 1 AND rev.version = 1;
+  FROM (
+    SELECT w.*, OWL_MakeLine(w.nodes, max_tstamp) AS geom
+    FROM ways w
+    WHERE w.changeset_id = $1 AND w.version = 1) w
+  WHERE w.geom IS NOT NULL;
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Created ways done (%)', clock_timestamp(), row_count;
@@ -305,16 +318,36 @@ BEGIN
     'W'::element_type AS type,
     w.id,
     w.version,
-    rev.rev,
     'MODIFY',
+    w.geom_changed,
+    w.tags_changed,
+    w.nodes_changed,
+    NULL,
+    CASE WHEN w.geom_changed AND NOT w.tags_changed AND NOT w.nodes_changed THEN
+      OWL_MakeMinimalLine(w.nodes, max_tstamp, (SELECT array_agg(id) FROM _tmp_changeset_nodes n WHERE w.nodes @> ARRAY[n.id]))
+    ELSE
+      OWL_MakeLine(w.nodes, max_tstamp)
+    END,
+    CASE WHEN w.geom_changed AND NOT w.tags_changed AND NOT w.nodes_changed THEN
+      OWL_MakeMinimalLine(w.prev_nodes, min_tstamp, (SELECT array_agg(id) FROM _tmp_changeset_nodes n WHERE w.prev_nodes @> ARRAY[n.id]))
+    ELSE
+      CASE WHEN w.visible AND NOT w.geom_changed THEN NULL ELSE OWL_MakeLine(w.prev_nodes, min_tstamp) END
+    END,
     w.tags,
-    prev_way.tags
-  FROM way_revisions rev
-  INNER JOIN way_revisions prev_rev ON (prev_rev.way_id = rev.way_id AND prev_rev.rev = rev.rev - 1)
-  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
-  INNER JOIN ways prev_way ON (prev_way.id = prev_rev.way_id AND prev_way.version = prev_rev.version)
-  WHERE rev.changeset_id = $1 AND rev.visible AND (rev.version = prev_rev.version OR w.tags != prev_way.tags OR
-    NOT OWL_Equals(rev.geom, prev_rev.geom));
+    w.prev_tags,
+    w.nodes,
+    CASE WHEN w.nodes = w.prev_nodes THEN NULL ELSE w.prev_nodes END
+  FROM (
+    SELECT w.*,
+      prev.tags AS prev_tags,
+      prev.nodes AS prev_nodes,
+      NOT OWL_Equals(OWL_MakeLine(w.nodes, max_tstamp), OWL_MakeLine(prev.nodes, min_tstamp)) AS geom_changed,
+      CASE WHEN NOT w.visible OR w.version = 1 THEN NULL ELSE w.tags != prev.tags END AS tags_changed,
+      w.nodes != prev.nodes AS nodes_changed
+    FROM ways w
+    INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
+    WHERE w.changeset_id = $1 AND w.visible) w
+  WHERE w.geom_changed IS NOT NULL AND (w.geom_changed OR w.tags_changed);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Modified ways done (%)', clock_timestamp(), row_count;
@@ -329,21 +362,110 @@ BEGIN
     'W'::element_type AS type,
     w.id,
     w.version,
-    rev.rev,
     'DELETE',
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    w.prev_geom,
     w.tags,
-    prev_way.tags
-  FROM way_revisions rev
-  INNER JOIN way_revisions prev_rev ON (prev_rev.way_id = rev.way_id AND prev_rev.rev = rev.rev - 1)
-  INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
-  INNER JOIN ways prev_way ON (prev_way.id = prev_rev.way_id AND prev_way.version = prev_rev.version)
-  WHERE rev.changeset_id = $1 AND NOT rev.visible;
+    w.prev_tags,
+    w.nodes,
+    w.prev_nodes
+  FROM (
+    SELECT w.*,
+      prev.tags AS prev_tags,
+      prev.nodes AS prev_nodes,
+      OWL_MakeLine(prev.nodes, max_tstamp) AS prev_geom
+    FROM ways w
+    INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
+    WHERE w.changeset_id = $1 AND NOT w.visible) w
+  WHERE w.prev_geom IS NOT NULL;
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Deleted ways done (%)', clock_timestamp(), row_count;
 
-  RETURN QUERY SELECT * FROM _tmp_result;
+  -- Affected ways
+
+  INSERT INTO _tmp_result
+  SELECT
+    $1,
+    w.tstamp,
+    w.changeset_id,
+    'W'::element_type AS type,
+    w.id,
+    version,
+    'AFFECT'::action,
+    true,
+    false,
+    false,
+    NULL,
+    w.geom,
+    w.prev_geom,
+    w.tags,
+    NULL,
+    w.nodes,
+    NULL
+  FROM (
+    SELECT
+      *,
+      OWL_MakeMinimalLine(w.nodes, max_tstamp, array_intersect(w.nodes, moved_nodes_ids)) AS geom,
+      OWL_MakeMinimalLine(w.nodes, min_tstamp, array_intersect(w.nodes, moved_nodes_ids)) AS prev_geom
+      --OWL_MakeLine(w.nodes, max_tstamp) AS geom,
+      --OWL_MakeLine(w.nodes, min_tstamp) AS prev_geom
+    FROM ways w
+    WHERE w.nodes && moved_nodes_ids AND
+      w.version = (SELECT version FROM ways WHERE id = w.id AND w.tstamp <= max_tstamp ORDER BY version DESC LIMIT 1) AND
+      w.changeset_id != $1) w; -- AND
+      --OWL_MakeLine(w.nodes, max_tstamp) IS NOT NULL AND
+      --(w.version = 1 OR OWL_MakeLine(w.nodes, min_tstamp) IS NOT NULL)) w;
+
+  GET DIAGNOSTICS row_count = ROW_COUNT;
+  RAISE NOTICE '% --   Affected ways done (%)', clock_timestamp(), row_count;
+
+  RETURN array_agg(ROW(
+    tstamp,
+    type,
+    el_action,
+    id,
+    version,
+    tags,
+    prev_tags,
+    geom,
+    prev_geom
+  )::change) FROM _tmp_result;
 END
+$$ LANGUAGE plpgsql;
+
+--
+-- OWL_UpdateChangeset
+--
+CREATE OR REPLACE FUNCTION OWL_UpdateChangeset(bigint) RETURNS void AS $$
+DECLARE
+  row record;
+  idx int;
+  result int[9];
+  result_bbox geometry;
+BEGIN
+  result := ARRAY[0, 0, 0, 0, 0, 0, 0, 0, 0];
+  FOR row IN
+    SELECT
+      CASE el_type WHEN 'N' THEN 0 WHEN 'W' THEN 1 WHEN 'R' THEN 2 END AS el_type_idx,
+      CASE action WHEN 'CREATE' THEN 0 WHEN 'MODIFY' THEN 1 WHEN 'DELETE' THEN 2 END AS action_idx,
+      COUNT(*) as cnt
+    FROM changes
+    WHERE changeset_id = $1
+    GROUP BY el_type, action
+  LOOP
+    result[row.el_type_idx * 3 + row.action_idx + 1] := row.cnt;
+  END LOOP;
+
+  result_bbox := (SELECT ST_Envelope(ST_Collect(ST_Collect(current_geom, new_geom))) FROM changes WHERE changeset_id = $1);
+
+  UPDATE changesets cs SET entity_changes = result, bbox = result_bbox
+  WHERE cs.id = $1;
+END;
 $$ LANGUAGE plpgsql;
 
 --
@@ -407,257 +529,5 @@ BEGIN
   FROM changeset_tiles
   WHERE changeset_id = $1 AND zoom = $2
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
-END;
-$$ LANGUAGE plpgsql;
-
----
---- OWL_GenerateWayRevisions
----
-CREATE OR REPLACE FUNCTION OWL_GenerateWayRevisions(bigint) RETURNS SETOF way_revisions AS $$
-DECLARE
-  node_row record;
-  row record;
-  last_node record;
-  last_way record;
-  last_row record;
-  rev way_revisions%rowtype;
-  rev_count int;
-  last_changeset_id int;
-  go boolean;
-  rev_geom geometry(GEOMETRY, 4326);
-
-BEGIN
-  SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
-  SELECT NULL::bigint[] AS nodes INTO last_way;
-  SELECT NULL::text AS type INTO last_row;
-
-  SET enable_mergejoin = off;
-  SET enable_hashjoin = off;
-
-  last_changeset_id := NULL;
-  rev_count := 1;
-  go := false;
-
-  CREATE TEMPORARY TABLE IF NOT EXISTS _tmp_nodes (
-    id bigint PRIMARY KEY,
-    geom geometry(GEOMETRY, 4326)
-  );
-
-  CREATE TEMPORARY TABLE IF NOT EXISTS _tmp_current_nodes (
-    id bigint,
-    seq int,
-    geom geometry(GEOMETRY, 4326)
-  );
-
-  FOR row IN (WITH way_versions AS (
-    SELECT w.tstamp, w.visible, w.version, w.changeset_id, w.user_id, w.nodes
-    FROM ways w
-    WHERE w.id = $1),
-
-  revs AS (
-    SELECT date_trunc('second', n.tstamp) AS tstamp, n.changeset_id, n.user_id, array_agg(n.id) AS nodes,
-      array_agg(n.geom) AS geom
-    FROM nodes n
-    LEFT JOIN nodes n2 ON (n2.id = n.id AND n2.version = n.version - 1)
-    WHERE n.id IN (SELECT unnest(nodes) FROM way_versions) AND n.visible
-    GROUP BY date_trunc('second', n.tstamp), n.changeset_id, n.user_id)
-
-  SELECT
-    $1,
-    q.version,
-    row_number() OVER (ORDER BY q.tstamp)::int,
-    q.visible,
-    q.user_id::bigint,
-    q.tstamp,
-    q.changeset_id::bigint,
-    q.type,
-    q.nodes::bigint[],
-    q.geom
-  FROM
-    (SELECT
-      'W' AS type,
-      version,
-      user_id,
-      tstamp,
-      changeset_id,
-      visible,
-      nodes,
-      NULL AS geom
-    FROM way_versions
-      UNION
-    SELECT
-      'N' AS type,
-      NULL,--version,
-      revs.user_id,
-      revs.tstamp,
-      revs.changeset_id,
-      true,--visible,
-      revs.nodes,
-      revs.geom
-    FROM revs
-      UNION
-    SELECT
-      'END' AS type,
-      NULL,--version,
-      -1,
-      NULL,
-      -1,
-      true,--visible,
-      ARRAY[]::bigint[],
-      NULL AS geom) q
-  ORDER BY q.tstamp NULLS LAST, q.type) LOOP
-    --RAISE NOTICE '%', row;
-
-    IF NOT go THEN
-      IF row.type = 'N' THEN
-        FOR node_row IN (SELECT x.id, q.geom FROM (SELECT row_number() OVER () AS seq, id FROM unnest(row.nodes) id) x
-          INNER JOIN (SELECT row_number() OVER () AS seq, n AS geom FROM unnest(row.geom) n) q ON (q.seq = x.seq))
-        LOOP
-          IF EXISTS (SELECT 1 FROM _tmp_nodes n WHERE n.id = node_row.id) THEN
-            UPDATE _tmp_nodes SET geom = node_row.geom WHERE id = node_row.id;
-          ELSE
-            INSERT INTO _tmp_nodes VALUES (node_row.id, node_row.geom);
-          END IF;
-        END LOOP;
-      ELSE
-        TRUNCATE _tmp_current_nodes;
-        INSERT INTO _tmp_current_nodes
-        SELECT node_id, x.seq, n.geom
-        FROM (SELECT row_number() OVER () AS seq, n AS node_id FROM unnest(row.nodes) n) x
-        INNER JOIN _tmp_nodes n ON (n.id = x.node_id);
-        go := true;
-      END IF;
-    END IF;
-
-    IF (row.type != 'END') AND row.visible AND ((NOT go)) THEN
-      CONTINUE;
-    END IF;
-
-    IF row.type IN ('END', 'W') OR (row.type = 'N' AND last_way.nodes && row.nodes) THEN
-    IF last_changeset_id IS NOT NULL AND row.changeset_id != last_changeset_id THEN
-      IF last_node.tstamp IS NOT NULL THEN
-        rev_geom := OWL_MakeLineFromTmpNodes(last_way.nodes);
-
-        IF rev.tstamp IS NULL OR last_way.version != rev.version OR (NOT rev.geom = rev_geom) THEN
-          rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id,rev_geom);
-          rev_count := rev_count + 1;
-          RETURN NEXT rev;
-        END IF;
-        SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
-      ELSIF last_way.changeset_id = last_changeset_id THEN
-        rev := ($1,last_way.version,rev_count,last_way.visible,last_way.user_id,last_way.tstamp,last_way.changeset_id,OWL_MakeLineFromTmpNodes(last_way.nodes));
-        rev_count := rev_count + 1;
-        RETURN NEXT rev;
-      END IF;
-    ELSE
-      IF row.type = 'W' THEN
-        IF last_node.tstamp IS NOT NULL THEN
-          rev_geom := OWL_MakeLineFromTmpNodes(last_way.nodes);
-          IF rev.tstamp IS NULL OR last_way.version != rev.version OR (NOT rev.geom = rev_geom) THEN
-            rev := ($1,last_way.version,rev_count,last_way.visible,last_node.user_id,last_node.tstamp,last_node.changeset_id,rev_geom);
-            rev_count := rev_count + 1;
-            RETURN NEXT rev;
-          END IF;
-        END IF;
-        SELECT NULL::timestamp without time zone AS tstamp INTO last_node;
-
-        IF last_row.type IS NOT NULL AND last_row.type = 'W' THEN
-          rev := ($1,last_row.version,rev_count,last_row.visible,last_row.user_id,last_row.tstamp,last_row.changeset_id,OWL_MakeLineFromTmpNodes(last_row.nodes));
-          rev_count := rev_count + 1;
-          RETURN NEXT rev;
-        END IF;
-      END IF;
-    END IF;
-
-    IF row.type = 'W' THEN
-      last_way := row;
-      last_row := row;
-    ELSE
-      last_node := row;
-      last_row := row;
-    END IF;
-
-    last_changeset_id := row.changeset_id;
-
-    END IF;
-
-    IF row.type = 'N' THEN
-      FOR node_row IN (SELECT x.id, q.geom FROM (SELECT row_number() OVER () AS seq, id FROM unnest(row.nodes) id) x
-        INNER JOIN (SELECT row_number() OVER () AS seq, n AS geom FROM unnest(row.geom) n) q ON (q.seq = x.seq))
-      LOOP
-        IF EXISTS (SELECT 1 FROM _tmp_nodes n WHERE n.id = node_row.id) THEN
-          UPDATE _tmp_nodes SET geom = node_row.geom WHERE id = node_row.id;
-          UPDATE _tmp_current_nodes SET geom = node_row.geom WHERE id = node_row.id;
-        ELSE
-          INSERT INTO _tmp_nodes VALUES (node_row.id, node_row.geom);
-        END IF;
-      END LOOP;
-    ELSE
-      TRUNCATE _tmp_current_nodes;
-      INSERT INTO _tmp_current_nodes
-      SELECT node_id, x.seq, n.geom
-      FROM (SELECT row_number() OVER () AS seq, n AS node_id FROM unnest(row.nodes) n) x
-      INNER JOIN _tmp_nodes n ON (n.id = x.node_id);
-    END IF;
-  END LOOP;
-
-  TRUNCATE _tmp_nodes;
-  TRUNCATE _tmp_current_nodes;
-END;
-$$ LANGUAGE plpgsql;
-
----
---- OWL_CreateWayRevisions
----
-CREATE OR REPLACE FUNCTION OWL_CreateWayRevisions(bigint, boolean) RETURNS void AS $$
-BEGIN
-  IF $2 AND EXISTS (SELECT 1 FROM way_revisions WHERE way_id = $1 LIMIT 1) THEN
-    RETURN;
-  END IF;
-  INSERT INTO way_revisions SELECT * FROM OWL_GenerateWayRevisions($1);
-END;
-$$ LANGUAGE plpgsql;
-
----
---- OWL_UpdateWayRevisions
----
-CREATE OR REPLACE FUNCTION OWL_UpdateWayRevisions(bigint) RETURNS void AS $$
-DECLARE
-  last_rev record;
-  last_way record;
-  last_node_tstamp timestamp without time zone;
-  row_count int;
-  generate_needed boolean;
-BEGIN
-  SET client_min_messages = 'WARNING';
-  RAISE WARNING '% -- Updating revisions for way %', clock_timestamp(), $1;
-
-  generate_needed := false;
-
-  SELECT tstamp, rev FROM way_revisions WHERE way_id = $1 ORDER BY rev DESC LIMIT 1 INTO last_rev;
-
-  IF last_rev.tstamp IS NULL THEN
-    generate_needed := true;
-  ELSE
-    SELECT * FROM ways WHERE id = $1 ORDER BY version DESC LIMIT 1 INTO last_way;
-    IF last_way.tstamp IS NOT NULL AND last_way.tstamp > last_rev.tstamp THEN
-      generate_needed := true;
-    ELSE
-      last_node_tstamp := (SELECT MAX(n.tstamp) FROM nodes n
-        INNER JOIN nodes prev_n ON (prev_n.id = n.id AND prev_n.version = n.version - 1)
-        WHERE n.id IN (SELECT unnest(last_way.nodes)) AND NOT n.geom = prev_n.geom);
-      generate_needed := (last_node_tstamp IS NOT NULL AND last_node_tstamp > last_rev.tstamp);
-    END IF;
-  END IF;
-
-  IF generate_needed THEN
-    INSERT INTO way_revisions
-    SELECT * FROM OWL_GenerateWayRevisions($1) r
-    WHERE last_rev IS NULL OR r.rev > last_rev.rev;
-    GET DIAGNOSTICS row_count = ROW_COUNT;
-    RAISE WARNING '% -- Inserted % revision(s)', clock_timestamp(), row_count;
-  ELSE
-    RAISE WARNING '% -- Nothing to do!', clock_timestamp();
-  END IF;
 END;
 $$ LANGUAGE plpgsql;

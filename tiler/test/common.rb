@@ -6,7 +6,6 @@ module TestCommon
     puts "setup_changeset_test(#{id})"
     setup_db
     load_changeset(id)
-    verify_way_revisions
     @tiler = Tiler::ChangesetTiler.new(@conn)
     @tiler.generate(16, id, {:retile => true, :changes => true})
     @changes = get_changes
@@ -32,51 +31,25 @@ module TestCommon
   end
 
   def load_changeset(id, update_revs = true)
+    if not File.exists?("../../testdata/#{id}-nodes.csv") or not File.exists?("../../testdata/#{id}-ways.csv")
+      raise "No test data for changeset #{id}"
+    end
+
     @conn.exec("COPY nodes FROM STDIN;")
+
     File.open("../../testdata/#{id}-nodes.csv").read.each_line do |line|
       @conn.put_copy_data(line)
     end
+
     @conn.put_copy_end
     @conn.exec("COPY ways FROM STDIN;")
+
     File.open("../../testdata/#{id}-ways.csv").read.each_line do |line|
       @conn.put_copy_data(line)
     end
+
     @conn.put_copy_end
     @conn.exec("VACUUM ANALYZE")
-    @conn.exec("SELECT OWL_UpdateWayRevisions(w.id) FROM (SELECT DISTINCT id FROM ways) w") if update_revs
-  end
-
-  def verify_way_revisions
-    duplicate_revs =  @conn.exec("SELECT way_id, changeset_id, version, COUNT(*) AS count
-        FROM way_revisions rev
-        GROUP BY way_id, changeset_id, version
-        HAVING COUNT(*) > 1").to_a
-
-    #assert_equal(0, duplicate_revs.size, "There are too many revisions for some ways: #{duplicate_revs}")
-
-    @revisions = {}
-    for rev in @conn.exec("SELECT rev.*, w.tags
-        FROM way_revisions rev
-        INNER JOIN ways w ON (w.id = rev.way_id AND w.version = rev.version)
-        ORDER BY way_id, rev.version, rev.rev").to_a
-      @revisions[rev['way_id'].to_i] ||= []
-      @revisions[rev['way_id'].to_i] << rev
-    end
-
-    for way_subs in @revisions.values
-      way_subs.each_cons(2) do |rev1, rev2|
-        next if rev1['way_id'] != rev2['way_id']
-        #assert((rev1['visible'] == 'f' or !rev1['geom'].nil?), "Visible revision geometry should not be null: #{rev1}")
-        assert(rev1['version'].to_i <= rev2['version'].to_i, "Wrong revision tstamp:\n#{rev1}\n#{rev2}")
-        assert(rev1['revision'].to_i <= rev2['revision'].to_i, "Wrong revision order:\n#{rev1}\n#{rev2}")
-        assert(rev1['tstamp'] <= rev2['tstamp'], "Newer revision has older or equal timestamp:\n#{rev1}\n#{rev2}")
-        assert((
-          (rev1['version'] != rev2['version']) or
-          (rev1['nodes'] != rev2['nodes']) or
-          (rev1['tags'] != rev2['tags']) or
-          (rev1['geom'] != rev2['geom'] or rev1['geom'].nil?)), "Revisions are the same:\n#{rev1}\n#{rev2}")
-      end
-    end
   end
 
   def verify_changes(changeset_id)

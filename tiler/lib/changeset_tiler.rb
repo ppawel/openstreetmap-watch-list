@@ -1,22 +1,26 @@
 require 'logging'
 require 'utils'
-require 'geos_utils'
 require 'ffi-geos'
-require 'way_tiler'
 
 module Tiler
 
-# Implements tiling logic for changesets.
+# Implements tiling logic.
 class ChangesetTiler
   include ::Tiler::Logger
 
   attr_accessor :conn
 
   def initialize(conn)
-    @way_tiler = WayTiler.new(conn)
-    @tiledata = {}
     @conn = conn
     setup_prepared_statements
+    init_geos
+  end
+
+  def init_geos
+    @wkb_reader = Geos::WkbReader.new
+    @wkt_reader = Geos::WktReader.new
+    @wkb_writer = Geos::WkbWriter.new
+    @wkb_writer.include_srid = true
   end
 
   ##
@@ -25,15 +29,12 @@ class ChangesetTiler
   def generate(zoom, changeset_id, options = {})
     tile_count = nil
     @@log.debug "mem = #{memory_usage} (before)"
-
-    if options[:changes] or !has_changes(changeset_id)
-      @conn.transaction do |c|
-        ensure_way_revisions(changeset_id)
-        generate_changes(changeset_id)
-      end
+    @conn.transaction do |c|
+      generate_changes(changeset_id)
+      tile_count = generate_tiles(zoom, changeset_id, options)
     end
-
-    do_generate(zoom, changeset_id, options)
+    @@log.debug "mem = #{memory_usage} (after)"
+    tile_count
   end
 
   ##
@@ -50,48 +51,77 @@ class ChangesetTiler
     @conn.exec("SELECT COUNT(*) FROM changeset_tiles WHERE changeset_id = #{changeset_id}").getvalue(0, 0).to_i > 0
   end
 
-  def has_changes(changeset_id)
-    @conn.exec("SELECT COUNT(*) FROM changes WHERE changeset_id = #{changeset_id}").getvalue(0, 0).to_i > 0
-  end
-
   protected
 
-  def do_generate(zoom, changeset_id, options = {})
+  def generate_tiles(zoom, changeset_id, options = {})
     if options[:retile]
       clear_tiles(changeset_id, zoom)
     else
       return -1 if has_tiles(changeset_id)
     end
 
-    @conn.transaction do |c|
-      @@log.debug "Generating way tiles..."
-      for row in @conn.exec_prepared('select_way_ids', [changeset_id]).to_a
-        @way_tiler.create_way_tiles(row['el_id'].to_i, changeset_id, false)
+    count = 0
+
+    for change in @conn.exec_prepared('select_changes').to_a
+      change['geom_changed'] = (change['geom_changed'] == 't')
+      if change['geom']
+        change['geom_obj'] = @wkb_reader.read_hex(change['geom'])
+        change['geom_obj_prep'] = change['geom_obj'].to_prepared
       end
+      if change['prev_geom']
+        change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom'])
+        change['prev_geom_obj_prep'] = change['prev_geom_obj'].to_prepared
+      end
+      if change['diff_bbox']
+        change['diff_geom_obj'] =  change['geom_obj'].difference(change['prev_geom_obj'])
+        change['diff_geom_obj_prep'] = change['diff_geom_obj'].to_prepared
+      end
+
+      @@log.debug "#{change['el_type']} #{change['el_id']} (#{change['el_version']})"
+
+      count += create_change_tiles(changeset_id, change, change['id'].to_i, zoom)
+
+      # GC has problems if we don't do this explicitly...
+      change['geom_obj'] = nil
+      change['prev_geom_obj'] = nil
+      change['diff_geom_obj'] = nil
     end
 
-    count = nil
-    @conn.transaction do |c|
-      @@log.debug "Generating changeset tiles..."
-      count = @conn.exec_prepared('generate_changeset_tiles', [changeset_id]).cmd_tuples
-    end
+    @conn.exec_prepared('generate_changeset_tiles', [changeset_id, zoom])
 
     @@log.debug "Aggregating tiles..."
 
-    @conn.transaction do |c|
-      # Now generate tiles at lower zoom levels.
-      (12..zoom).reverse_each do |i|
-        @conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
-      end
+    # Now generate tiles at lower zoom levels.
+    (12..zoom).reverse_each do |i|
+      #@conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
     end
 
     count
   end
 
-  def ensure_way_revisions(changeset_id)
-    @conn.exec("SELECT OWL_UpdateWayRevisions(q.id) FROM (
-      SELECT DISTINCT id FROM ways WHERE changeset_id = #{changeset_id} UNION
-      SELECT DISTINCT id FROM ways WHERE nodes && (SELECT array_agg(id) FROM nodes WHERE changeset_id = #{changeset_id})) q")
+  def add_change_tile(x, y, zoom, change, geom, prev_geom)
+    @conn.exec_prepared('insert_tile', [x, y, change['tstamp'], change['el_type'], change['action'],
+      change['el_id'], change['version'], change['tags'], change['prev_tags'],
+      (geom ? @wkb_writer.write_hex(geom) : nil),
+      (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)])
+#      to_postgres_geom_array(data[:geom]), to_postgres_geom_array(data[:prev_geom])])
+#      "INSERT INTO _tiles (x, y, c) VALUES
+ #       ($1, $2, ROW($3, $4, $5, $6, $7, $8, $9, $10, $11)::change)")
+
+  end
+
+  def create_change_tiles(changeset_id, change, change_id, zoom)
+    if change['el_action'] == 'DELETE'
+      count = create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
+    else
+      count = create_geom_tiles(changeset_id, change, change['geom_obj'], change['geom_obj_prep'], change_id, zoom, false)
+      if change['geom_changed']
+        count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
+      end
+    end
+
+    @@log.debug "  Created #{count} tile(s)"
+    count
   end
 
   def create_geom_tiles(changeset_id, change, geom, geom_prep, change_id, zoom, is_prev)
@@ -141,121 +171,73 @@ class ChangesetTiler
     count
   end
 
+  def prepare_tiles(tiles_to_check, geom, source_zoom, zoom)
+    tiles = Set.new
+    for tile in tiles_to_check
+      tile_geom = get_tile_geom(tile[0], tile[1], source_zoom)
+      intersects = geom.intersects?(tile_geom)
+      tiles.merge(subtiles(tile, source_zoom, zoom)) if intersects
+    end
+    tiles
+  end
+
+  def prepare_tiles_to_check(geom, bbox, source_zoom)
+    tiles = Set.new
+    test_zoom = 11
+    bbox_to_tiles(test_zoom, bbox).select {|tile| geom.intersects?(get_tile_geom(tile[0], tile[1], test_zoom))}.each do |tile|
+      tiles.merge(subtiles(tile, test_zoom, source_zoom))
+    end
+    tiles
+  end
+
+  def get_tile_geom(x, y, zoom)
+    cs = Geos::CoordinateSequence.new(5, 2)
+    y1, x1 = tile2latlon(x, y, zoom)
+    y2, x2 = tile2latlon(x + 1, y + 1, zoom)
+    cs.y[0], cs.x[0] = y1, x1
+    cs.y[1], cs.x[1] = y1, x2
+    cs.y[2], cs.x[2] = y2, x2
+    cs.y[3], cs.x[3] = y2, x1
+    cs.y[4], cs.x[4] = y1, x1
+    Geos::create_polygon(cs, :srid => 4326)
+  end
+
   def generate_changes(changeset_id)
-    @conn.exec_prepared('delete_changes', [changeset_id])
+    #@conn.exec_prepared('delete_changes', [changeset_id])
     @conn.exec_prepared('insert_changes', [changeset_id])
   end
 
   def setup_prepared_statements
-    @conn.prepare('delete_changes', 'DELETE FROM changes WHERE changeset_id = $1')
+    #@conn.prepare('delete_changes', 'DELETE FROM changes WHERE changeset_id = $1')
 
-    @conn.prepare('insert_changes', 'INSERT INTO changes
-      (changeset_id, tstamp, el_changeset_id, el_type, el_id, el_version, el_rev, el_action,
-        tags, prev_tags)
-      SELECT * FROM OWL_GenerateChanges($1)')
+    @conn.exec('CREATE TEMPORARY TABLE _changes (c change)')
 
-    @conn.prepare('select_way_ids', "SELECT DISTINCT el_id FROM changes WHERE changeset_id = $1 AND el_type = 'W'")
+    @conn.exec('CREATE TEMPORARY TABLE _tiles (x int, y int, c change)')
+
+    #@conn.prepare('insert_changes', '--INSERT INTO _changes (change)
+    #  SELECT change FROM OWL_GenerateChanges($1)')
+
+    @conn.prepare('insert_changes', 'INSERT INTO _changes SELECT unnest(OWL_GenerateChanges($1))')
+
+    @conn.prepare('select_changes',
+      "SELECT (c).action, (c).el_id, (c).version, (c).el_type, (c).tstamp, (c).geom, (c).prev_geom,
+          CASE WHEN (c).el_type = 'N' THEN ST_X((c).prev_geom) ELSE NULL END AS prev_lon,
+          CASE WHEN (c).el_type = 'N' THEN ST_Y((c).prev_geom) ELSE NULL END AS prev_lat,
+          CASE WHEN (c).el_type = 'N' THEN ST_X((c).geom) ELSE NULL END AS lon,
+          CASE WHEN (c).el_type = 'N' THEN ST_Y((c).geom) ELSE NULL END AS lat,
+          Box2D((c).geom) AS geom_bbox, Box2D((c).prev_geom) AS prev_geom_bbox,
+          Box2D(ST_Difference((c).geom, (c).prev_geom)) AS diff_bbox
+        FROM _changes")
+
+    @conn.prepare('insert_tile',
+      "INSERT INTO _tiles (x, y, c) VALUES
+        ($1, $2, ROW($3, $4, $5, $6, $7, $8, $9, $10, $11)::change)")
 
     @conn.prepare('generate_changeset_tiles',
-      "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes, geom, prev_geom)
-      SELECT
-        $1::int,
-        MAX(q.tstamp),
-        16,
-        q.x,
-        q.y,
-        array_agg(q.change_id),
-        array_agg(q.geom),
-        array_agg(q.prev_geom)
-      FROM (
-        SELECT
-          t.tstamp,
-          t.x,
-          t.y,
-          c.id AS change_id,
-          t.geom AS geom,
-          CASE WHEN ST_AsText(t.geom) != ST_AsText(prev_t.geom) THEN prev_t.geom ELSE NULL END AS prev_geom
-        FROM changes c
-        INNER JOIN way_tiles t ON (t.way_id = c.el_id AND t.rev = c.el_rev)
-        INNER JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1 AND
-          t.x = prev_t.x AND t.y = prev_t.y)
-        WHERE c.changeset_id = $1 AND c.el_type = 'W' AND
-          (c.tags != c.prev_tags OR ((t.geom = prev_t.geom) IS NOT TRUE))
-
-          UNION
-
-        SELECT
-          prev_t.tstamp,
-          prev_t.x,
-          prev_t.y,
-          c.id AS change_id,
-          NULL AS geom,
-          prev_t.geom AS prev_geom
-        FROM changes c
-        INNER JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1)
-        LEFT JOIN way_tiles t ON (t.way_id = c.el_id AND t.rev = c.el_rev AND t.x = prev_t.x AND t.y = prev_t.y)
-        WHERE c.changeset_id = $1 AND c.el_type = 'W' AND t.x IS NULL
-
-          UNION
-
-        SELECT
-          t.tstamp,
-          t.x,
-          t.y,
-          c.id AS change_id,
-          t.geom AS geom,
-          NULL AS prev_geom
-        FROM changes c
-        INNER JOIN way_tiles t ON (t.way_id = c.el_id AND t.rev = c.el_rev)
-        LEFT JOIN way_tiles prev_t ON (prev_t.way_id = c.el_id AND prev_t.rev = c.el_rev - 1 AND
-          t.x = prev_t.x AND t.y = prev_t.y)
-        WHERE c.changeset_id = $1 AND c.el_type = 'W' AND prev_t.x IS NULL
-
-          UNION
-
-        SELECT
-          q.tstamp,
-          CASE WHEN q.t_x IS NOT NULL THEN q.t_x ELSE q.prev_t_x END,
-          CASE WHEN q.t_y IS NOT NULL THEN q.t_y ELSE q.prev_t_y END,
-          q.change_id AS change_id,
-          q.geom,
-          CASE WHEN q.geom = q.prev_geom OR t_x != prev_t_x OR t_y != prev_t_y THEN NULL ELSE prev_geom END AS prev_geom
-        FROM (
-          SELECT n.tstamp, n.geom, prev_n.geom AS prev_geom,
-            (SELECT x FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(n.geom) THEN n.geom ELSE NULL END)) AS t_x,
-            (SELECT y FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(n.geom) THEN n.geom ELSE NULL END)) AS t_y,
-            (SELECT x FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(prev_n.geom) THEN prev_n.geom ELSE NULL END)) AS prev_t_x,
-            (SELECT y FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(prev_n.geom) THEN prev_n.geom ELSE NULL END)) AS prev_t_y,
-            c.id AS change_id
-          FROM changes c
-          INNER JOIN nodes n ON (n.id = c.el_id AND n.version = c.el_version)
-          INNER JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.rev = n.rev - 1)
-          WHERE c.changeset_id = $1 AND c.el_type = 'N') q
-
-          UNION
-
-        SELECT
-          q.tstamp,
-          q.t_x,
-          q.t_y,
-          q.change_id AS change_id,
-          q.geom,
-          CASE WHEN q.geom = q.prev_geom OR t_x != prev_t_x OR t_y != prev_t_y THEN NULL ELSE prev_geom END AS prev_geom
-        FROM (
-          SELECT n.tstamp, n.geom, prev_n.geom AS prev_geom,
-            (SELECT x FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(n.geom) THEN n.geom ELSE NULL END)) AS t_x,
-            (SELECT y FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(n.geom) THEN n.geom ELSE NULL END)) AS t_y,
-            (SELECT x FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(prev_n.geom) THEN prev_n.geom ELSE NULL END)) AS prev_t_x,
-            (SELECT y FROM OWL_LatLonToTile(16, CASE WHEN ST_IsValid(prev_n.geom) THEN prev_n.geom ELSE NULL END)) AS prev_t_y,
-            c.id AS change_id
-          FROM changes c
-          LEFT JOIN nodes n ON (n.id = c.el_id AND n.version = c.el_version)
-          LEFT JOIN nodes prev_n ON (prev_n.id = c.el_id AND prev_n.rev = n.rev - 1)
-          WHERE c.changeset_id = $1 AND c.el_type = 'N' AND (n.tstamp IS NULL OR prev_n.tstamp IS NULL) AND
-            (n.tstamp IS NOT NULL OR prev_n.tstamp IS NOT NULL)) q
-        WHERE q.t_x IS NOT NULL
-      ) q
-      GROUP BY q.x, q.y")
+      "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes)
+      SELECT $1, MAX((c).tstamp), $2, x, y, array_agg(c)
+      FROM _tiles
+      GROUP BY x, y")
   end
 end
 
