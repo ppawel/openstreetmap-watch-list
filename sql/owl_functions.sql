@@ -267,7 +267,8 @@ BEGIN
 
   moved_nodes_ids := (SELECT array_agg(id) FROM _tmp_moved_nodes);
 
-  RAISE NOTICE '% --   Prepared data (min = %, max = %)', clock_timestamp(), min_tstamp, max_tstamp;
+  RAISE NOTICE '% --   Prepared data (min = %, max = %, moved nodes = %)', clock_timestamp(),
+    min_tstamp, max_tstamp, (SELECT COUNT(*) FROM _tmp_moved_nodes);
 
   CREATE TEMPORARY TABLE _tmp_result ON COMMIT DROP AS
   SELECT *
@@ -416,7 +417,7 @@ BEGIN
       --OWL_MakeLine(w.nodes, min_tstamp) AS prev_geom
     FROM ways w
     WHERE w.nodes && moved_nodes_ids AND
-      w.version = (SELECT version FROM ways WHERE id = w.id AND w.tstamp <= max_tstamp ORDER BY version DESC LIMIT 1) AND
+      w.version = (SELECT version FROM ways WHERE id = w.id AND tstamp <= max_tstamp ORDER BY version DESC LIMIT 1) AND
       w.changeset_id != $1) w; -- AND
       --OWL_MakeLine(w.nodes, max_tstamp) IS NOT NULL AND
       --(w.version = 1 OR OWL_MakeLine(w.nodes, min_tstamp) IS NOT NULL)) w;

@@ -77,7 +77,7 @@ class ChangesetTiler
         change['diff_geom_obj_prep'] = change['diff_geom_obj'].to_prepared
       end
 
-      @@log.debug "#{change['el_type']} #{change['el_id']} (#{change['el_version']})"
+      @@log.debug "#{change['el_type']} #{change['el_id']} (#{change['version']})"
 
       count += create_change_tiles(changeset_id, change, change['id'].to_i, zoom)
 
@@ -111,7 +111,7 @@ class ChangesetTiler
   end
 
   def create_change_tiles(changeset_id, change, change_id, zoom)
-    if change['el_action'] == 'DELETE'
+    if change['action'] == 'DELETE'
       count = create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
     else
       count = create_geom_tiles(changeset_id, change, change['geom_obj'], change['geom_obj_prep'], change_id, zoom, false)
@@ -221,6 +221,7 @@ class ChangesetTiler
 
     @conn.prepare('select_changes',
       "SELECT (c).action, (c).el_id, (c).version, (c).el_type, (c).tstamp, (c).geom, (c).prev_geom,
+          (c).tags, (c).prev_tags,
           CASE WHEN (c).el_type = 'N' THEN ST_X((c).prev_geom) ELSE NULL END AS prev_lon,
           CASE WHEN (c).el_type = 'N' THEN ST_Y((c).prev_geom) ELSE NULL END AS prev_lat,
           CASE WHEN (c).el_type = 'N' THEN ST_X((c).geom) ELSE NULL END AS lon,
