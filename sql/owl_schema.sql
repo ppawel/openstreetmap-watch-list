@@ -16,6 +16,7 @@ CREATE TYPE action AS ENUM ('CREATE', 'MODIFY', 'DELETE', 'AFFECT');
 
 DROP TYPE IF EXISTS change CASCADE;
 CREATE TYPE change AS (
+  id int,
   tstamp timestamp without time zone,
   el_type element_type,
   action action,

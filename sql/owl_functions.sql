@@ -174,19 +174,14 @@ $$ LANGUAGE sql IMMUTABLE;
 -- Merges (collects/unions in the spatial sense) geometries belonging
 -- to the same change.
 --
--- $1 - an array of change ids
--- $2 - an array of geometries corresponding to changes from $1
+-- $1 - an array of changes
 --
 -- The two arrays are of the same size. Returns an array of GeoJSON strings.
 --
-CREATE OR REPLACE FUNCTION OWL_JoinTileGeometriesByChange(bigint[], geometry(GEOMETRY, 4326)[]) RETURNS text[] AS $$
+CREATE OR REPLACE FUNCTION OWL_JoinTileGeometriesByChange(change[]) RETURNS text[] AS $$
   WITH joined_arrays AS (
-    SELECT change_id, geom, GeometryType(geom) AS geom_type
-    FROM
-      (SELECT row_number() OVER () AS seq, unnest AS change_id FROM unnest($1)) x
-      INNER JOIN
-      (SELECT row_number() OVER () AS seq, unnest AS geom FROM unnest($2)) y
-      ON (x.seq = y.seq)
+    SELECT (c.unnest).id AS change_id, (c.unnest).geom, GeometryType((c.unnest).geom) AS geom_type
+    FROM (SELECT unnest($1)) c
   )
   SELECT
     array_agg(CASE WHEN c.g IS NOT NULL AND NOT ST_IsEmpty(c.g) AND ST_NumGeometries(c.g) > 0 THEN ST_AsGeoJSON(ST_CollectionHomogenize(c.g)) ELSE NULL END order by c.change_id)
@@ -348,7 +343,7 @@ BEGIN
     FROM ways w
     INNER JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
     WHERE w.changeset_id = $1 AND w.visible) w
-  WHERE w.geom_changed IS NOT NULL AND (w.geom_changed OR w.tags_changed);
+  WHERE w.geom_changed IS NOT NULL AND (w.geom_changed OR w.tags_changed OR w.nodes_changed);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Modified ways done (%)', clock_timestamp(), row_count;
@@ -425,7 +420,8 @@ BEGIN
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Affected ways done (%)', clock_timestamp(), row_count;
 
-  RETURN array_agg(ROW(
+  RETURN (SELECT array_agg(x.c) FROM (SELECT ROW(
+    (row_number() OVER ())::int,
     tstamp,
     type,
     el_action,
@@ -435,7 +431,7 @@ BEGIN
     prev_tags,
     geom,
     prev_geom
-  )::change) FROM _tmp_result;
+  )::change AS c FROM _tmp_result ORDER BY tstamp) x);
 END
 $$ LANGUAGE plpgsql;
 

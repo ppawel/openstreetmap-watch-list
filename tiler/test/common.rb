@@ -89,6 +89,7 @@ module TestCommon
 
   def get_changes
     @conn.exec("SELECT DISTINCT
+        (c.unnest).id,
         (c.unnest).tstamp,
         (c.unnest).tags,
         (c.unnest).prev_tags,

@@ -93,14 +93,14 @@ class ChangesetTiler
 
     # Now generate tiles at lower zoom levels.
     (12..zoom).reverse_each do |i|
-      #@conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
+      @conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
     end
 
     count
   end
 
   def add_change_tile(x, y, zoom, change, geom, prev_geom)
-    @conn.exec_prepared('insert_tile', [x, y, change['tstamp'], change['el_type'], change['action'],
+    @conn.exec_prepared('insert_tile', [x, y, change['id'], change['tstamp'], change['el_type'], change['action'],
       change['el_id'], change['version'], change['tags'], change['prev_tags'],
       (geom ? @wkb_writer.write_hex(geom) : nil),
       (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)])
@@ -220,7 +220,7 @@ class ChangesetTiler
     @conn.prepare('insert_changes', 'INSERT INTO _changes SELECT unnest(OWL_GenerateChanges($1))')
 
     @conn.prepare('select_changes',
-      "SELECT (c).action, (c).el_id, (c).version, (c).el_type, (c).tstamp, (c).geom, (c).prev_geom,
+      "SELECT (c).id, (c).action, (c).el_id, (c).version, (c).el_type, (c).tstamp, (c).geom, (c).prev_geom,
           (c).tags, (c).prev_tags,
           CASE WHEN (c).el_type = 'N' THEN ST_X((c).prev_geom) ELSE NULL END AS prev_lon,
           CASE WHEN (c).el_type = 'N' THEN ST_Y((c).prev_geom) ELSE NULL END AS prev_lat,
@@ -232,7 +232,7 @@ class ChangesetTiler
 
     @conn.prepare('insert_tile',
       "INSERT INTO _tiles (x, y, c) VALUES
-        ($1, $2, ROW($3, $4, $5, $6, $7, $8, $9, $10, $11)::change)")
+        ($1, $2, ROW($3, $4, $5, $6, $7, $8, $9, $10, $11, $12)::change)")
 
     @conn.prepare('generate_changeset_tiles',
       "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes)
