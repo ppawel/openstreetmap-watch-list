@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class ApiControllerTest < ActionController::TestCase
+class ChangesetApiControllerTest < ActionController::TestCase
   test "Retrieving a JSON tile (simple node tags change)" do
     reset_db
     load_changeset(12917265)
@@ -135,11 +135,11 @@ class ApiControllerTest < ActionController::TestCase
 
   def load_changeset(changeset_id)
     system('psql -a -d owl_test -c "\copy changesets from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-changeset.csv"')
-    system('psql -a -d owl_test -c "\copy changes from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-changes.csv"')
-    system('psql -a -d owl_test -c "\copy tiles from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-tiles.csv"')
+    system('psql -a -d owl_test -c "\copy nodes from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-nodes.csv"')
+    system('psql -a -d owl_test -c "\copy ways from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-ways.csv"')
   end
 
   def reset_db
-    system('psql -a -d owl_test -c "TRUNCATE changes; TRUNCATE changesets; TRUNCATE tiles;"')
+    system('psql -a -d owl_test -c "TRUNCATE changesets; TRUNCATE changeset_tiles; TRUNCATE nodes; TRUNCATE ways;"')
   end
 end
