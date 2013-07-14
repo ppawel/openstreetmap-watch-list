@@ -1,4 +1,5 @@
 require 'utils'
+require 'changeset_tiler'
 
 ##
 # Implements OWL API operations.
@@ -50,22 +51,11 @@ class ChangesetApiController < ApplicationController
 private
   def find_changesets_by_tile(format)
     @x, @y, @zoom = get_xyz(params)
-    changesets = ActiveRecord::Base.connection.select_all("
-      SELECT cs.*,
-        #{format == 'geojson' ? '(SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.geom) AS g) AS geom_geojson,' : ''}
-        #{format == 'geojson' ? '(SELECT array_agg(ST_AsGeoJSON(g)) FROM unnest(t.prev_geom) AS g) AS prev_geom_geojson,' : ''}
-        (SELECT ST_Extent(g) FROM unnest(t.geom) AS g)::text AS bboxes,
-        cs.bbox::box2d::text AS total_bbox,
-        (SELECT array_agg(g) FROM unnest(t.changes) AS g) AS change_ids
-      FROM changeset_tiles t
-      INNER JOIN changesets cs ON (cs.id = t.changeset_id)
-      WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
-      #{get_timelimit_sql(params)}
-      GROUP BY cs.id, t.geom, t.prev_geom, t.changes
-      ORDER BY cs.created_at DESC
-      #{get_limit_sql(params)}").collect {|row| Changeset.new(row)}
-    load_changes(changesets)
-    changesets
+    params[:x1] = @x
+    params[:x2] = @x
+    params[:y1] = @y
+    params[:y2] = @y
+    find_changesets_by_range(format)
   end
 
   def find_changesets_by_range(format)
@@ -74,12 +64,13 @@ private
       SELECT
         changeset_id,
         MAX(tstamp) AS max_tstamp,
-        #{format == 'geojson' ? 'OWL_JoinTileGeometriesByChange(array_accum(t.changes), array_accum(t.geom)) AS geom_geojson,' : ''}
-        #{format == 'geojson' ? 'OWL_JoinTileGeometriesByChange(array_accum(t.changes), array_accum(t.prev_geom)) AS prev_geom_geojson,' : ''}
-        array_accum(((SELECT array_agg(x::box2d) FROM unnest(t.geom) x))) AS bboxes,
+        #{format == 'geojson' ? 'OWL_JoinTileGeometriesByChange(array_accum(t.changes)) AS geom_geojson,' : ''}
+        #{format == 'geojson' ? 'OWL_JoinTileGeometriesByChange(array_accum(t.changes)) AS prev_geom_geojson,' : ''}
+        array_accum(((SELECT array_agg((unnest.geom)::box2d) FROM unnest(t.changes)))) AS bboxes,
         cs.*,
-        cs.bbox AS total_bbox,
-        ARRAY(SELECT DISTINCT unnest FROM unnest(array_accum(t.changes)) ORDER by unnest) AS change_ids
+        cs.bbox AS total_bbox
+
+
       FROM changeset_tiles t
       INNER JOIN changesets cs ON (cs.id = t.changeset_id)
       WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
@@ -133,22 +124,10 @@ private
   def load_changes(changesets)
     return if changesets.empty?
 
-    # Gather change ids from all changesets.
-    change_ids = Set.new
-    changesets.each {|changeset| change_ids.merge(changeset.change_ids)}
-    return if change_ids.empty?
-
-    # Now load all the changes from the database with a single query.
-    changes = {}
-    for change_row in ActiveRecord::Base.connection.select_all("SELECT * FROM changes WHERE id IN
-        (#{change_ids.to_a.join(',')})")
-      change = Change.new(change_row)
-      changes[change.id] = change
-    end
-
     # And finally assign them back to changesets.
     for changeset in changesets
-      changeset.changes = []
+      #p changeset.changes
+=begin
       changeset.change_ids.uniq.each_with_index do |change_id, index|
         if !changes.include?(change_id.to_i)
           logger.warn("Change #{change_id} not found for changeset #{changeset.id}")
@@ -162,6 +141,7 @@ private
         changeset.changes << change
       end
       changeset.changes.sort! {|c1, c2| -(c1.tstamp <=> c2.tstamp)}
+=end
     end
   end
 
