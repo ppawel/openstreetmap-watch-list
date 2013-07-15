@@ -22,10 +22,14 @@ class Changeset
     @closed_at = hash['closed_at'] ? Time.parse(hash['closed_at']) : nil
     @open = hash['open'] == 't'
     @tags = eval("{#{hash['tags']}}")
-    @change_ids = pg_string_to_array(hash['change_ids']).map(&:to_i) if hash['change_ids']
+    @changes = pg_string_to_array(hash['changes']).collect {|change_string| Change.from_string(@id, change_string)}
+    pg_string_to_array(hash['geojson']).each_with_index do |geojson, index|
+      @changes[index].geom_geojson = geojson
+    end
+    pg_string_to_array(hash['prev_geojson']).each_with_index do |geojson, index|
+      @changes[index].prev_geom_geojson = geojson
+    end
     @bboxes = box2d_to_bbox(hash['bboxes']) if hash['bboxes']
-    @geom_geojson = pg_string_to_array(hash['geom_geojson']) if hash['geom_geojson']
-    @prev_geom_geojson = pg_string_to_array(hash['prev_geom_geojson']) if hash['prev_geom_geojson']
   end
 
   def generate_json(options = {:include_changes => true})
@@ -43,7 +47,7 @@ class Changeset
     }
     # Optionally include metadata for changes (but without GeoJSON strings - they belong in GeoJSON features).
     if options[:include_changes]
-      result['changes'] = changes.as_json.collect do |change|
+      result['changes'] = @changes.as_json.collect do |change|
         if change.has_key?('geom_geojson')
           change.delete('geom_geojson')
           change.delete('prev_geom_geojson')

@@ -68,9 +68,10 @@ private
         #{format == 'geojson' ? 'OWL_JoinTileGeometriesByChange(array_accum(t.changes)) AS prev_geom_geojson,' : ''}
         array_accum(((SELECT array_agg((unnest.geom)::box2d) FROM unnest(t.changes)))) AS bboxes,
         cs.*,
-        cs.bbox AS total_bbox
-
-
+        cs.bbox AS total_bbox,
+        array_accum(t.changes) AS changes,
+        array_accum(((SELECT array_agg(ST_AsGeoJSON(unnest.geom)) FROM unnest(t.changes)))) AS geojson,
+        array_accum(((SELECT array_agg(ST_AsGeoJSON(unnest.prev_geom)) FROM unnest(t.changes)))) AS prev_geojson
       FROM changeset_tiles t
       INNER JOIN changesets cs ON (cs.id = t.changeset_id)
       WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}
@@ -84,7 +85,6 @@ private
         )
       GROUP BY changeset_id, cs.id
       ORDER BY created_at DESC").collect {|row| Changeset.new(row)}
-    load_changes(changesets)
     changesets
   end
 
@@ -119,30 +119,6 @@ private
         #{get_timelimit_sql(params)}
         GROUP BY x, y").to_a
     rows.to_a
-  end
-
-  def load_changes(changesets)
-    return if changesets.empty?
-
-    # And finally assign them back to changesets.
-    for changeset in changesets
-      #p changeset.changes
-=begin
-      changeset.change_ids.uniq.each_with_index do |change_id, index|
-        if !changes.include?(change_id.to_i)
-          logger.warn("Change #{change_id} not found for changeset #{changeset.id}")
-          next
-        end
-        change = changes[change_id.to_i]
-        if changeset.geom_geojson and changeset.prev_geom_geojson
-          change.geom_geojson = changeset.geom_geojson[index]
-          change.prev_geom_geojson = changeset.prev_geom_geojson[index]
-        end
-        changeset.changes << change
-      end
-      changeset.changes.sort! {|c1, c2| -(c1.tstamp <=> c2.tstamp)}
-=end
-    end
   end
 
   def changesets_to_geojson(changesets, x, y, zoom)
