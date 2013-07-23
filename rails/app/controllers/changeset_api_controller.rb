@@ -71,7 +71,9 @@ private
         cs.bbox AS total_bbox,
         array_accum(t.changes) AS changes,
         array_accum(((SELECT array_agg(ST_AsGeoJSON(unnest.geom)) FROM unnest(t.changes)))) AS geojson,
-        array_accum(((SELECT array_agg(ST_AsGeoJSON(unnest.prev_geom)) FROM unnest(t.changes)))) AS prev_geojson
+        array_accum(((SELECT array_agg(ST_AsGeoJSON(unnest.prev_geom)) FROM unnest(t.changes)))) AS prev_geojson,
+        array_accum(((SELECT array_agg(unnest.tags) FROM unnest(t.changes)))) AS change_tags,
+        array_accum(((SELECT array_agg(unnest.prev_tags) FROM unnest(t.changes)))) AS change_prev_tags
       FROM changeset_tiles t
       INNER JOIN changesets cs ON (cs.id = t.changeset_id)
       WHERE x >= #{@x1} AND x <= #{@x2} AND y >= #{@y1} AND y <= #{@y2} AND zoom = #{@zoom}

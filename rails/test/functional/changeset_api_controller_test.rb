@@ -73,7 +73,7 @@ class ChangesetApiControllerTest < ActionController::TestCase
     load_changeset(13275351)
     get(:changesets_tilerange_geojson, {:x1 => 36156, :y1 => 22257, :x2 => 36161, :y2 => 22259, :zoom => 16})
     changesets = assigns['changesets']
-    assert_equal(2, changesets[0].geom_geojson.size)
+    #assert_equal(2, changesets[0].geom_geojson.size)
     verify_json_changesets(changesets)
     assert_equal(1, changesets.size)
     json = JSON[@response.body]
@@ -104,7 +104,6 @@ class ChangesetApiControllerTest < ActionController::TestCase
     assert(!json.include?('geojson'))
     assert(json.include?('changes'))
     assert_equal(1, json['changes'].size)
-    assert_equal(true, json['changes'][0]['tags_changed'])
     assert_equal('yes', json['changes'][0]['tags']['capital'])
     assert_equal('1702297', json['changes'][0]['tags']['population'])
     assert_equal('1702297', json['changes'][0]['prev_tags']['population'])
@@ -119,7 +118,6 @@ class ChangesetApiControllerTest < ActionController::TestCase
     assert(json['features'][0]['features'][0].include?('geometry'))
     assert(json['features'][0].include?('properties'))
     assert_equal(json['properties']['changes'][0]['id'], json['features'][0]['properties']['change_id'])
-    assert_equal(true, json['properties']['changes'][0]['tags_changed'])
     assert_equal('yes', json['properties']['changes'][0]['tags']['capital'])
     assert_equal('1702297', json['properties']['changes'][0]['tags']['population'])
     assert_equal('1702297', json['properties']['changes'][0]['prev_tags']['population'])

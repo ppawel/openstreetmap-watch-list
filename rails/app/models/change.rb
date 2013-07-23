@@ -32,6 +32,8 @@ class Change
     hash['el_action'] = a[3]
     hash['el_id'] = a[4]
     hash['el_version'] = a[5]
+    #p s
+    #p eval(str.gsub(/""/, '"').gsub(/^(.*?)"""/, '{').gsub(/"([^"]*)$/, '}'))
     #hash['geom_geojson'] = geojson(a[-2]) unless a[-2].empty?
     #hash['prev_geom_geojson'] = geojson(a[-1]) unless a[-1].empty?
     Change.new(changeset_id, hash)

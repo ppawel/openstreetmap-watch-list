@@ -23,12 +23,23 @@ class Changeset
     @open = hash['open'] == 't'
     @tags = eval("{#{hash['tags']}}")
     @changes = pg_string_to_array(hash['changes']).collect {|change_string| Change.from_string(@id, change_string)}
+
     pg_string_to_array(hash['geojson']).each_with_index do |geojson, index|
       @changes[index].geom_geojson = geojson
     end
+
     pg_string_to_array(hash['prev_geojson']).each_with_index do |geojson, index|
       @changes[index].prev_geom_geojson = geojson
     end
+
+    pg_string_to_array(hash['change_tags']).each_with_index do |tags, index|
+      @changes[index].tags = eval("{#{tags}}")
+    end
+
+    pg_string_to_array(hash['change_prev_tags']).each_with_index do |tags, index|
+      @changes[index].prev_tags = eval("{#{tags}}")
+    end
+
     @bboxes = box2d_to_bbox(hash['bboxes']) if hash['bboxes']
   end
 
