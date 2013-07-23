@@ -22,25 +22,28 @@ class Changeset
     @closed_at = hash['closed_at'] ? Time.parse(hash['closed_at']) : nil
     @open = hash['open'] == 't'
     @tags = eval("{#{hash['tags']}}")
-    @changes = pg_string_to_array(hash['changes']).collect {|change_string| Change.from_string(@id, change_string)}
-
-    pg_string_to_array(hash['geojson']).each_with_index do |geojson, index|
-      @changes[index].geom_geojson = geojson
-    end
-
-    pg_string_to_array(hash['prev_geojson']).each_with_index do |geojson, index|
-      @changes[index].prev_geom_geojson = geojson
-    end
-
-    pg_string_to_array(hash['change_tags']).each_with_index do |tags, index|
-      @changes[index].tags = eval("{#{tags}}")
-    end
-
-    pg_string_to_array(hash['change_prev_tags']).each_with_index do |tags, index|
-      @changes[index].prev_tags = eval("{#{tags}}")
-    end
-
     @bboxes = box2d_to_bbox(hash['bboxes']) if hash['bboxes']
+
+    @changes = []
+
+    change_ids = []
+    geojsons = pg_string_to_array(hash['geojson'])
+    prev_geojsons = pg_string_to_array(hash['prev_geojson'])
+    change_tags = pg_string_to_array(hash['change_tags'])
+    change_prev_tags = pg_string_to_array(hash['change_prev_tags'])
+
+    pg_string_to_array(hash['changes']).each_with_index do |change_string, index|
+      change = Change.from_string(@id, change_string)
+      change.geom_geojson = geojsons[index]
+      change.prev_geom_geojson = prev_geojsons[index]
+      change.tags = eval("{#{change_tags[index]}}")
+      change.prev_tags = eval("{#{change_prev_tags[index]}}")
+
+      unless change_ids.include?(change.id)
+        change_ids << change.id
+        @changes << change
+      end
+    end
   end
 
   def generate_json(options = {:include_changes => true})

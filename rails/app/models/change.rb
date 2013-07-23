@@ -25,14 +25,13 @@ class Change
 
   def self.from_string(changeset_id, str)
     hash = {}
-    a = str.delete('(', ')').split(',')
+    a = str.delete('(').delete(')').split(',')
     hash['id'] = a[0]
     hash['tstamp'] = a[1].delete('"')
     hash['el_type'] = a[2]
     hash['el_action'] = a[3]
     hash['el_id'] = a[4]
     hash['el_version'] = a[5]
-    #p s
     #p eval(str.gsub(/""/, '"').gsub(/^(.*?)"""/, '{').gsub(/"([^"]*)$/, '}'))
     #hash['geom_geojson'] = geojson(a[-2]) unless a[-2].empty?
     #hash['prev_geom_geojson'] = geojson(a[-1]) unless a[-1].empty?
