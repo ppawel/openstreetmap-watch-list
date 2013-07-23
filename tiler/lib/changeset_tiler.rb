@@ -33,6 +33,7 @@ class ChangesetTiler
       generate_changes(changeset_id)
       tile_count = generate_tiles(zoom, changeset_id, options)
     end
+    cleanup
     @@log.debug "mem = #{memory_usage} (after)"
     tile_count
   end
@@ -52,6 +53,11 @@ class ChangesetTiler
   end
 
   protected
+
+  def cleanup
+     @conn.exec('TRUNCATE _changes')
+     @conn.exec('TRUNCATE _tiles')
+  end
 
   def generate_tiles(zoom, changeset_id, options = {})
     if options[:retile]
