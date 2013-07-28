@@ -146,6 +146,25 @@ class ChangesetTilerTest < Test::Unit::TestCase
     assert_equal(1, changes.size)
   end
 
+  def test_13294164
+    setup_changeset_test(13294164)
+    assert_equal(9, find_changes('el_type' => 'W').size)
+
+    # traffic_signals changed position - should be a change for that.
+    changes = find_changes('el_type' => 'N', 'el_id' => '244942711')
+    assert_equal(1, changes.size)
+  end
+
+  def test_16951072
+    setup_changeset_test(16951072)
+    assert_equal(2, find_changes('el_type' => 'W').size)
+  end
+
+  def test_16863679
+    setup_changeset_test(16863679)
+    assert_equal(3, find_changes('el_type' => 'W').size)
+  end
+
   def test_14530383_forest_with_small_change_and_multiple_changes_of_one_object
     setup_changeset_test(14530383)
     forest_change = find_changes('el_type' => 'W', 'el_id' => '161116311', 'version' => '3')
@@ -169,5 +188,13 @@ class ChangesetTilerTest < Test::Unit::TestCase
 
   def test_collection
     setup_changeset_test(14836474)
+  end
+
+  # Way 16105282 has no-change versions.
+  def test_7082
+    setup_changeset_test(7082)
+    p find_changes('el_type' => 'W', 'el_id' => '16105282')[0]
+    p find_changes('el_type' => 'W', 'el_id' => '16105282')[1]
+    assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '16105282').size)
   end
 end

@@ -86,6 +86,7 @@ class Changeset
   end
 
   def pg_string_to_array(str)
+    return [] unless str
     dup = str.dup
     dup[0] = '['
     dup[-1] = ']'

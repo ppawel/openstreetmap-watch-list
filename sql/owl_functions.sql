@@ -206,6 +206,26 @@ CREATE OR REPLACE FUNCTION OWL_JoinTileGeometriesByChange(change[]) RETURNS text
 $$ LANGUAGE sql IMMUTABLE;
 
 --
+-- OWL_MergeChanges
+--
+CREATE OR REPLACE FUNCTION OWL_MergeChanges(change[]) RETURNS change[] AS $$
+  SELECT array_agg(x.ch ORDER BY (x.ch).id) FROM (
+  SELECT DISTINCT ROW(
+    id,
+    tstamp,
+    el_type,
+    action,
+    el_id,
+    version,
+    tags,
+    prev_tags,
+    NULL,
+    NULL)::change ch
+  FROM unnest($1) c
+  GROUP BY c.id, c.tstamp, c.el_type, c.action, c.el_id, c.version, c.tags, c.prev_tags) x
+$$ LANGUAGE sql;
+
+--
 -- OWL_GenerateChanges
 --
 CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS change[] AS $$
@@ -337,7 +357,7 @@ BEGIN
     SELECT w.*,
       prev.tags AS prev_tags,
       prev.nodes AS prev_nodes,
-      NOT OWL_Equals(OWL_MakeLine(w.nodes, max_tstamp), OWL_MakeLine(prev.nodes, min_tstamp)) AS geom_changed,
+      NOT OWL_Equals(OWL_MakeLine(w.nodes, w.tstamp), OWL_MakeLine(prev.nodes, prev.tstamp)) AS geom_changed,
       CASE WHEN NOT w.visible OR w.version = 1 THEN NULL ELSE w.tags != prev.tags END AS tags_changed,
       w.nodes != prev.nodes AS nodes_changed
     FROM ways w
@@ -419,6 +439,8 @@ BEGIN
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Affected ways done (%)', clock_timestamp(), row_count;
+
+  RAISE NOTICE '% -- Returning % change(s)', clock_timestamp(), (SELECT COUNT(*) FROM _tmp_result);
 
   RETURN (SELECT array_agg(x.c) FROM (SELECT ROW(
     (row_number() OVER ())::int,
