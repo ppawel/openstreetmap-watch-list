@@ -18,6 +18,10 @@ OwlViewer::Application.routes.draw do
   match 'api/0.1/summary/:zoom/:x/:y' => 'changeset_api#summary_tile', :constraints => @xyz_constrains
   match 'api/0.1/summary/:zoom/:x1/:y1/:x2/:y2' => 'changeset_api#summary_tilerange', :constraints => @range_constrains, :format => 'json'
 
+  # Single changeset operations
+  match 'api/0.1/changeset/:id.geojson' => 'changeset_api#changeset_geojson', :constraints => { :id => /\d+/ }, :format => 'json'
+  match 'api/0.1/changeset/:id.json' => 'changeset_api#changeset_json', :constraints => { :id => /\d+/ }, :format => 'json'
+
   # Map API
   match 'api/0.1/kothic/:zoom/:x/:y.js' => 'map_api#kothic', :constraints => @xyz_constrains
 end
