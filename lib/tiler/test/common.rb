@@ -31,20 +31,20 @@ module TestCommon
   end
 
   def load_changeset(id, update_revs = true)
-    if not File.exists?("../../testdata/#{id}-nodes.csv") or not File.exists?("../../testdata/#{id}-ways.csv")
+    if not File.exists?("testdata/#{id}-nodes.csv")
       raise "No test data for changeset #{id}"
     end
 
     @conn.exec("COPY nodes FROM STDIN;")
 
-    File.open("../../testdata/#{id}-nodes.csv").read.each_line do |line|
+    File.open("testdata/#{id}-nodes.csv").read.each_line do |line|
       @conn.put_copy_data(line)
     end
 
     @conn.put_copy_end
     @conn.exec("COPY ways FROM STDIN;")
 
-    File.open("../../testdata/#{id}-ways.csv").read.each_line do |line|
+    File.open("testdata/#{id}-ways.csv").read.each_line do |line|
       @conn.put_copy_data(line)
     end
 

@@ -4,6 +4,10 @@ class ApplicationController < ActionController::Base
   before_filter :cors_preflight_check
   after_filter :cors_set_access_control_headers
 
+  def test
+    TilerWorker.perform_async(123, 321)
+  end
+
   # For all responses in this controller, return the CORS access control headers.
 
   def cors_set_access_control_headers

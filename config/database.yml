@@ -17,7 +17,7 @@ test:
   #port: 3333
   #database: europe_osm
   database: owl_test
-  username: postgres
+  username: ppawel
   password: aa
   pool: 5
 

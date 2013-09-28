@@ -1,3 +1,6 @@
+require 'sidekiq/web'
+require 'sidekiq_status/web'
+
 Owl::Application.routes.draw do
   @xyz_constraints = {:zoom => /\d+/, :x => /\d+/, :y => /\d+/}
   @range_constraints = {:zoom => /\d+/, :x1 => /\d+/, :y1 => /\d+/, :x2 => /\d+/, :y2 => /\d+/}
@@ -21,5 +24,7 @@ Owl::Application.routes.draw do
   # Map API
   get 'api/0.1/kothic/:zoom/:x/:y.js' => 'map_api#kothic', :constraints => @xyz_constrains
 
-  mount ResqueWeb::Engine => "/resque"
+  get 'test' => 'application#test'
+
+  mount Sidekiq::Web => '/sidekiq'
 end

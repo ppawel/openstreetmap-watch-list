@@ -35,8 +35,9 @@ end
 gem 'pg'
 gem 'ffi-geos'
 
-gem "resque"#, "~> 2.0.0.pre.1", github: "resque/resque"
-gem 'resque-web', require: 'resque_web'
+gem 'sinatra', '>= 1.3.0', :require => nil
+gem 'sidekiq'
+gem 'sidekiq_status'
 
 # Use ActiveModel has_secure_password
 # gem 'bcrypt-ruby', '~> 3.0.0'
