@@ -12,7 +12,10 @@ class ChangesetTiler
 
   def initialize(conn)
     @conn = conn
-    setup_prepared_statements
+
+      setup_prepared_statements
+
+
     init_geos
   end
 
@@ -30,7 +33,6 @@ class ChangesetTiler
     tile_count = nil
     @@log.debug "mem = #{memory_usage} (before)"
     @conn.transaction do |c|
-      generate_changes(changeset_id)
       tile_count = generate_tiles(zoom, changeset_id, options)
     end
     cleanup
@@ -55,7 +57,6 @@ class ChangesetTiler
   protected
 
   def cleanup
-     @conn.exec('TRUNCATE _changes')
      @conn.exec('TRUNCATE _tiles')
   end
 
@@ -68,7 +69,7 @@ class ChangesetTiler
 
     count = 0
 
-    for change in @conn.exec_prepared('select_changes').to_a
+    for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
       change['geom_changed'] = (change['geom_changed'] == 't')
       if change['geom']
         change['geom_obj'] = @wkb_reader.read_hex(change['geom'])
@@ -208,22 +209,9 @@ class ChangesetTiler
     Geos::create_polygon(cs, :srid => 4326)
   end
 
-  def generate_changes(changeset_id)
-    #@conn.exec_prepared('delete_changes', [changeset_id])
-    @conn.exec_prepared('insert_changes', [changeset_id])
-  end
-
   def setup_prepared_statements
-    #@conn.prepare('delete_changes', 'DELETE FROM changes WHERE changeset_id = $1')
-
-    @conn.exec('CREATE TEMPORARY TABLE _changes (c change)')
-
+    @conn.exec('DROP TABLE IF EXISTS _tiles')
     @conn.exec('CREATE TEMPORARY TABLE _tiles (x int, y int, c change)')
-
-    #@conn.prepare('insert_changes', '--INSERT INTO _changes (change)
-    #  SELECT change FROM OWL_GenerateChanges($1)')
-
-    @conn.prepare('insert_changes', 'INSERT INTO _changes SELECT unnest(OWL_GenerateChanges($1))')
 
     @conn.prepare('select_changes',
       "SELECT (c).id, (c).action, (c).el_id, (c).version, (c).el_type, (c).tstamp, (c).geom, (c).prev_geom,
@@ -234,7 +222,7 @@ class ChangesetTiler
           CASE WHEN (c).el_type = 'N' THEN ST_Y((c).geom) ELSE NULL END AS lat,
           Box2D((c).geom) AS geom_bbox, Box2D((c).prev_geom) AS prev_geom_bbox,
           Box2D(ST_Difference((c).geom, (c).prev_geom)) AS diff_bbox
-        FROM _changes")
+        FROM unnest(OWL_GenerateChanges($1)) c")
 
     @conn.prepare('insert_tile',
       "INSERT INTO _tiles (x, y, c) VALUES

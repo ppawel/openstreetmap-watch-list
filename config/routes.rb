@@ -24,7 +24,10 @@ Owl::Application.routes.draw do
   # Map API
   get 'api/0.1/kothic/:zoom/:x/:y.js' => 'map_api#kothic', :constraints => @xyz_constrains
 
-  get 'test' => 'application#test'
+  #get 'admin/:changeset_id' => 'application#test'
+  #get 'admin/:changeset_id' => 'application#test'
+  post 'admin/spawn_workers' => 'admin#spawn_workers'
 
   mount Sidekiq::Web => '/sidekiq'
+  mount Sidekiq::Monitor::Engine => '/sidekiqm'
 end

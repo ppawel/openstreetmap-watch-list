@@ -21,4 +21,4 @@ CREATE INDEX idx_changeset_tiles_xcyz ON changeset_tiles USING btree (zoom, chan
 --CREATE INDEX idx_ways_tstamp ON ways USING btree (tstamp);
 
 -- Used by the vector tiles API.
-CREATE INDEX idx_nodes_geom ON nodes USING gist (geom) WHERE visible AND current;
+--CREATE INDEX idx_nodes_geom ON nodes USING gist (geom) WHERE visible AND current;

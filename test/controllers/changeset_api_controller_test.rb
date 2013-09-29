@@ -133,9 +133,9 @@ class ChangesetApiControllerTest < ActionController::TestCase
   end
 
   def load_changeset(changeset_id)
-    system('psql -a -d owl_test -c "\copy changesets from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-changeset.csv"')
-    system('psql -a -d owl_test -c "\copy nodes from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-nodes.csv"')
-    system('psql -a -d owl_test -c "\copy ways from ' + Rails.root.to_s + '/../testdata/' + changeset_id.to_s + '-ways.csv"')
+    system('psql -a -d owl_test -c "\copy changesets from ' + Rails.root.to_s + '/testdata/' + changeset_id.to_s + '-changeset.csv"')
+    system('psql -a -d owl_test -c "\copy nodes from ' + Rails.root.to_s + '/testdata/' + changeset_id.to_s + '-nodes.csv"')
+    system('psql -a -d owl_test -c "\copy ways from ' + Rails.root.to_s + '/testdata/' + changeset_id.to_s + '-ways.csv"')
 
     tiler = Tiler::ChangesetTiler.new(conn = PGconn.open(:dbname => 'owl_test', :user => 'ppawel'))
     tiler.generate(16, changeset_id)

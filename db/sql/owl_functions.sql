@@ -288,8 +288,8 @@ BEGIN
   CREATE TEMPORARY TABLE _tmp_result ON COMMIT DROP AS
   SELECT *
   FROM _tmp_changeset_nodes n
-  WHERE (n.el_action IN ('CREATE', 'DELETE') OR n.tags_changed OR n.geom_changed) AND
-    (OWL_RemoveTags(n.tags) != ''::hstore OR OWL_RemoveTags(n.prev_tags) != ''::hstore);
+  WHERE (n.el_action IN ('CREATE', 'DELETE') OR n.tags_changed OR n.geom_changed);
+  --AND (OWL_RemoveTags(n.tags) != ''::hstore OR OWL_RemoveTags(n.prev_tags) != ''::hstore);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Nodes done (%)', clock_timestamp(), row_count;

@@ -2,6 +2,20 @@
 # Utility methods for tiler tests.
 #
 module TestCommon
+  def setup_unit_test(test_name)
+    setup_db
+    exec_sql_file("test/fixtures/tiler_unit_#{test_name.gsub('test_', '')}.sql")
+    @tiler = Tiler::ChangesetTiler.new(@conn)
+    for id in @conn.exec("SELECT changeset_id FROM nodes UNION SELECT changeset_id FROM ways").to_a.uniq do
+      @tiler.generate(16, id['changeset_id'].to_i, {:retile => true, :changes => true})
+    end
+    @changes = get_changes
+    @changes_h = Hash[@changes.collect {|row| [row['id'].to_i, row]}]
+    verify_changes(1)
+    @tiles = get_tiles
+    verify_tiles
+  end
+
   def setup_changeset_test(id)
     puts "setup_changeset_test(#{id})"
     setup_db
@@ -35,6 +49,8 @@ module TestCommon
       raise "No test data for changeset #{id}"
     end
 
+    puts 'Loading data...'
+
     @conn.exec("COPY nodes FROM STDIN;")
 
     File.open("testdata/#{id}-nodes.csv").read.each_line do |line|
@@ -59,7 +75,7 @@ module TestCommon
       geom_changed = geom_changed(change)
       tags_changed = change['tags'] != change['prev_tags']
       #puts "changed #{change['el_id']} -- #{geom_changed} #{tags_changed}"
-      assert((geom_changed or tags_changed or change['action'] == 'MODIFY'), "Change doesn't change anything: #{change}")
+      assert((geom_changed or tags_changed or change['action'] == 'MODIFY' or change['action'] == 'DELETE'), "Change doesn't change anything: #{change}")
     end
 
     for way in find_changes('el_type' => 'W')
