@@ -1,15 +1,30 @@
 class AdminController < ActionController::Base
   protect_from_forgery
 
-  def spawn_workers
-    #post_params[]
-    #TilerWorker.perform_async(params[:changeset_id])
-    sql = 'SELECT DISTINCT changeset_id AS id FROM nodes LIMIT 100'
+  def index
+    @person = {}
+  end
 
-    for row in ActiveRecord::Base.connection.execute(sql) do
-      TilerWorker.perform_async(row['id'].to_i)
+  def go
+    params[:ids].each_line do |line|
+      TilerWorker.perform_async(line.to_i)
     end
+    render nothing: true
+  end
 
-    redirect_to '/admin'
+  def go_latest
+    sql = "SELECT DISTINCT changeset_id FROM ways w WHERE NOT EXISTS
+            (SELECT 1 FROM changeset_tiles WHERE changeset_id = w.changeset_id)
+          ORDER BY changeset_id DESC
+          LIMIT #{params[:limit]}"
+    go_from_sql(sql)
+    render nothing: true
+  end
+
+  def go_from_sql(sql)
+    for row in ActiveRecord::Base.connection.execute(sql) do
+      #TilerWorker.perform_async(row['changeset_id'].to_i)
+      Resque.enqueue(TilerWorker, row['changeset_id'].to_i)
+    end
   end
 end

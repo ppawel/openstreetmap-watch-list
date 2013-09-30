@@ -1,5 +1,6 @@
-require 'sidekiq/web'
-require 'sidekiq_status/web'
+require 'resque/server'
+#require 'sidekiq/web'
+#require 'sidekiq_status/web'
 
 Owl::Application.routes.draw do
   @xyz_constraints = {:zoom => /\d+/, :x => /\d+/, :y => /\d+/}
@@ -25,9 +26,14 @@ Owl::Application.routes.draw do
   get 'api/0.1/kothic/:zoom/:x/:y.js' => 'map_api#kothic', :constraints => @xyz_constrains
 
   #get 'admin/:changeset_id' => 'application#test'
-  #get 'admin/:changeset_id' => 'application#test'
+  get 'admin' => 'admin#index'
+  get 'admin/process' => 'admin#process'
+  post 'admin/go' => 'admin#go'
+  get 'admin/go_latest' => 'admin#go_latest'
   post 'admin/spawn_workers' => 'admin#spawn_workers'
 
-  mount Sidekiq::Web => '/sidekiq'
-  mount Sidekiq::Monitor::Engine => '/sidekiqm'
+  mount Resque::Server.new, :at => "/resque"
+
+  #mount Sidekiq::Web => '/sidekiq'
+  #mount Sidekiq::Monitor::Engine => '/sidekiqm'
 end

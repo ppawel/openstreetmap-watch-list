@@ -12,10 +12,10 @@ class ChangesetTiler
 
   def initialize(conn)
     @conn = conn
-
+    begin
       setup_prepared_statements
-
-
+    rescue
+    end
     init_geos
   end
 
@@ -100,7 +100,7 @@ class ChangesetTiler
 
     # Now generate tiles at lower zoom levels.
     (12..zoom).reverse_each do |i|
-      #@conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
+      @conn.exec("SELECT OWL_AggregateChangeset(#{changeset_id}, #{i}, #{i - 1})")
     end
 
     count

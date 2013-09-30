@@ -251,10 +251,6 @@ BEGIN
       WHEN n.version > 1 AND n.visible THEN 'MODIFY'::action
       WHEN NOT n.visible THEN 'DELETE'::action
     END AS el_action,
-    NOT OWL_Equals(n.geom, prev.geom) AS geom_changed,
-    n.tags != prev.tags AS tags_changed,
-    NULL::boolean AS nodes_changed,
-    NULL::boolean AS members_changed,
     CASE WHEN NOT n.visible THEN NULL ELSE n.geom END AS geom,
     CASE WHEN NOT n.visible OR NOT OWL_Equals(n.geom, prev.geom) THEN prev.geom ELSE NULL END AS prev_geom,
     n.tags,
@@ -264,9 +260,6 @@ BEGIN
   FROM nodes n
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
   WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1);
-
-  CREATE TEMPORARY TABLE _tmp_moved_nodes ON COMMIT DROP AS
-  SELECT * FROM _tmp_changeset_nodes n WHERE n.version > 1 AND n.geom_changed AND n.el_action != 'DELETE';
 
   SELECT MAX(x.tstamp), MIN(x.tstamp) - INTERVAL '1 second'
   INTO max_tstamp, min_tstamp
@@ -280,15 +273,16 @@ BEGIN
     WHERE w.changeset_id = $1
   ) x;
 
-  moved_nodes_ids := (SELECT array_agg(id) FROM _tmp_moved_nodes);
+  moved_nodes_ids := (SELECT array_agg(id) FROM _tmp_changeset_nodes n
+    WHERE n.version > 1 AND NOT n.geom = n.prev_geom AND n.el_action != 'DELETE');
 
   RAISE NOTICE '% --   Prepared data (min = %, max = %, moved nodes = %)', clock_timestamp(),
-    min_tstamp, max_tstamp, (SELECT COUNT(*) FROM _tmp_moved_nodes);
+    min_tstamp, max_tstamp, array_length(moved_nodes_ids, 1);
 
   CREATE TEMPORARY TABLE _tmp_result ON COMMIT DROP AS
   SELECT *
   FROM _tmp_changeset_nodes n
-  WHERE (n.el_action IN ('CREATE', 'DELETE') OR n.tags_changed OR n.geom_changed);
+  WHERE (n.el_action IN ('CREATE', 'DELETE') OR n.tags != n.prev_tags OR NOT n.geom = n.prev_geom);
   --AND (OWL_RemoveTags(n.tags) != ''::hstore OR OWL_RemoveTags(n.prev_tags) != ''::hstore);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
@@ -305,10 +299,6 @@ BEGIN
     w.id,
     w.version,
     'CREATE',
-    NULL,
-    NULL,
-    NULL,
-    NULL,
     w.geom,
     NULL,
     w.tags,
@@ -335,10 +325,6 @@ BEGIN
     w.id,
     w.version,
     'MODIFY',
-    w.geom_changed,
-    w.tags_changed,
-    w.nodes_changed,
-    NULL,
     CASE WHEN w.geom_changed AND NOT w.tags_changed AND NOT w.nodes_changed THEN
       OWL_MakeMinimalLine(w.nodes, max_tstamp, (SELECT array_agg(id) FROM _tmp_changeset_nodes n WHERE w.nodes @> ARRAY[n.id]))
     ELSE
@@ -380,10 +366,6 @@ BEGIN
     w.version,
     'DELETE',
     NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
     w.prev_geom,
     w.tags,
     w.prev_tags,
@@ -413,10 +395,6 @@ BEGIN
     w.id,
     version,
     'AFFECT'::action,
-    true,
-    false,
-    false,
-    NULL,
     w.geom,
     w.prev_geom,
     w.tags,
@@ -529,22 +507,15 @@ BEGIN
 
   DELETE FROM changeset_tiles WHERE changeset_id = $1 AND zoom = $3;
 
-  INSERT INTO changeset_tiles (changeset_id, tstamp, x, y, zoom, geom, prev_geom, changes)
+  INSERT INTO changeset_tiles (changeset_id, tstamp, x, y, zoom, changes)
   SELECT
   $1,
   MAX(tstamp),
   x/subtiles_per_tile * subtiles_per_tile,
   y/subtiles_per_tile * subtiles_per_tile,
   $3,
-  CASE
-    WHEN $3 >= 14 THEN array_accum(geom)
-    ELSE array_accum((SELECT array_agg(ST_Envelope(unnest)) FROM unnest(geom)))
-  END,
-  CASE
-    WHEN $3 >= 14 THEN array_accum(prev_geom)
-    ELSE array_accum((SELECT array_agg(ST_Envelope(unnest)) FROM unnest(prev_geom)))
-  END,
   array_accum(changes)
+
   FROM changeset_tiles
   WHERE changeset_id = $1 AND zoom = $2
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
