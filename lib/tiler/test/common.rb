@@ -105,6 +105,7 @@ module TestCommon
 
   def get_changes
     @conn.exec("SELECT DISTINCT
+        changeset_id,
         (c.unnest).id,
         (c.unnest).tstamp,
         (c.unnest).tags,
@@ -113,7 +114,7 @@ module TestCommon
         (c.unnest).action,
         (c.unnest).el_id,
         (c.unnest).version
-      FROM (SELECT unnest(changes) FROM changeset_tiles) c").to_a
+      FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c").to_a
   end
 
   def get_tiles

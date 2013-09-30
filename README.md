@@ -1,3 +1,5 @@
+NOTE: Code rewrite is currently in progress, things probably don't work as described!
+
         OWL: OpenStreetMap Watch List
         =============================
 
