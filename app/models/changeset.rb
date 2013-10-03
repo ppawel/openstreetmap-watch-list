@@ -25,7 +25,6 @@ class Changeset
     @bboxes = box2d_to_bbox(hash['bboxes']) if hash['bboxes']
 
     @changes = []
-
     change_ids = []
     geojsons = pg_string_to_array(hash['geojson'])
     prev_geojsons = pg_string_to_array(hash['prev_geojson'])
@@ -34,8 +33,8 @@ class Changeset
 
     pg_string_to_array(hash['changes']).each_with_index do |change_string, index|
       change = Change.from_string(@id, change_string)
-      change.geom_geojson = geojsons[index]
-      change.prev_geom_geojson = prev_geojsons[index]
+      change.geom = geojsons[index]
+      change.prev_geom = prev_geojsons[index]
       change.tags = eval("{#{change_tags[index]}}")
       change.prev_tags = eval("{#{change_prev_tags[index]}}")
 

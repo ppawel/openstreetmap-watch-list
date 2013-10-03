@@ -10,21 +10,36 @@ class ChangesetApiControllerTest < ActionController::TestCase
     setup_test
     get(:changesets_tile_json, {:x => 36154, :y => 22260, :zoom => 16})
     changesets = assigns['changesets']
-    verify_json_changesets(changesets)
-    assert_equal(1, changesets.size)
     json = JSON[@response.body]
+    verify_response(json)
+    assert_equal(1, changesets.size)
+    assert_equal(1, json.size)
+    #verify_json_12917265(json[0])
+  end
+
+  test "delete_node" do
+    setup_test
+    get(:changesets_tile_json, {:x => 36154, :y => 22260, :zoom => 16})
+    changesets = assigns['changesets']
+    json = JSON[@response.body]
+    verify_response(json)
+    assert_equal(1, changesets.size)
     assert_equal(1, json.size)
     #verify_json_12917265(json[0])
   end
 
   # Does some generic checks.
-  def verify_json_changesets(changesets)
+  def verify_response(changesets)
     for changeset in changesets
-      assert_equal(false, changeset.open)
-      assert_equal('Hash', changeset.tags.class.name)
-      #assert(changeset.tags.size > 0)
-      assert_equal('Fixnum', changeset.id.class.name)
-      assert_equal('Fixnum', changeset.user_id.class.name)
+      for change in changeset['changes']
+        if change['el_action'] == 'CREATE'
+          assert(change['prev_geom'].nil?)
+          assert(!change['geom'].nil?)
+        elsif change['el_action'] == 'DELETE'
+          assert(change['geom'].nil?)
+          assert(!change['prev_geom'].nil?)
+        end
+      end
     end
   end
 

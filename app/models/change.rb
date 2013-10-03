@@ -12,8 +12,8 @@ class Change
   attr_accessor :tags_changed
   attr_accessor :nodes_changed
   attr_accessor :members_changed
-  attr_accessor :geom_geojson
-  attr_accessor :prev_geom_geojson
+  attr_accessor :geom
+  attr_accessor :prev_geom
   attr_accessor :tags
   attr_accessor :prev_tags
   attr_accessor :nodes
@@ -58,8 +58,8 @@ class Change
     @members_changed = hash['members_changed'] == 't' if hash['members_changed']
     @tags = eval("{#{hash['tags']}}")
     @prev_tags = eval("{#{hash['prev_tags']}}") if hash['prev_tags']
-    @geom_geojson = hash['geom_geojson']
-    @prev_geom_geojson = hash['prev_geom_geojson']
+    @geom = hash['geom']
+    @prev_geom = hash['prev_geom']
   end
 
   def as_json(options = {})
