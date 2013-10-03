@@ -15,10 +15,16 @@ Rake::TestTask.new do |t|
 end
 
 Rake::TestTask.new do |t|
-  t.name = 'owl:test:api'
-  #t.loader = :testrb
+  t.name = 'owl:test:api:realdata'
   t.libs << 'test'
   t.test_files = FileList['test/controllers/*.rb']
+  t.verbose = true
+end
+
+Rake::TestTask.new do |t|
+  t.name = 'owl:test:api:unit'
+  t.libs << 'test'
+  t.test_files = FileList['test/controllers/*unit_test.rb']
   t.verbose = true
 end
 

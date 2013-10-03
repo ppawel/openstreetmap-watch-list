@@ -54,4 +54,9 @@ class TilerUnitTest < Test::Unit::TestCase
     assert_equal(0, find_changes('el_type' => 'N', 'changeset_id' => 3).size)
     assert_equal(2, find_changes('el_type' => 'W', 'changeset_id' => 3).size)
   end
+
+  def test_delete_way
+    setup_unit_test(@test_name)
+    assert_equal(1, find_changes('el_type' => 'W', 'changeset_id' => 2).size)
+  end
 end
