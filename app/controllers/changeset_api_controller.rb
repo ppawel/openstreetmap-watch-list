@@ -38,6 +38,8 @@ private
         cs.*,
         cs.bbox AS total_bbox,
         t.changes::change[],
+        (SELECT array_agg(tags) FROM unnest(t.changes)) AS change_tags,
+        (SELECT array_agg(prev_tags) FROM unnest(t.changes)) AS change_prev_tags,
         (SELECT array_agg(ST_AsGeoJSON(geom)) FROM unnest(t.changes)) AS geojson,
         (SELECT array_agg(ST_AsGeoJSON(prev_geom)) FROM unnest(t.changes)) AS prev_geojson
       FROM changeset_tiles t

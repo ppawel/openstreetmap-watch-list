@@ -2,12 +2,11 @@ class AdminController < ActionController::Base
   protect_from_forgery
 
   def index
-    @person = {}
   end
 
   def go
     params[:ids].each_line do |line|
-      TilerWorker.perform_async(line.to_i)
+      Resque.enqueue(TilerWorker, line.to_i)
     end
     render nothing: true
   end

@@ -58,8 +58,8 @@ class Change
     @members_changed = hash['members_changed'] == 't' if hash['members_changed']
     @tags = eval("{#{hash['tags']}}")
     @prev_tags = eval("{#{hash['prev_tags']}}") if hash['prev_tags']
-    @geom = hash['geom']
-    @prev_geom = hash['prev_geom']
+    @geom = JSON[hash['geom']] if hash['geom']
+    @prev_geom = JSON[hash['prev_geom']] if hash['prev_geom']
   end
 
   def as_json(options = {})

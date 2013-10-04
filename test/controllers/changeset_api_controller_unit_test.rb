@@ -14,7 +14,6 @@ class ChangesetApiControllerTest < ActionController::TestCase
     verify_response(json)
     assert_equal(1, changesets.size)
     assert_equal(1, json.size)
-    #verify_json_12917265(json[0])
   end
 
   test "delete_node" do
@@ -25,7 +24,6 @@ class ChangesetApiControllerTest < ActionController::TestCase
     verify_response(json)
     assert_equal(1, changesets.size)
     assert_equal(1, json.size)
-    #verify_json_12917265(json[0])
   end
 
   # Does some generic checks.
@@ -33,9 +31,13 @@ class ChangesetApiControllerTest < ActionController::TestCase
     for changeset in changesets
       for change in changeset['changes']
         if change['el_action'] == 'CREATE'
+          assert(change['prev_tags'].nil?)
+          assert(!change['tags'].nil?)
           assert(change['prev_geom'].nil?)
           assert(!change['geom'].nil?)
         elsif change['el_action'] == 'DELETE'
+          #assert(change['tags'].nil?)
+          assert(!change['prev_tags'].nil?)
           assert(change['geom'].nil?)
           assert(!change['prev_geom'].nil?)
         end

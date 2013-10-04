@@ -33,20 +33,20 @@ class Changeset
 
     pg_string_to_array(hash['changes']).each_with_index do |change_string, index|
       change = Change.from_string(@id, change_string)
-      change.geom = geojsons[index]
-      change.prev_geom = prev_geojsons[index]
-      change.tags = eval("{#{change_tags[index]}}")
-      change.prev_tags = eval("{#{change_prev_tags[index]}}")
+      change.geom = JSON[geojsons[index]] if geojsons[index]
+      change.prev_geom = JSON[prev_geojsons[index]] if prev_geojsons[index]
+      change.tags = eval("{#{change_tags[index]}}") if change_tags[index]
+      change.prev_tags = eval("{#{change_prev_tags[index]}}") if change_prev_tags[index]
 
-      unless change_ids.include?(change.id)
+      #unless change_ids.include?(change.id)
         change_ids << change.id
         @changes << change
-      end
+      #end
     end
   end
 
   def generate_json(options = {:include_changes => true})
-    result = {
+    {
       "id" => id,
       "created_at" => created_at,
       "closed_at" => closed_at,
@@ -55,20 +55,9 @@ class Changeset
       #"entity_changes" => entity_changes.nil? ? [] : entity_changes_as_list,
       "tags" => tags,
       #"bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
-      "changes" => [],
+      "changes" => @changes.as_json,
       "bboxes" => bboxes
     }
-    # Optionally include metadata for changes (but without GeoJSON strings - they belong in GeoJSON features).
-    if options[:include_changes]
-      result['changes'] = @changes.as_json.collect do |change|
-        if change.has_key?('geom_geojson')
-          change.delete('geom_geojson')
-          change.delete('prev_geom_geojson')
-        end
-        change
-      end
-    end
-    result
   end
 
   ##

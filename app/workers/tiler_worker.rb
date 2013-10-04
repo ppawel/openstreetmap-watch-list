@@ -5,7 +5,7 @@ class TilerWorker
     @conn = ActiveRecord::Base.connection.raw_connection()
     @conn.set_error_verbosity(0)
     @tiler = Tiler::ChangesetTiler.new(@conn)
-    zoom = 16
+    zoom = 18
     before = Time.now
     puts "Generating tiles for changeset #{changeset_id}..."
     tile_count = @tiler.generate(zoom, changeset_id, {})

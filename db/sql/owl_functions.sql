@@ -217,8 +217,8 @@ CREATE OR REPLACE FUNCTION OWL_MergeChanges(change[]) RETURNS change[] AS $$
     version,
     tags,
     prev_tags,
-    NULL,
-    NULL)::change ch
+    ST_LineMerge(ST_Union(geom)),
+    ST_LineMerge(ST_Union(prev_geom)))::change ch
   FROM unnest($1) c
   GROUP BY c.id, c.tstamp, c.el_type, c.action, c.el_id, c.version, c.tags, c.prev_tags) x
 $$ LANGUAGE sql;
@@ -440,13 +440,12 @@ BEGIN
 
   INSERT INTO changeset_tiles (changeset_id, tstamp, x, y, zoom, changes)
   SELECT
-  $1,
-  MAX(tstamp),
-  x/subtiles_per_tile * subtiles_per_tile,
-  y/subtiles_per_tile * subtiles_per_tile,
-  $3,
-  array_accum(changes)
-
+    $1,
+    MAX(tstamp),
+    x/subtiles_per_tile,
+    y/subtiles_per_tile,
+    $3,
+    OWL_MergeChanges(array_accum(changes))
   FROM changeset_tiles
   WHERE changeset_id = $1 AND zoom = $2
   GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
