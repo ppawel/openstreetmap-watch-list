@@ -70,7 +70,6 @@ class ChangesetTiler
     count = 0
 
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
-      change['geom_changed'] = (change['geom_changed'] == 't')
       if change['geom']
         change['geom_obj'] = @wkb_reader.read_hex(change['geom'])
         change['geom_obj_prep'] = change['geom_obj'].to_prepared
@@ -111,10 +110,6 @@ class ChangesetTiler
       change['el_id'], change['version'], change['tags'], change['prev_tags'],
       (geom ? @wkb_writer.write_hex(geom) : nil),
       (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)])
-#      to_postgres_geom_array(data[:geom]), to_postgres_geom_array(data[:prev_geom])])
-#      "INSERT INTO _tiles (x, y, c) VALUES
- #       ($1, $2, ROW($3, $4, $5, $6, $7, $8, $9, $10, $11)::change)")
-
   end
 
   def create_change_tiles(changeset_id, change, change_id, zoom)
@@ -122,7 +117,7 @@ class ChangesetTiler
       count = create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
     else
       count = create_geom_tiles(changeset_id, change, change['geom_obj'], change['geom_obj_prep'], change_id, zoom, false)
-      if change['geom_changed']
+      if change['prev_geom']
         count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
       end
     end

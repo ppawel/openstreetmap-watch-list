@@ -80,8 +80,8 @@ class ChangesetTilerTest < Test::Unit::TestCase
     setup_changeset_test(13477568)
     for tile in @tiles
       if (tile['x'].to_i == 36175) and (tile['y'].to_i == 22851)
-        geom_arr = pg_parse_geom_array(tile['geom'])
-        prev_geom_arr = pg_parse_geom_array(tile['prev_geom'])
+        #geom_arr = pg_parse_geom_array(tile['geom'])
+        #prev_geom_arr = pg_parse_geom_array(tile['prev_geom'])
         #p @changes_h[30]['tags'] != @changes_h[30]['prev_tags']
         #p @changes_h[30]
         #p geom_arr[0]
@@ -127,6 +127,7 @@ class ChangesetTilerTest < Test::Unit::TestCase
     setup_changeset_test(13223248)
 
     way = find_changes('el_type' => 'W', 'el_id' => '166444532', 'version' => '4')
+    p way
     assert_equal(1, way.size)
     #assert_equal(11, way[0]['nodes_len'].to_i)
     #assert(way[0]['geom_astext'].include?('18.650061'))

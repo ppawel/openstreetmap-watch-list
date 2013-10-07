@@ -75,7 +75,13 @@ module TestCommon
       geom_changed = geom_changed(change)
       tags_changed = change['tags'] != change['prev_tags']
       #puts "changed #{change['el_id']} -- #{geom_changed} #{tags_changed}"
-      assert((geom_changed or tags_changed or change['action'] == 'MODIFY' or change['action'] == 'DELETE'), "Change doesn't change anything: #{change}")
+      assert((geom_changed or tags_changed or change['action'] == 'MODIFY' or change['action'] == 'DELETE'),
+        "Change doesn't change anything: #{change}")
+
+      if change['action'] == 'AFFECT'
+        assert(!change['geom'].nil?)
+        assert(!change['prev_geom'].nil?, 'preg_geom should not be null for change: ' + change.to_s)
+      end
     end
 
     for way in find_changes('el_type' => 'W')
@@ -104,7 +110,7 @@ module TestCommon
   end
 
   def get_changes
-    @conn.exec("SELECT DISTINCT
+    for change in @conn.exec("SELECT DISTINCT
         changeset_id,
         (c.unnest).id,
         (c.unnest).tstamp,
@@ -115,6 +121,15 @@ module TestCommon
         (c.unnest).el_id,
         (c.unnest).version
       FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c").to_a
+
+      change['geom'] = @conn.exec("SELECT ST_Union((c.unnest).geom) AS geom
+        FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c
+        WHERE (c.unnest).id = #{change['id']}").getvalue(0, 0)
+
+      change['prev_geom'] = @conn.exec("SELECT ST_Union((c.unnest).prev_geom) AS geom
+        FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c
+        WHERE (c.unnest).id = #{change['id']}").getvalue(0, 0)
+    end
   end
 
   def get_tiles

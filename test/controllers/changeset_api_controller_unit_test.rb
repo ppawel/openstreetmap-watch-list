@@ -26,6 +26,16 @@ class ChangesetApiControllerTest < ActionController::TestCase
     assert_equal(1, json.size)
   end
 
+  test "move_way" do
+    setup_test
+    get(:changesets_tile_json, {:x => 36154, :y => 22260, :zoom => 16})
+    changesets = assigns['changesets']
+    json = JSON[@response.body]
+    verify_response(json)
+    assert_equal(1, changesets.size)
+    assert_equal(1, json.size)
+  end
+
   # Does some generic checks.
   def verify_response(changesets)
     for changeset in changesets

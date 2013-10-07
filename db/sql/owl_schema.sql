@@ -25,7 +25,9 @@ CREATE TYPE change AS (
   tags hstore,
   prev_tags hstore,
   geom geometry(GEOMETRY, 4326),
-  prev_geom geometry(GEOMETRY, 4326)
+  prev_geom geometry(GEOMETRY, 4326),
+  nodes bigint[],
+  prev_nodes bigint[]
 );
 
 DROP AGGREGATE IF EXISTS array_accum(anyarray);

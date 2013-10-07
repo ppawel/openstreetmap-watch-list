@@ -236,25 +236,26 @@ DECLARE
 BEGIN
   RAISE NOTICE '% -- Generating changes for changeset %', clock_timestamp(), $1;
 
-  CREATE TEMPORARY TABLE _tmp_result ON COMMIT DROP AS
-  SELECT
-    $1,
+  CREATE TEMPORARY TABLE _tmp_result (c change) ON COMMIT DROP;
+
+  INSERT INTO _tmp_result
+  SELECT ROW(
+    -1,
     n.tstamp,
-    n.changeset_id,
-    'N'::element_type AS type,
-    n.id,
-    n.version,
+    'N'::element_type,
     CASE
       WHEN n.version = 1 THEN 'CREATE'::action
       WHEN n.version > 1 AND n.visible THEN 'MODIFY'::action
       WHEN NOT n.visible THEN 'DELETE'::action
-    END AS el_action,
-    CASE WHEN NOT n.visible THEN NULL ELSE n.geom END AS geom,
-    CASE WHEN NOT n.visible OR NOT OWL_Equals(n.geom, prev.geom) THEN prev.geom ELSE NULL END AS prev_geom,
+    END::action,
+    n.id,
+    n.version,
     n.tags,
-    prev.tags AS prev_tags,
-    NULL::bigint[] AS nodes,
-    NULL::bigint[] AS prev_nodes
+    prev.tags,
+    CASE WHEN NOT n.visible THEN NULL ELSE n.geom END::geometry(GEOMETRY, 4326),
+    CASE WHEN NOT n.visible OR NOT OWL_Equals(n.geom, prev.geom) THEN prev.geom ELSE NULL END::geometry(GEOMETRY, 4326),
+    NULL::bigint[],
+    NULL::bigint[])::change
   FROM nodes n
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
   WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1);
@@ -288,7 +289,7 @@ BEGIN
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Changeset ways selected (%)', clock_timestamp(), row_count;
 
-  SELECT MAX(tstamp), MIN(tstamp) - INTERVAL '1 second'
+  SELECT MAX(tstamp), MIN(tstamp)
   INTO max_tstamp, min_tstamp
   FROM _tmp_result;
 
@@ -297,17 +298,6 @@ BEGIN
 
   RAISE NOTICE '% --   Prepared data (min = %, max = %, moved nodes = %)', clock_timestamp(),
     min_tstamp, max_tstamp, array_length(moved_nodes_ids, 1);
-
-  -- Created ways
-
-  UPDATE _tmp_result
-  SET
-    geom = OWL_MakeLine(nodes, max_tstamp), 
-    prev_geom = OWL_MakeLine(prev_nodes, max_tstamp)
-  WHERE type = 'W';
-
-  GET DIAGNOSTICS row_count = ROW_COUNT;
-  RAISE NOTICE '% --   Updated way geoms (%)', clock_timestamp(), row_count;
 
   -- Affected ways
 
@@ -320,24 +310,19 @@ BEGIN
     w.id,
     version,
     'AFFECT'::action,
-    w.geom,
-    w.prev_geom,
+    NULL,
+    NULL,
     w.tags,
     NULL,
     w.nodes,
-    NULL
-  FROM (
-    SELECT
-      *,
-      OWL_MakeMinimalLine(w.nodes, max_tstamp, array_intersect(w.nodes, moved_nodes_ids)) AS geom,
-      OWL_MakeMinimalLine(w.nodes, min_tstamp, array_intersect(w.nodes, moved_nodes_ids)) AS prev_geom
+    w.nodes
+      --OWL_MakeMinimalLine(w.nodes, max_tstamp, array_intersect(w.nodes, moved_nodes_ids)) AS geom,
+      --OWL_MakeMinimalLine(w.nodes, min_tstamp, array_intersect(w.nodes, moved_nodes_ids)) AS prev_geom
       --OWL_MakeLine(w.nodes, max_tstamp) AS geom,
       --OWL_MakeLine(w.nodes, min_tstamp) AS prev_geom
-    FROM ways w
-    WHERE w.nodes && moved_nodes_ids AND
-      w.version = (SELECT version FROM ways WHERE id = w.id AND tstamp <= max_tstamp ORDER BY version DESC LIMIT 1) ) w; -- AND
-      --OWL_MakeLine(w.nodes, max_tstamp) IS NOT NULL AND
-      --(w.version = 1 OR OWL_MakeLine(w.nodes, min_tstamp) IS NOT NULL)) w;
+  FROM ways w
+  WHERE w.nodes && moved_nodes_ids AND
+    w.version = (SELECT version FROM ways WHERE id = w.id AND tstamp <= max_tstamp ORDER BY version DESC LIMIT 1);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Affected ways done (%)', clock_timestamp(), row_count;
@@ -348,6 +333,33 @@ BEGIN
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Removed not interesting nodes (%)', clock_timestamp(), row_count;
+
+  UPDATE _tmp_result w
+  SET el_action = 'CREATE', prev_geom = NULL
+  WHERE type = 'W' AND EXISTS
+    (SELECT 1 FROM _tmp_result w2 WHERE w2.type = 'W' AND w2.id = w.id AND w2.el_action = 'CREATE');
+
+  DELETE FROM _tmp_result w
+  WHERE type = 'W' AND version < (SELECT MAX(w2.version) FROM _tmp_result w2 WHERE w2.type = 'W' AND w2.id = w.id);
+
+  GET DIAGNOSTICS row_count = ROW_COUNT;
+  RAISE NOTICE '% --   Removed old changes (%)', clock_timestamp(), row_count;
+
+  UPDATE _tmp_result
+  SET
+    geom = OWL_MakeLine(nodes, max_tstamp),
+    prev_geom = OWL_MakeLine(prev_nodes, min_tstamp)
+  WHERE type = 'W' ;
+
+  GET DIAGNOSTICS row_count = ROW_COUNT;
+  RAISE NOTICE '% --   Updated way geoms (%)', clock_timestamp(), row_count;
+
+  DELETE FROM _tmp_result
+  WHERE type = 'W' AND geom IS NOT NULL AND prev_geom IS NOT NULL
+    AND OWL_Equals(geom, prev_geom) AND tags = prev_tags AND nodes = prev_nodes;
+
+  GET DIAGNOSTICS row_count = ROW_COUNT;
+  RAISE NOTICE '% --   Removed not interesting ways (%)', clock_timestamp(), row_count;
 
   RAISE NOTICE '% -- Returning % change(s)', clock_timestamp(), (SELECT COUNT(*) FROM _tmp_result);
 
@@ -361,7 +373,9 @@ BEGIN
     tags,
     prev_tags,
     geom,
-    prev_geom
+    prev_geom,
+    NULL,
+    NULL
   )::change AS c FROM _tmp_result ORDER BY tstamp) x);
 END
 $$ LANGUAGE plpgsql;
