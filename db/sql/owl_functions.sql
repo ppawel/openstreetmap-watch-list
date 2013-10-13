@@ -294,7 +294,7 @@ BEGIN
   INTO max_tstamp, min_tstamp
   FROM _tmp_result;
 
-  moved_nodes_ids := (SELECT array_agg((c).id) FROM _tmp_result
+  moved_nodes_ids := (SELECT array_agg((c).el_id) FROM _tmp_result
     WHERE (c).el_type = 'N' AND (c).version > 1 AND NOT (c).geom = (c).prev_geom AND (c).action != 'DELETE');
 
   RAISE NOTICE '% --   Prepared data (min = %, max = %, moved nodes = %)', clock_timestamp(),
@@ -328,7 +328,7 @@ BEGIN
   RAISE NOTICE '% --   Affected ways done (%)', clock_timestamp(), row_count;
 
   DELETE FROM _tmp_result
-  WHERE (c).el_type = 'N' AND (c).id IN (SELECT unnest((c).nodes) FROM _tmp_result UNION SELECT unnest((c).prev_nodes) FROM _tmp_result)
+  WHERE (c).el_type = 'N' AND (c).el_id IN (SELECT unnest((c).nodes) FROM _tmp_result UNION SELECT unnest((c).prev_nodes) FROM _tmp_result)
     AND NOT OWL_InterestingTags((c).tags) AND NOT OWL_InterestingTags((c).prev_tags);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
@@ -337,10 +337,10 @@ BEGIN
   UPDATE _tmp_result w
   SET c.action = 'CREATE', c.prev_geom = NULL
   WHERE (c).el_type = 'W' AND EXISTS
-    (SELECT 1 FROM _tmp_result w2 WHERE (w2.c).el_type = 'W' AND (w2.c).id = (w.c).id AND (w2.c).action = 'CREATE');
+    (SELECT 1 FROM _tmp_result w2 WHERE (w2.c).el_type = 'W' AND (w2.c).el_id = (w.c).el_id AND (w2.c).action = 'CREATE');
 
   DELETE FROM _tmp_result w
-  WHERE (c).el_type = 'W' AND (c).version < (SELECT MAX((w2.c).version) FROM _tmp_result w2 WHERE (w2.c).el_type = 'W' AND (w2.c).id = (w.c).id);
+  WHERE (c).el_type = 'W' AND (c).version < (SELECT MAX((w2.c).version) FROM _tmp_result w2 WHERE (w2.c).el_type = 'W' AND (w2.c).el_id = (w.c).el_id);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Removed old changes (%)', clock_timestamp(), row_count;

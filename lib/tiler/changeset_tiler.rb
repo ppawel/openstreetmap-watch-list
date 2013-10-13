@@ -12,10 +12,7 @@ class ChangesetTiler
 
   def initialize(conn)
     @conn = conn
-    begin
-      setup_prepared_statements
-    rescue
-    end
+    setup_prepared_statements
     init_geos
   end
 
@@ -109,7 +106,8 @@ class ChangesetTiler
     @conn.exec_prepared('insert_tile', [x, y, change['id'], change['tstamp'], change['el_type'], change['action'],
       change['el_id'], change['version'], change['tags'], change['prev_tags'],
       (geom ? @wkb_writer.write_hex(geom) : nil),
-      (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)])
+      (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil),
+      change['nodes'], change['prev_nodes']])
   end
 
   def create_change_tiles(changeset_id, change, change_id, zoom)
@@ -221,7 +219,7 @@ class ChangesetTiler
 
     @conn.prepare('insert_tile',
       "INSERT INTO _tiles (x, y, c) VALUES
-        ($1, $2, ROW($3, $4, $5, $6, $7, $8, $9, $10, $11, $12)::change)")
+        ($1, $2, ROW($3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)::change)")
 
     @conn.prepare('generate_changeset_tiles',
       "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes)

@@ -33,7 +33,7 @@ module TestCommon
     $config = YAML.load_file('config/database.yml')['test']
     @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
       :user => $config['username'], :password => $config['password'])
-    @conn.set_error_verbosity(0)
+    @conn.set_error_verbosity(2)
     exec_sql_file('db/sql/owl_schema.sql')
     exec_sql_file('db/sql/owl_constraints.sql')
     exec_sql_file('db/sql/owl_indexes.sql')
@@ -74,13 +74,14 @@ module TestCommon
     for change in @changes
       geom_changed = geom_changed(change)
       tags_changed = change['tags'] != change['prev_tags']
+      nodes_changed = change['nodes'] != change['prev_nodes']
       #puts "changed #{change['el_id']} -- #{geom_changed} #{tags_changed}"
-      assert((geom_changed or tags_changed or change['action'] == 'MODIFY' or change['action'] == 'DELETE'),
-        "Change doesn't change anything: #{change}")
+      #assert((nodes_changed or geom_changed or tags_changed or change['action'] == 'CREATE' or change['action'] == 'DELETE'),
+      #  "Change doesn't change anything: #{change}")
 
       if change['action'] == 'AFFECT'
-        assert(!change['geom'].nil?)
-        assert(!change['prev_geom'].nil?, 'preg_geom should not be null for change: ' + change.to_s)
+        #assert(!change['geom'].nil?)
+        #assert(!change['prev_geom'].nil?, 'preg_geom should not be null for change: ' + change.to_s)
       end
     end
 
@@ -119,16 +120,18 @@ module TestCommon
         (c.unnest).el_type,
         (c.unnest).action,
         (c.unnest).el_id,
-        (c.unnest).version
-      FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c").to_a
+        (c.unnest).version,
+        (c.unnest).nodes,
+        (c.unnest).prev_nodes
+      FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles WHERE zoom = 16) c").to_a
 
-      change['geom'] = @conn.exec("SELECT ST_Union((c.unnest).geom) AS geom
-        FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c
-        WHERE (c.unnest).id = #{change['id']}").getvalue(0, 0)
+      #change['geom'] = @conn.exec("SELECT ST_Union((c.unnest).geom) AS geom
+      #  FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c
+      #  WHERE (c.unnest).id = #{change['id']}").getvalue(0, 0)
 
-      change['prev_geom'] = @conn.exec("SELECT ST_Union((c.unnest).prev_geom) AS geom
-        FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c
-        WHERE (c.unnest).id = #{change['id']}").getvalue(0, 0)
+      #change['prev_geom'] = @conn.exec("SELECT ST_Union((c.unnest).prev_geom) AS geom
+      #  FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c
+      #  WHERE (c.unnest).id = #{change['id']}").getvalue(0, 0)
     end
   end
 

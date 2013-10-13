@@ -53,7 +53,7 @@ class TilerUnitTest < Test::Unit::TestCase
     assert_equal(0, find_changes('el_type' => 'N', 'changeset_id' => 2).size)
     assert_equal(1, find_changes('el_type' => 'W', 'changeset_id' => 2).size)
     assert_equal(0, find_changes('el_type' => 'N', 'changeset_id' => 3).size)
-    assert_equal(2, find_changes('el_type' => 'W', 'changeset_id' => 3).size)
+    assert_equal(1, find_changes('el_type' => 'W', 'action' => 'CREATE', 'changeset_id' => 3).size)
   end
 
   def test_delete_way
@@ -69,5 +69,6 @@ class TilerUnitTest < Test::Unit::TestCase
     assert_equal(0, find_changes('el_type' => 'N', 'changeset_id' => 3).size)
     assert_equal(1, find_changes('el_type' => 'W', 'changeset_id' => 3).size)
     assert_equal(1, find_changes('el_type' => 'W', 'action' => 'CREATE', 'changeset_id' => 3).size)
+    assert_equal(1, find_changes('el_type' => 'W', 'action' => 'CREATE', 'changeset_id' => 4).size)
   end
 end
