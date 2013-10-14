@@ -33,12 +33,13 @@ class TilerUnitTest < Test::Unit::TestCase
 
   def test_move_node_same_changeset
     setup_unit_test(@test_name)
-    assert_equal(2, find_changes('el_type' => 'N').size)
+    assert_equal(1, find_changes('el_type' => 'N').size)
   end
 
   def test_tag_node
     setup_unit_test(@test_name)
-    assert_equal(2, find_changes('el_type' => 'N').size)
+    assert_equal(1, find_changes('el_type' => 'N').size)
+    assert_equal(1, find_changes('el_type' => 'N', 'version' => '2').size)
   end
 
   def test_create_way

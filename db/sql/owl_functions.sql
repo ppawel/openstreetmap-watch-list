@@ -1,3 +1,43 @@
+CREATE OR REPLACE FUNCTION OWL_AggregateChanges(change, change) RETURNS change AS $$
+DECLARE
+  agg change;
+  result change;
+BEGIN
+  agg := $1;
+
+  IF agg IS NULL THEN
+    agg := $2;
+    RETURN agg;
+  END IF;
+
+  IF agg.action = 'CREATE' THEN
+    agg.action = $2.action;
+    IF $2.action = 'DELETE' THEN
+      agg.id = -1;
+    ELSE
+    END IF;
+  ELSIF agg.action = 'DELETE' THEN
+  ELSE
+    agg.action = $2.action;
+  END IF;
+
+  IF $2.tstamp >= agg.tstamp THEN
+    agg.tstamp = $2.tstamp;
+    agg.version = $2.version;
+    agg.tags = $2.tags;
+    agg.nodes = $2.nodes;
+  END IF;
+
+  RETURN agg;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP AGGREGATE IF EXISTS OWL_Aggregate(change);
+CREATE AGGREGATE OWL_Aggregate(change) (
+    sfunc = OWL_AggregateChanges,
+    stype = change
+);
+
 CREATE OR REPLACE FUNCTION OWL_LatLonToTile(int, geometry) RETURNS table (x int, y int) AS $$
   SELECT
     floor((POW(2, $1) * ((ST_X($2) + 180) / 360)))::int AS tile_x,
@@ -363,7 +403,23 @@ BEGIN
 
   RAISE NOTICE '% -- Returning % change(s)', clock_timestamp(), (SELECT COUNT(*) FROM _tmp_result);
 
-  RETURN (SELECT array_agg(c ORDER BY (c).tstamp) FROM _tmp_result);
+  RETURN (SELECT array_agg(c ORDER BY (c).tstamp) FROM (
+      SELECT ROW(
+        (row_number() OVER ())::int,
+        (c).tstamp,
+        (c).el_type,
+        (c).action,
+        (c).el_id,
+        (c).version,
+        (c).tags,
+        (c).prev_tags,
+        (c).geom,
+        (c).prev_geom,
+        (c).nodes,
+        (c).prev_nodes)::change AS c
+      FROM
+      (SELECT OWL_Aggregate(c ORDER BY (c).el_type, (c).el_id, (c).tstamp, (c).version) AS c
+        FROM _tmp_result GROUP BY (c).el_type, (c).el_id) x) y);
 END
 $$ LANGUAGE plpgsql;
 

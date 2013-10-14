@@ -25,7 +25,6 @@ class Changeset
     @bboxes = box2d_to_bbox(hash['bboxes']) if hash['bboxes']
 
     @changes = []
-    change_ids = []
     geojsons = pg_string_to_array(hash['geojson'])
     prev_geojsons = pg_string_to_array(hash['prev_geojson'])
     change_tags = pg_string_to_array(hash['change_tags'])
@@ -37,11 +36,7 @@ class Changeset
       change.prev_geom = JSON[prev_geojsons[index]] if prev_geojsons[index]
       change.tags = eval("{#{change_tags[index]}}") if change_tags[index]
       change.prev_tags = eval("{#{change_prev_tags[index]}}") if change_prev_tags[index]
-
-      #unless change_ids.include?(change.id)
-        change_ids << change.id
-        @changes << change
-      #end
+      @changes << change
     end
   end
 

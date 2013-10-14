@@ -8,7 +8,7 @@ class TilerWorker
     zoom = 18
     before = Time.now
     puts "Generating tiles for changeset #{changeset_id}..."
-    tile_count = @tiler.generate(zoom, changeset_id, {})
+    tile_count = @tiler.generate(zoom, changeset_id, {:retile => true})
     puts "Done, tile count: #{tile_count}"
     puts "Changeset #{changeset_id} took #{Time.now - before}s"
     { tiles: tile_count }

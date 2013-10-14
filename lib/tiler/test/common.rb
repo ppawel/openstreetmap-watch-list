@@ -33,7 +33,7 @@ module TestCommon
     $config = YAML.load_file('config/database.yml')['test']
     @conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],
       :user => $config['username'], :password => $config['password'])
-    @conn.set_error_verbosity(2)
+    @conn.set_error_verbosity(1)
     exec_sql_file('db/sql/owl_schema.sql')
     exec_sql_file('db/sql/owl_constraints.sql')
     exec_sql_file('db/sql/owl_indexes.sql')
