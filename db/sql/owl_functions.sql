@@ -5,20 +5,12 @@ DECLARE
 BEGIN
   agg := $1;
 
+  --raise notice '$2: %', $2;
+  --raise notice 'ag: %', agg;
+
   IF agg IS NULL THEN
     agg := $2;
     RETURN agg;
-  END IF;
-
-  IF agg.action = 'CREATE' THEN
-    agg.action = $2.action;
-    IF $2.action = 'DELETE' THEN
-      agg.id = -1;
-    ELSE
-    END IF;
-  ELSIF agg.action = 'DELETE' THEN
-  ELSE
-    agg.action = $2.action;
   END IF;
 
   IF $2.tstamp >= agg.tstamp THEN
@@ -26,6 +18,26 @@ BEGIN
     agg.version = $2.version;
     agg.tags = $2.tags;
     agg.nodes = $2.nodes;
+  END IF;
+
+  IF $2.action = 'CREATE' THEN
+    IF agg.action = 'DELETE' THEN
+      agg.id = -1;
+    ELSE
+      agg.prev_nodes := NULL;
+      agg.prev_tags := NULL;
+    END IF;
+    agg.action = $2.action;
+  ELSIF $2.action = 'DELETE' THEN
+    IF agg.action = 'CREATE' THEN
+      agg.id = -1;
+    ELSE
+      agg.nodes := NULL;
+      agg.tags := NULL;
+    END IF;
+    agg.action = $2.action;
+  ELSE
+    agg.action = $2.action;
   END IF;
 
   RETURN agg;
@@ -387,8 +399,16 @@ BEGIN
 
   UPDATE _tmp_result
   SET
-    c.geom = OWL_MakeLine((c).nodes, max_tstamp),
-    c.prev_geom = OWL_MakeLine((c).prev_nodes, min_tstamp)
+    c.geom =
+      CASE
+        WHEN (c).action = 'DELETE' THEN NULL
+        ELSE OWL_MakeLine((c).nodes, max_tstamp)
+      END,
+    c.prev_geom =
+      CASE
+        WHEN (c).action = 'CREATE' THEN NULL
+        ELSE OWL_MakeLine((c).prev_nodes, min_tstamp)
+      END
   WHERE (c).el_type = 'W';
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
@@ -419,7 +439,8 @@ BEGIN
         (c).prev_nodes)::change AS c
       FROM
       (SELECT OWL_Aggregate(c ORDER BY (c).el_type, (c).el_id, (c).tstamp, (c).version) AS c
-        FROM _tmp_result GROUP BY (c).el_type, (c).el_id) x) y);
+        FROM _tmp_result GROUP BY (c).el_type, (c).el_id) x) y
+      WHERE (c).id != -1);
 END
 $$ LANGUAGE plpgsql;
 

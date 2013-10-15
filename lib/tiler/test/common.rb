@@ -79,9 +79,23 @@ module TestCommon
       #assert((nodes_changed or geom_changed or tags_changed or change['action'] == 'CREATE' or change['action'] == 'DELETE'),
       #  "Change doesn't change anything: #{change}")
 
+      if change['action'] == 'CREATE'
+        assert(!change['geom'].nil?, 'geom should not be null for change: ' + change.to_s)
+        assert(change['prev_geom'].nil?, 'prev_geom should be null for change: ' + change.to_s)
+        #assert(!change['tags'].empty?, 'tags should not be null for change: ' + change.to_s)
+        #assert(change['prev_tags'].empty?, 'prev_tags should be null for change: ' + change.to_s)
+      end
+
+      if change['action'] == 'DELETE'
+        assert(change['geom'].nil?, 'geom should be null for change: ' + change.to_s)
+        assert(!change['prev_geom'].empty?, 'prev_geom should not be null for change: ' + change.to_s)
+        #assert(change['tags'].empty?, 'tags should be null for change: ' + change.to_s)
+        #assert(!change['prev_tags'].empty?, 'prev_tags should not be null for change: ' + change.to_s)
+      end
+
       if change['action'] == 'AFFECT'
         #assert(!change['geom'].nil?)
-        #assert(!change['prev_geom'].nil?, 'preg_geom should not be null for change: ' + change.to_s)
+        #assert(!change['prev_geom'].nil?, 'prev_geom should not be null for change: ' + change.to_s)
       end
     end
 
@@ -111,7 +125,7 @@ module TestCommon
   end
 
   def get_changes
-    for change in @conn.exec("SELECT DISTINCT
+    for change in @conn.exec("SELECT
         changeset_id,
         (c.unnest).id,
         (c.unnest).tstamp,
@@ -122,16 +136,19 @@ module TestCommon
         (c.unnest).el_id,
         (c.unnest).version,
         (c.unnest).nodes,
-        (c.unnest).prev_nodes
-      FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles WHERE zoom = 16) c").to_a
-
-      #change['geom'] = @conn.exec("SELECT ST_Union((c.unnest).geom) AS geom
-      #  FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c
-      #  WHERE (c.unnest).id = #{change['id']}").getvalue(0, 0)
-
-      #change['prev_geom'] = @conn.exec("SELECT ST_Union((c.unnest).prev_geom) AS geom
-      #  FROM (SELECT changeset_id, unnest(changes) FROM changeset_tiles) c
-      #  WHERE (c.unnest).id = #{change['id']}").getvalue(0, 0)
+        (c.unnest).prev_nodes,
+        (c.unnest).geom,
+        (c.unnest).prev_geom
+      FROM
+      (
+        SELECT changeset_id, unnest(OWL_MergeChanges(all_changes))
+        FROM
+        (
+          SELECT changeset_id, array_accum(changes) AS all_changes
+          FROM changeset_tiles WHERE zoom = 16
+          GROUP BY changeset_id
+        ) q
+      ) c").to_a
     end
   end
 
