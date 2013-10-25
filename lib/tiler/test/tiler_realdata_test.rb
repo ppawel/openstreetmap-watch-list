@@ -198,4 +198,10 @@ class ChangesetTilerTest < Test::Unit::TestCase
     p find_changes('el_type' => 'W', 'el_id' => '16105282')[1]
     assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '16105282').size)
   end
+
+  def test_13473782
+    setup_changeset_test(13473782)
+    p find_changes('el_type' => 'W', 'el_id' => '104749747')
+    #assert_equal(3, @tiles.size)
+  end
 end

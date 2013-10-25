@@ -17,7 +17,7 @@ end
 Rake::TestTask.new do |t|
   t.name = 'owl:test:api:realdata'
   t.libs << 'test'
-  t.test_files = FileList['test/controllers/*.rb']
+  t.test_files = FileList['test/controllers/*realdata_test.rb']
   t.verbose = true
 end
 
