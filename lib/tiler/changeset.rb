@@ -23,21 +23,7 @@ class Changeset
     @open = hash['open'] == 't'
     @tags = eval("{#{hash['tags']}}")
     @bboxes = box2d_to_bbox(hash['bboxes']) if hash['bboxes']
-
-    @changes = []
-    geojsons = pg_string_to_array(hash['geojson'])
-    prev_geojsons = pg_string_to_array(hash['prev_geojson'])
-    change_tags = pg_string_to_array(hash['change_tags'])
-    change_prev_tags = pg_string_to_array(hash['change_prev_tags'])
-
-    pg_string_to_array(hash['changes']).each_with_index do |change_string, index|
-      change = Change.from_string(@id, change_string)
-      change.geom = JSON[geojsons[index]] if geojsons[index]
-      change.prev_geom = JSON[prev_geojsons[index]] if prev_geojsons[index]
-      change.tags = eval("{#{change_tags[index]}}") if change_tags[index]
-      change.prev_tags = eval("{#{change_prev_tags[index]}}") if change_prev_tags[index]
-      @changes << change
-    end
+    @changes = Change.from_pg_array(hash['changes'])
   end
 
   def generate_json(options = {:include_changes => true})

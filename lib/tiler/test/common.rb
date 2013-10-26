@@ -1,3 +1,5 @@
+require 'change'
+
 ##
 # Utility methods for tiler tests.
 #
@@ -7,10 +9,9 @@ module TestCommon
     exec_sql_file("test/fixtures/tiler_unit_#{test_name.gsub('test_', '')}.sql")
     @tiler = Tiler::ChangesetTiler.new(@conn)
     for id in @conn.exec("SELECT changeset_id FROM nodes UNION SELECT changeset_id FROM ways").to_a.uniq do
-      @tiler.generate(16, id['changeset_id'].to_i, {:retile => true, :changes => true})
+      @tiler.generate(18, id['changeset_id'].to_i, {:retile => true, :changes => true})
     end
     @changes = get_changes
-    @changes_h = Hash[@changes.collect {|row| [row['id'].to_i, row]}]
     verify_changes(1)
     @tiles = get_tiles
     verify_tiles
@@ -21,7 +22,7 @@ module TestCommon
     setup_db
     load_changeset(id)
     @tiler = Tiler::ChangesetTiler.new(@conn)
-    @tiler.generate(16, id, {:retile => true, :changes => true})
+    @tiler.generate(18, id, {:retile => true, :changes => true})
     @changes = get_changes
     @changes_h = Hash[@changes.collect {|row| [row['id'].to_i, row]}]
     verify_changes(id)
@@ -44,7 +45,7 @@ module TestCommon
     @conn.exec(File.open(file).read)
   end
 
-  def load_changeset(id, update_revs = true)
+  def load_changeset(id)
     if not File.exists?("testdata/#{id}-nodes.csv")
       raise "No test data for changeset #{id}"
     end
@@ -145,7 +146,7 @@ module TestCommon
         FROM
         (
           SELECT changeset_id, array_accum(changes) AS all_changes
-          FROM changeset_tiles WHERE zoom = 16
+          FROM changeset_tiles WHERE zoom = 18
           GROUP BY changeset_id
         ) q
       ) c").to_a
@@ -153,16 +154,19 @@ module TestCommon
   end
 
   def get_tiles
-    @conn.exec("SELECT * FROM changeset_tiles WHERE zoom = 16").to_a
+    @conn.exec("SELECT * FROM changeset_tiles WHERE zoom = 18").to_a
   end
 
-  # Performs sanity checks on given tiles.
+  # Performs sanity checks on tiles.
   def verify_tiles
-    # Check if each change has a tile.
-    change_ids = @changes_h.keys.sort.uniq
-    change_ids_from_tiles = @tiles.collect {|tile| pg_parse_array(tile['changes'])}.flatten.sort.uniq
-    #assert_equal(change_ids, change_ids_from_tiles,
-    #  (change_ids - change_ids_from_tiles).collect {|id| @changes_h[id]})
+    for tile in @tiles
+      changes = Change.from_pg_array(tile['changes'])
+      change_ids = []
+      for change in changes do
+          change_ids << change.id
+      end
+      assert_equal(change_ids.uniq, change_ids, 'Tile has duplicate changes: ' + tile.to_s)
+    end
   end
 
   def find_changes(filters)

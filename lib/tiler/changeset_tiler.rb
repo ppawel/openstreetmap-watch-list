@@ -80,7 +80,7 @@ class ChangesetTiler
         change['diff_geom_obj_prep'] = change['diff_geom_obj'].to_prepared
       end
 
-      @@log.debug "#{change['el_type']} #{change['el_id']} (#{change['version']})"
+      @@log.debug "#{change['action']} #{change['el_type']} #{change['el_id']} (#{change['version']})"
 
       count += create_change_tiles(changeset_id, change, change['id'].to_i, zoom)
 
@@ -100,14 +100,6 @@ class ChangesetTiler
     end
 
     count
-  end
-
-  def add_change_tile(x, y, zoom, change, geom, prev_geom)
-    @conn.exec_prepared('insert_tile', [x, y, change['id'], change['tstamp'], change['el_type'], change['action'],
-      change['el_id'], change['version'], change['tags'], change['prev_tags'],
-      (geom ? @wkb_writer.write_hex(geom) : nil),
-      (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil),
-      change['nodes'], change['prev_nodes']])
   end
 
   def create_change_tiles(changeset_id, change, change_id, zoom)
@@ -170,6 +162,15 @@ class ChangesetTiler
     end
     count
   end
+
+  def add_change_tile(x, y, zoom, change, geom, prev_geom)
+    @conn.exec_prepared('insert_tile', [x, y, change['id'], change['tstamp'], change['el_type'], change['action'],
+      change['el_id'], change['version'], change['tags'], change['prev_tags'],
+      (geom ? @wkb_writer.write_hex(geom) : nil),
+      (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil),
+      change['nodes'], change['prev_nodes']])
+  end
+
 
   def prepare_tiles(tiles_to_check, geom, source_zoom, zoom)
     tiles = Set.new
