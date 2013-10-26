@@ -75,6 +75,7 @@ class ChangesetTiler
         change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom'])
         change['prev_geom_obj_prep'] = change['prev_geom_obj'].to_prepared
       end
+
       if change['diff_bbox']
         change['diff_geom_obj'] =  change['geom_obj'].difference(change['prev_geom_obj'])
         change['diff_geom_obj_prep'] = change['diff_geom_obj'].to_prepared
@@ -103,11 +104,11 @@ class ChangesetTiler
   end
 
   def create_change_tiles(changeset_id, change, change_id, zoom)
-    if change['action'] == 'DELETE'
-      count = create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
+    if change['diff_bbox']
+      count = create_geom_tiles_diff(changeset_id, change, zoom)
     else
       count = create_geom_tiles(changeset_id, change, change['geom_obj'], change['geom_obj_prep'], change_id, zoom, false)
-      if change['prev_geom']
+      if !change['equal']
         count += create_geom_tiles(changeset_id, change, change['prev_geom_obj'], change['prev_geom_obj_prep'], change_id, zoom, true)
       end
     end
@@ -116,32 +117,60 @@ class ChangesetTiler
     count
   end
 
-  def create_geom_tiles(changeset_id, change, geom, geom_prep, change_id, zoom, is_prev)
-    return 0 if geom.nil?
-
-    if change['diff_bbox']
-      bbox_to_use = 'diff_bbox'
-    else
-      bbox_to_use = (is_prev ? 'prev_geom' : 'geom') + '_bbox'
-    end
-
+  def create_geom_tiles_diff(changeset_id, change, zoom)
+    bbox_to_use = 'diff_bbox'
     bbox = box2d_to_bbox(change[bbox_to_use])
     tile_count = bbox_tile_count(zoom, bbox)
 
     @@log.debug "  tile_count = #{tile_count} (using #{bbox_to_use})"
 
-    if change['el_type'] == 'N'
-      # Fast track a change that fits on a single tile (e.g. all nodes) - just create the tile.
-      tiles = bbox_to_tiles(zoom, bbox)
+    tiles = prepare_tiles(zoom, change, change['diff_geom_obj_prep'], bbox, tile_count)
+
+    if tiles.size == 1
+      add_change_tile(tiles.to_a[0][0], tiles.to_a[0][1], zoom, change, change['geom_obj'], change['geom_prev_obj'])
+      return 1
+    end
+
+    @@log.debug "  Processing #{tiles.size} tile(s)..."
+
+    count = 0
+
+    for tile in tiles
+      x, y = tile[0], tile[1]
+      tile_geom = get_tile_geom(x, y, zoom)
+      intersection = nil
+      intersection_prev = nil
+
+      if change['geom_obj'].intersects?(tile_geom)
+        intersection = change['geom_obj'].intersection(tile_geom)
+        intersection.srid = 4326
+      end
+
+      if change['prev_geom_obj'].intersects?(tile_geom)
+        intersection_prev = change['prev_geom_obj'].intersection(tile_geom)
+        intersection_prev.srid = 4326
+      end
+
+      add_change_tile(x, y, zoom, change, intersection, intersection_prev)
+      count += 1
+    end
+    count
+  end
+
+  def create_geom_tiles(changeset_id, change, geom, geom_prep, change_id, zoom, is_prev)
+    return 0 if geom.nil?
+
+    bbox_to_use = (is_prev ? 'prev_geom' : 'geom') + '_bbox'
+    bbox = box2d_to_bbox(change[bbox_to_use])
+    tile_count = bbox_tile_count(zoom, bbox)
+
+    @@log.debug "  tile_count = #{tile_count} (using #{bbox_to_use})"
+
+    tiles = prepare_tiles(zoom, change, geom_prep, bbox, tile_count)
+
+    if tiles.size == 1
       add_change_tile(tiles.to_a[0][0], tiles.to_a[0][1], zoom, change, is_prev ? nil : geom, is_prev ? geom : nil)
       return 1
-    elsif tile_count < 64
-      # Does not make sense to try to reduce small geoms.
-      tiles = bbox_to_tiles(zoom, bbox)
-    else
-      tiles_to_check = (tile_count < 2048 ? bbox_to_tiles(14, bbox) : prepare_tiles_to_check(geom_prep, bbox, 14))
-      @@log.debug "  tiles_to_check = #{tiles_to_check.size}"
-      tiles = prepare_tiles(tiles_to_check, geom_prep, 14, zoom)
     end
 
     @@log.debug "  Processing #{tiles.size} tile(s)..."
@@ -163,6 +192,22 @@ class ChangesetTiler
     count
   end
 
+  def prepare_tiles(zoom, change, geom_prep, bbox, tile_count)
+    tiles = []
+    if change['el_type'] == 'N'
+      # Fast track a change that fits on a single tile (e.g. all nodes) - just create the tile.
+      tiles = bbox_to_tiles(zoom, bbox)
+    elsif tile_count < 64
+      # Does not make sense to try to reduce small geoms.
+      tiles = bbox_to_tiles(zoom, bbox)
+    else
+      tiles_to_check = (tile_count < 2048 ? bbox_to_tiles(14, bbox) : prepare_tiles_to_check(geom_prep, bbox, 14))
+      @@log.debug "  tiles_to_check = #{tiles_to_check.size}"
+      tiles = reduce_tiles(tiles_to_check, geom_prep, 14, zoom)
+    end
+    tiles
+  end
+
   def add_change_tile(x, y, zoom, change, geom, prev_geom)
     @conn.exec_prepared('insert_tile', [x, y, change['id'], change['tstamp'], change['el_type'], change['action'],
       change['el_id'], change['version'], change['tags'], change['prev_tags'],
@@ -171,8 +216,7 @@ class ChangesetTiler
       change['nodes'], change['prev_nodes']])
   end
 
-
-  def prepare_tiles(tiles_to_check, geom, source_zoom, zoom)
+  def reduce_tiles(tiles_to_check, geom, source_zoom, zoom)
     tiles = Set.new
     for tile in tiles_to_check
       tile_geom = get_tile_geom(tile[0], tile[1], source_zoom)
@@ -215,7 +259,8 @@ class ChangesetTiler
           CASE WHEN (c).el_type = 'N' THEN ST_X((c).geom) ELSE NULL END AS lon,
           CASE WHEN (c).el_type = 'N' THEN ST_Y((c).geom) ELSE NULL END AS lat,
           Box2D((c).geom) AS geom_bbox, Box2D((c).prev_geom) AS prev_geom_bbox,
-          Box2D(ST_Difference((c).geom, (c).prev_geom)) AS diff_bbox
+          Box2D(ST_Difference((c).geom, (c).prev_geom)) AS diff_bbox,
+          ST_Equals((c).geom, (c).prev_geom) AS equal
         FROM unnest(OWL_GenerateChanges($1)) c")
 
     @conn.prepare('insert_tile',

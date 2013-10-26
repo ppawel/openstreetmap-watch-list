@@ -4,12 +4,14 @@ require 'change'
 # Utility methods for tiler tests.
 #
 module TestCommon
+  TEST_ZOOM = 16
+
   def setup_unit_test(test_name)
     setup_db
     exec_sql_file("test/fixtures/tiler_unit_#{test_name.gsub('test_', '')}.sql")
     @tiler = Tiler::ChangesetTiler.new(@conn)
     for id in @conn.exec("SELECT changeset_id FROM nodes UNION SELECT changeset_id FROM ways").to_a.uniq do
-      @tiler.generate(18, id['changeset_id'].to_i, {:retile => true, :changes => true})
+      @tiler.generate(TEST_ZOOM, id['changeset_id'].to_i, {:retile => true, :changes => true})
     end
     @changes = get_changes
     verify_changes(1)
@@ -22,7 +24,7 @@ module TestCommon
     setup_db
     load_changeset(id)
     @tiler = Tiler::ChangesetTiler.new(@conn)
-    @tiler.generate(18, id, {:retile => true, :changes => true})
+    @tiler.generate(TEST_ZOOM, id, {:retile => true, :changes => true})
     @changes = get_changes
     @changes_h = Hash[@changes.collect {|row| [row['id'].to_i, row]}]
     verify_changes(id)
@@ -146,7 +148,7 @@ module TestCommon
         FROM
         (
           SELECT changeset_id, array_accum(changes) AS all_changes
-          FROM changeset_tiles WHERE zoom = 18
+          FROM changeset_tiles WHERE zoom = #{TEST_ZOOM}
           GROUP BY changeset_id
         ) q
       ) c").to_a
@@ -154,7 +156,7 @@ module TestCommon
   end
 
   def get_tiles
-    @conn.exec("SELECT * FROM changeset_tiles WHERE zoom = 18").to_a
+    @conn.exec("SELECT * FROM changeset_tiles WHERE zoom = #{TEST_ZOOM}").to_a
   end
 
   # Performs sanity checks on tiles.
