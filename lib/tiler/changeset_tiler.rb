@@ -71,6 +71,7 @@ class ChangesetTiler
         change['geom_obj'] = @wkb_reader.read_hex(change['geom'])
         change['geom_obj_prep'] = change['geom_obj'].to_prepared
       end
+
       if change['prev_geom']
         change['prev_geom_obj'] = @wkb_reader.read_hex(change['prev_geom'])
         change['prev_geom_obj_prep'] = change['prev_geom_obj'].to_prepared
@@ -104,6 +105,29 @@ class ChangesetTiler
   end
 
   def create_change_tiles(changeset_id, change, change_id, zoom)
+    if change['el_type'] == 'N'
+      count = 1
+      if change['geom'] and change['prev_geom']
+        bbox_tile = bbox_to_tiles(zoom, box2d_to_bbox(change['geom_bbox'])).to_a[0]
+        prev_bbox_tile = bbox_to_tiles(zoom, box2d_to_bbox(change['prev_geom_bbox'])).to_a[0]
+        if bbox_tile == prev_bbox_tile
+          add_change_tile(bbox_tile[0], bbox_tile[1], zoom, change, change['geom_obj'], change['prev_geom_obj'])
+        else
+          add_change_tile(bbox_tile[0], bbox_tile[1], zoom, change, change['geom_obj'], nil)
+          add_change_tile(prev_bbox_tile[0], prev_bbox_tile[1], zoom, change, nil, change['prev_geom_obj'])
+          count = 2
+        end
+      elsif change['geom']
+        bbox_tile = bbox_to_tiles(zoom, box2d_to_bbox(change['geom_bbox'])).to_a[0]
+        add_change_tile(bbox_tile[0], bbox_tile[1], zoom, change, change['geom_obj'], change['prev_geom_obj'])
+      elsif change['prev_geom']
+        prev_bbox_tile = bbox_to_tiles(zoom, box2d_to_bbox(change['prev_geom_bbox'])).to_a[0]
+        add_change_tile(prev_bbox_tile[0], prev_bbox_tile[1], zoom, change, nil, change['prev_geom_obj'])
+      else
+      end
+      return count
+    end
+
     if change['diff_bbox']
       count = create_geom_tiles_diff(changeset_id, change, zoom)
     else
@@ -127,7 +151,7 @@ class ChangesetTiler
     tiles = prepare_tiles(zoom, change, change['diff_geom_obj_prep'], bbox, tile_count)
 
     if tiles.size == 1
-      add_change_tile(tiles.to_a[0][0], tiles.to_a[0][1], zoom, change, change['geom_obj'], change['geom_prev_obj'])
+      add_change_tile(tiles.to_a[0][0], tiles.to_a[0][1], zoom, change, change['geom_obj'], change['prev_geom_obj'])
       return 1
     end
 
@@ -194,10 +218,7 @@ class ChangesetTiler
 
   def prepare_tiles(zoom, change, geom_prep, bbox, tile_count)
     tiles = []
-    if change['el_type'] == 'N'
-      # Fast track a change that fits on a single tile (e.g. all nodes) - just create the tile.
-      tiles = bbox_to_tiles(zoom, bbox)
-    elsif tile_count < 64
+    if tile_count < 64
       # Does not make sense to try to reduce small geoms.
       tiles = bbox_to_tiles(zoom, bbox)
     else
@@ -258,7 +279,8 @@ class ChangesetTiler
           CASE WHEN (c).el_type = 'N' THEN ST_Y((c).prev_geom) ELSE NULL END AS prev_lat,
           CASE WHEN (c).el_type = 'N' THEN ST_X((c).geom) ELSE NULL END AS lon,
           CASE WHEN (c).el_type = 'N' THEN ST_Y((c).geom) ELSE NULL END AS lat,
-          Box2D((c).geom) AS geom_bbox, Box2D((c).prev_geom) AS prev_geom_bbox,
+          Box2D((c).geom) AS geom_bbox,
+          Box2D((c).prev_geom) AS prev_geom_bbox,
           Box2D(ST_Difference((c).geom, (c).prev_geom)) AS diff_bbox,
           ST_Equals((c).geom, (c).prev_geom) AS equal
         FROM unnest(OWL_GenerateChanges($1)) c")

@@ -54,20 +54,18 @@ module TestCommon
 
     puts 'Loading data...'
 
+    @conn.exec("COPY changesets FROM STDIN;")
+    File.open("testdata/#{id}-changeset.csv").read.each_line do |line| @conn.put_copy_data(line) end
+    @conn.put_copy_end
+
     @conn.exec("COPY nodes FROM STDIN;")
-
-    File.open("testdata/#{id}-nodes.csv").read.each_line do |line|
-      @conn.put_copy_data(line)
-    end
-
+    File.open("testdata/#{id}-nodes.csv").read.each_line do |line| @conn.put_copy_data(line) end
     @conn.put_copy_end
+
     @conn.exec("COPY ways FROM STDIN;")
-
-    File.open("testdata/#{id}-ways.csv").read.each_line do |line|
-      @conn.put_copy_data(line)
-    end
-
+    File.open("testdata/#{id}-ways.csv").read.each_line do |line| @conn.put_copy_data(line) end
     @conn.put_copy_end
+
     @conn.exec("VACUUM ANALYZE")
   end
 
@@ -96,8 +94,8 @@ module TestCommon
         #assert(!change['prev_tags'].empty?, 'prev_tags should not be null for change: ' + change.to_s)
       end
 
-      if change['action'] == 'AFFECT'
-        #assert(!change['geom'].nil?)
+      if change['action'] == 'MODIFY'
+        assert(!change['geom'].nil?)
         #assert(!change['prev_geom'].nil?, 'prev_geom should not be null for change: ' + change.to_s)
       end
     end

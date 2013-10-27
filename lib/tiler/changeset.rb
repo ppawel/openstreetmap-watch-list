@@ -24,6 +24,18 @@ class Changeset
     @tags = eval("{#{hash['tags']}}")
     @bboxes = box2d_to_bbox(hash['bboxes']) if hash['bboxes']
     @changes = Change.from_pg_array(hash['changes'])
+
+    geojsons = pg_string_to_array(hash['geojson'])
+    prev_geojsons = pg_string_to_array(hash['prev_geojson'])
+    change_tags = pg_string_to_array(hash['change_tags'])
+    change_prev_tags = pg_string_to_array(hash['change_prev_tags'])
+
+    @changes.each_with_index do |change, index|
+      change.geom = JSON[geojsons[index]] if geojsons[index]
+      change.prev_geom = JSON[prev_geojsons[index]] if prev_geojsons[index]
+      change.tags = eval("{#{change_tags[index]}}") if change_tags[index]
+      change.prev_tags = eval("{#{change_prev_tags[index]}}") if change_prev_tags[index]
+    end
   end
 
   def generate_json(options = {:include_changes => true})
@@ -33,7 +45,6 @@ class Changeset
       "closed_at" => closed_at,
       "user_id" => user_id,
       "user_name" => user_name,
-      #"entity_changes" => entity_changes.nil? ? [] : entity_changes_as_list,
       "tags" => tags,
       #"bbox" => bbox ? box2d_to_bbox(total_bbox)[0] : nil,
       "changes" => @changes.as_json,

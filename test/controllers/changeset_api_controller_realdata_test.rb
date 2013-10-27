@@ -11,12 +11,15 @@ class ChangesetApiControllerTest < ActionController::TestCase
 
   def verify_api_response
     # For every tile we request it through the API and verify JSON from the response
-    for tile in conn.query('SELECT * FROM changeset_tiles WHERE zoom = 18').to_a do
-      get(:changesets_tile_json, {:x => tile['x'].to_i, :y => tile['y'].to_i, :zoom => 18})
-      for changeset in JSON[@response.body] do
+    for tile in @conn.query("SELECT * FROM changeset_tiles WHERE zoom = #{TEST_ZOOM}").to_a do
+      get(:changesets_tile_json, {:x => tile['x'].to_i, :y => tile['y'].to_i, :zoom => TEST_ZOOM})
+      json = JSON[@response.body]
+      assert(!json.empty?, 'Response is empty for tile: ' + tile.to_s)
+      for changeset in json do
         change_ids = []
         for change in changeset['changes'] do
           change_ids << change['id']
+          assert((!change['geom'].nil? or !change['prev_geom'].nil?), 'No geometry for change: ' + change.to_s)
         end
         assert_equal(change_ids.uniq, change_ids, 'Changeset has duplicate changes: ' + changeset.to_s)
       end

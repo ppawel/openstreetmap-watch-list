@@ -204,4 +204,17 @@ class ChangesetTilerTest < Test::Unit::TestCase
     p find_changes('el_type' => 'W', 'el_id' => '104749747')
     #assert_equal(3, @tiles.size)
   end
+
+  # Way 172609358 changed nodes only.
+  def test_13476841
+    setup_changeset_test(13476841)
+    assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '172609358').size)
+    assert(!find_changes('el_type' => 'W', 'el_id' => '172609358')[0]['prev_tags'].nil?)
+  end
+
+  def test_13472650
+    setup_changeset_test(13472650)
+    assert_equal(1, find_changes('el_type' => 'W', 'el_id' => '32284425').size)
+    p find_changes('el_type' => 'W', 'el_id' => '32284425')
+  end
 end

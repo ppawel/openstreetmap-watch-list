@@ -39,20 +39,6 @@ class Change
     change
   end
 
-  def ssinitialize(changeset_id, hash)
-    @id = hash['id'].to_i
-    @changeset_id = changeset_id
-    @tstamp = Time.parse(hash['tstamp'])
-    @el_type = hash['el_type']
-    @el_id = hash['el_id'].to_i
-    @el_version = hash['el_version'].to_i
-    @el_action = hash['el_action']
-    @tags = eval("{#{hash['tags']}}")
-    @prev_tags = eval("{#{hash['prev_tags']}}") if hash['prev_tags']
-    @geom = JSON[hash['geom']] if hash['geom']
-    @prev_geom = JSON[hash['prev_geom']] if hash['prev_geom']
-  end
-
   def as_json(options = {})
     Hash[instance_variables.collect {|key| [key.to_s.gsub('@', ''), instance_variable_get(key)]}]
   end

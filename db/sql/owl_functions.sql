@@ -6,24 +6,17 @@ BEGIN
   agg := $1;
 
   --raise notice '$2: %', $2;
-  --raise notice 'ag: %', agg;
 
   IF agg IS NULL THEN
     agg := $2;
     RETURN agg;
   END IF;
 
-  IF $2.tstamp >= agg.tstamp THEN
-    agg.tstamp = $2.tstamp;
-    agg.version = $2.version;
-    agg.tags = $2.tags;
-    agg.nodes = $2.nodes;
-  END IF;
-
   IF $2.action = 'CREATE' THEN
     IF agg.action = 'DELETE' THEN
       agg.id = -1;
     ELSE
+      agg.prev_geom := NULL;
       agg.prev_nodes := NULL;
       agg.prev_tags := NULL;
     END IF;
@@ -32,13 +25,29 @@ BEGIN
     IF agg.action = 'CREATE' THEN
       agg.id = -1;
     ELSE
+      agg.geom := NULL;
       agg.nodes := NULL;
       agg.tags := NULL;
+      agg.prev_geom := $2.prev_geom;
+      agg.prev_nodes := $2.prev_nodes;
+      agg.prev_tags := $2.prev_tags;
     END IF;
     agg.action = $2.action;
   ELSE
-    agg.action = $2.action;
+    IF agg.action = 'AFFECT' THEN
+      agg.prev_geom := $2.prev_geom;
+      agg.prev_nodes := $2.prev_nodes;
+      agg.prev_tags := $2.prev_tags;
+    END IF;
+    --agg.action = $2.action;
   END IF;
+
+  agg.tstamp = $2.tstamp;
+  agg.version = $2.version;
+  agg.tags = $2.tags;
+  agg.nodes = $2.nodes;
+
+  --raise notice 'ag: %', agg;
 
   RETURN agg;
 END;
@@ -269,8 +278,8 @@ CREATE OR REPLACE FUNCTION OWL_MergeChanges(change[]) RETURNS change[] AS $$
     version,
     tags,
     prev_tags,
-    ST_LineMerge(ST_Union(geom)),
-    ST_LineMerge(ST_Union(prev_geom)),
+    ST_Union(geom),
+    ST_Union(prev_geom),
     NULL::bigint[],
     NULL::bigint[])::change ch
   FROM unnest($1) c
@@ -294,7 +303,7 @@ BEGIN
 
   INSERT INTO _tmp_result
   SELECT (
-    -1,
+    0,
     n.tstamp,
     'N'::element_type,
     CASE
@@ -306,8 +315,8 @@ BEGIN
     n.version,
     n.tags,
     prev.tags,
-    CASE WHEN NOT n.visible THEN NULL ELSE n.geom END::geometry(GEOMETRY, 4326),
-    CASE WHEN NOT n.visible OR NOT OWL_Equals(n.geom, prev.geom) THEN prev.geom ELSE NULL END::geometry(GEOMETRY, 4326),
+    n.geom,
+    prev.geom,
     NULL::bigint[],
     NULL::bigint[])::change
   FROM nodes n
@@ -439,8 +448,8 @@ BEGIN
         (c).prev_nodes)::change AS c
       FROM
       (SELECT OWL_Aggregate(c ORDER BY (c).el_type, (c).el_id, (c).tstamp, (c).version) AS c
-        FROM _tmp_result GROUP BY (c).el_type, (c).el_id) x) y
-      WHERE (c).id != -1);
+        FROM _tmp_result GROUP BY (c).el_type, (c).el_id) x
+      WHERE (x.c).id != -1) y);
 END
 $$ LANGUAGE plpgsql;
 
