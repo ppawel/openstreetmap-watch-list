@@ -126,7 +126,6 @@ class ChangesetTiler
       elsif change['prev_geom']
         prev_bbox_tile = bbox_to_tiles(zoom, box2d_to_bbox(change['prev_geom_bbox'])).to_a[0]
         add_change_tile(prev_bbox_tile[0], prev_bbox_tile[1], zoom, change, nil, change['prev_geom_obj'])
-      else
       end
       return count
     end
@@ -298,8 +297,8 @@ class ChangesetTiler
       "INSERT INTO _tiles (x, y, change_id, tstamp, geom, prev_geom) VALUES ($1, $2, $3, $4, $5, $6)")
 
     @conn.prepare('generate_changeset_tiles',
-      "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, change_id, geom)
-      SELECT $1, tstamp, $2, x, y, change_id, geom
+      "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, change_id, geom, prev_geom)
+      SELECT $1, tstamp, $2, x, y, change_id, geom, prev_geom
       FROM _tiles")
   end
 end

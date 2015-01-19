@@ -4,7 +4,6 @@ require 'pg'
 require 'minitest/autorun'
 require 'yaml'
 require 'tiler/changeset_tiler'
-
 require 'tiler/test/common'
 
 class TilerUnitTest < Minitest::Test

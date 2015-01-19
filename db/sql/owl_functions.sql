@@ -299,7 +299,7 @@ BEGIN
     prev_geom =
       CASE
         WHEN action = 'CREATE' THEN NULL
-        ELSE OWL_MakeLine(prev_nodes, min_tstamp - interval '1 second')
+        ELSE OWL_MakeLine(prev_nodes, min_tstamp)
       END
   WHERE el_type = 'W';
 
@@ -340,7 +340,7 @@ BEGIN
     tags,
     prev_tags,
     geom,
-    NULL--prev_geom
+    prev_geom
   FROM
     _tmp_changes
   WHERE rownum = 1;

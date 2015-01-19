@@ -17,7 +17,7 @@ GC.enable
 $config = YAML.load_file(File.absolute_path(File.dirname(__FILE__) + '/../config/database.yml'))['development']
 options = Tiler::parse_cmdline_options
 puts options.inspect
-zoom = 16
+zoom = 18
 changeset_ids = ARGF.each_line.collect {|line| line.to_i}
 
 conn = PGconn.open(:host => $config['host'], :port => $config['port'], :dbname => $config['database'],

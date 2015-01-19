@@ -4,7 +4,7 @@ require 'tiler/change'
 # Utility methods for tiler tests.
 #
 module TestCommon
-  TEST_ZOOM = 16
+  TEST_ZOOM = 18
 
   def setup_unit_test(test_name)
     setup_db
