@@ -40,8 +40,8 @@ private
         array_agg(row(c.*)) AS changes,
         array_agg(c.tags) AS change_tags,
         array_agg(c.prev_tags) AS change_prev_tags,
-        array_agg(ST_AsGeoJSON(c.geom)) AS geojson,
-        array_agg(ST_AsGeoJSON(c.prev_geom)) AS prev_geojson
+        array_agg(ST_AsGeoJSON(t.geom)) AS geojson,
+        array_agg(ST_AsGeoJSON(t.prev_geom)) AS prev_geojson
       FROM changeset_tiles t
       INNER JOIN changesets cs ON (cs.id = t.changeset_id)
       INNER JOIN changes c ON (c.id = t.change_id)
