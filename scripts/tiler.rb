@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-$:.unshift File.absolute_path(File.dirname(__FILE__) + '/../tiler/lib/')
+$:.unshift File.absolute_path(File.dirname(__FILE__) + '/../lib/')
 
 # Useful when redirecting log output to a file.
 STDOUT.sync = true
@@ -8,13 +8,13 @@ STDOUT.sync = true
 require 'pg'
 require 'yaml'
 
-require 'cmdline_options'
-require 'logging'
-require 'changeset_tiler'
+require 'tiler/cmdline_options'
+require 'tiler/logging'
+require 'tiler/changeset_tiler'
 
 GC.enable
 
-$config = YAML.load_file('../rails/config/database.yml')['development']
+$config = YAML.load_file(File.absolute_path(File.dirname(__FILE__) + '/../config/database.yml'))['development']
 options = Tiler::parse_cmdline_options
 puts options.inspect
 zoom = 16

@@ -1,4 +1,4 @@
-require 'change'
+require 'tiler/change'
 
 ##
 # Utility methods for tiler tests.
@@ -75,7 +75,7 @@ module TestCommon
     for change in @changes
       geom_changed = geom_changed(change)
       tags_changed = change['tags'] != change['prev_tags']
-      nodes_changed = change['nodes'] != change['prev_nodes']
+      #nodes_changed = change['nodes'] != change['prev_nodes']
       #puts "changed #{change['el_id']} -- #{geom_changed} #{tags_changed}"
       #assert((nodes_changed or geom_changed or tags_changed or change['action'] == 'CREATE' or change['action'] == 'DELETE'),
       #  "Change doesn't change anything: #{change}")
@@ -128,28 +128,17 @@ module TestCommon
   def get_changes
     for change in @conn.exec("SELECT
         changeset_id,
-        (c.unnest).id,
-        (c.unnest).tstamp,
-        (c.unnest).tags,
-        (c.unnest).prev_tags,
-        (c.unnest).el_type,
-        (c.unnest).action,
-        (c.unnest).el_id,
-        (c.unnest).version,
-        (c.unnest).nodes,
-        (c.unnest).prev_nodes,
-        (c.unnest).geom,
-        (c.unnest).prev_geom
-      FROM
-      (
-        SELECT changeset_id, unnest(OWL_MergeChanges(all_changes))
-        FROM
-        (
-          SELECT changeset_id, array_accum(changes) AS all_changes
-          FROM changeset_tiles WHERE zoom = #{TEST_ZOOM}
-          GROUP BY changeset_id
-        ) q
-      ) c").to_a
+        id,
+        tstamp,
+        tags,
+        prev_tags,
+        el_type,
+        action,
+        el_id,
+        version,
+        (SELECT ST_Union(geom) FROM changeset_tiles WHERE change_id = c.id AND zoom = #{TEST_ZOOM}) AS geom,
+        (SELECT ST_Union(prev_geom) FROM changeset_tiles WHERE change_id = c.id AND zoom = #{TEST_ZOOM}) AS prev_geom
+      FROM changes c").to_a
     end
   end
 
@@ -159,14 +148,6 @@ module TestCommon
 
   # Performs sanity checks on tiles.
   def verify_tiles
-    for tile in @tiles
-      changes = Change.from_pg_array(tile['changes'])
-      change_ids = []
-      for change in changes do
-          change_ids << change.id
-      end
-      assert_equal(change_ids.uniq, change_ids, 'Tile has duplicate changes: ' + tile.to_s)
-    end
   end
 
   def find_changes(filters)

@@ -1,5 +1,6 @@
 -- Database creation script for the OWL schema.
 
+DROP TABLE IF EXISTS changes;
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS ways;
 DROP TABLE IF EXISTS changeset_tiles;
@@ -14,27 +15,25 @@ CREATE TYPE element_type AS ENUM ('N', 'W', 'R');
 DROP TYPE IF EXISTS action CASCADE;
 CREATE TYPE action AS ENUM ('CREATE', 'MODIFY', 'DELETE', 'AFFECT');
 
-DROP TYPE IF EXISTS change CASCADE;
-CREATE TYPE change AS (
-  id int,
-  tstamp timestamp without time zone,
-  el_type element_type,
-  action action,
-  el_id bigint,
-  version int,
-  tags hstore,
-  prev_tags hstore,
-  geom geometry(GEOMETRY, 4326),
-  prev_geom geometry(GEOMETRY, 4326),
-  nodes bigint[],
-  prev_nodes bigint[]
-);
-
 DROP AGGREGATE IF EXISTS array_accum(anyarray);
 CREATE AGGREGATE array_accum (anyarray) (
   sfunc = array_cat,
   stype = anyarray,
   initcond = '{}'
+);
+
+CREATE TABLE changes (
+  id bigserial NOT NULL,
+  tstamp timestamp without time zone,
+  el_type element_type,
+  action action,
+  el_id bigint,
+  version int,
+  changeset_id bigint,
+  tags hstore,
+  prev_tags hstore,
+  geom geometry(GEOMETRY, 4326),
+  prev_geom geometry(GEOMETRY, 4326)
 );
 
 -- Create a table for changesets.
@@ -45,8 +44,7 @@ CREATE TABLE changesets (
   created_at timestamp without time zone NOT NULL,
   closed_at timestamp without time zone, -- If NULL, changeset is still open for business.
   open boolean NOT NULL,
-  tags hstore NOT NULL,
-  entity_changes int[9], -- For each element type (N, W, R) holds number of actions (CREATE, MODIFY, DELETE) in this changeset.
+  tags hstore,
   num_changes int, -- Comes from the official changeset metadata.
   bbox geometry -- Bounding box of all changes for this changeset.
 );
@@ -79,7 +77,6 @@ CREATE TABLE ways (
 CREATE TABLE relations (
   id bigint NOT NULL,
   version int NOT NULL,
-  rev int NOT NULL,
   visible boolean NOT NULL,
   user_id int NOT NULL,
   tstamp timestamp without time zone NOT NULL,
@@ -110,5 +107,7 @@ CREATE TABLE changeset_tiles (
   x int NOT NULL,
   y int NOT NULL,
   zoom int NOT NULL,
-  changes change[] NOT NULL
+  change_id bigint NOT NULL,
+  geom geometry(GEOMETRY, 4326),
+  prev_geom geometry(GEOMETRY, 4326)
 );

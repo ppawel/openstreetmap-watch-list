@@ -1,70 +1,3 @@
-CREATE OR REPLACE FUNCTION OWL_AggregateChanges(change, change) RETURNS change AS $$
-DECLARE
-  agg change;
-  result change;
-BEGIN
-  agg := $1;
-
-  --raise notice '$2: %', $2;
-
-  IF agg IS NULL THEN
-    agg := $2;
-    RETURN agg;
-  END IF;
-
-  IF $2.action = 'CREATE' THEN
-    IF agg.action = 'DELETE' THEN
-      agg.id = -1;
-    ELSE
-      agg.prev_geom := NULL;
-      agg.prev_nodes := NULL;
-      agg.prev_tags := NULL;
-    END IF;
-    agg.action = $2.action;
-  ELSIF $2.action = 'DELETE' THEN
-    IF agg.action = 'CREATE' THEN
-      agg.id = -1;
-    ELSE
-      agg.geom := NULL;
-      agg.nodes := NULL;
-      agg.tags := NULL;
-      agg.prev_geom := $2.prev_geom;
-      agg.prev_nodes := $2.prev_nodes;
-      agg.prev_tags := $2.prev_tags;
-    END IF;
-    agg.action = $2.action;
-  ELSE
-    IF agg.action = 'AFFECT' THEN
-      agg.prev_geom := $2.prev_geom;
-      agg.prev_nodes := $2.prev_nodes;
-      agg.prev_tags := $2.prev_tags;
-    END IF;
-    --agg.action = $2.action;
-  END IF;
-
-  agg.tstamp = $2.tstamp;
-  agg.version = $2.version;
-  agg.tags = $2.tags;
-  agg.nodes = $2.nodes;
-
-  --raise notice 'ag: %', agg;
-
-  RETURN agg;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP AGGREGATE IF EXISTS OWL_Aggregate(change);
-CREATE AGGREGATE OWL_Aggregate(change) (
-    sfunc = OWL_AggregateChanges,
-    stype = change
-);
-
-CREATE OR REPLACE FUNCTION OWL_LatLonToTile(int, geometry) RETURNS table (x int, y int) AS $$
-  SELECT
-    floor((POW(2, $1) * ((ST_X($2) + 180) / 360)))::int AS tile_x,
-    floor((1.0 - ln(tan(radians(ST_Y($2))) + 1.0 / cos(radians(ST_Y($2)))) / pi()) / 2.0 * POW(2, $1))::int AS tile_y;
-$$ LANGUAGE SQL;
-
 --
 -- Returns index of an element in given array.
 --
@@ -122,7 +55,7 @@ BEGIN
       FROM nodes n
       WHERE n.id IN (SELECT unnest($1))
       AND tstamp <= $2 AND visible
-      ORDER BY id, tstamp DESC) q ON (q.id = x.node_id));
+      ORDER BY id, version DESC, tstamp DESC) q ON (q.id = x.node_id));
 
   -- Now check if the linestring has exactly the right number of points.
   IF ST_NumPoints(way_geom) != array_length($1, 1) THEN
@@ -228,68 +161,9 @@ CREATE OR REPLACE FUNCTION OWL_Equals_Simple(geometry(GEOMETRY, 4326), geometry(
 $$ LANGUAGE sql IMMUTABLE;
 
 --
--- OWL_JoinTileGeometriesByChange
---
--- Merges (collects/unions in the spatial sense) geometries belonging
--- to the same change.
---
--- $1 - an array of changes
---
--- The two arrays are of the same size. Returns an array of GeoJSON strings.
---
-CREATE OR REPLACE FUNCTION OWL_JoinTileGeometriesByChange(change[]) RETURNS text[] AS $$
-  WITH joined_arrays AS (
-    SELECT (c.unnest).id AS change_id, (c.unnest).geom, GeometryType((c.unnest).geom) AS geom_type
-    FROM (SELECT unnest($1)) c
-  )
-  SELECT
-    array_agg(CASE WHEN c.g IS NOT NULL AND NOT ST_IsEmpty(c.g) AND ST_NumGeometries(c.g) > 0 THEN ST_AsGeoJSON(ST_CollectionHomogenize(c.g)) ELSE NULL END order by c.change_id)
-  FROM (
-    SELECT ST_Collect(g) AS g, change_id
-    FROM
-      (SELECT NULL AS g, change_id
-      FROM joined_arrays
-      WHERE geom_type IS NULL
-      GROUP BY change_id
-        UNION
-      SELECT ST_LineMerge(ST_Union(geom)) AS g, change_id
-      FROM joined_arrays
-      WHERE geom_type IS NOT NULL AND geom_type LIKE '%LINESTRING'
-      GROUP BY change_id
-        UNION
-      SELECT ST_Union(geom) AS g, change_id
-      FROM joined_arrays
-      WHERE geom_type IS NOT NULL AND geom_type NOT LIKE '%LINESTRING'
-      GROUP BY change_id) x
-    GROUP BY change_id) c
-$$ LANGUAGE sql IMMUTABLE;
-
---
--- OWL_MergeChanges
---
-CREATE OR REPLACE FUNCTION OWL_MergeChanges(change[]) RETURNS change[] AS $$
-  SELECT array_agg(x.ch ORDER BY (x.ch).id) FROM (
-  SELECT DISTINCT ROW(
-    id,
-    tstamp,
-    el_type,
-    action,
-    el_id,
-    version,
-    tags,
-    prev_tags,
-    ST_Union(geom),
-    ST_Union(prev_geom),
-    NULL::bigint[],
-    NULL::bigint[])::change ch
-  FROM unnest($1) c
-  GROUP BY c.id, c.tstamp, c.el_type, c.action, c.el_id, c.version, c.tags, c.prev_tags) x
-$$ LANGUAGE sql;
-
---
 -- OWL_GenerateChanges
 --
-CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS change[] AS $$
+CREATE OR REPLACE FUNCTION OWL_GenerateChanges(bigint) RETURNS VOID AS $$
 DECLARE
   min_tstamp timestamp without time zone;
   max_tstamp timestamp without time zone;
@@ -299,11 +173,22 @@ DECLARE
 BEGIN
   RAISE NOTICE '% -- Generating changes for changeset %', clock_timestamp(), $1;
 
-  CREATE TEMPORARY TABLE _tmp_result (c change) ON COMMIT DROP;
+  CREATE TEMPORARY TABLE _tmp_result (
+    tstamp timestamp without time zone,
+    el_type element_type,
+    action action,
+    el_id bigint,
+    version int,
+    tags hstore,
+    prev_tags hstore,
+    geom geometry(GEOMETRY, 4326),
+    prev_geom geometry(GEOMETRY, 4326),
+    nodes bigint[],
+    prev_nodes bigint[]
+  ) ON COMMIT DROP;
 
   INSERT INTO _tmp_result
-  SELECT (
-    0,
+  SELECT
     n.tstamp,
     'N'::element_type,
     CASE
@@ -318,7 +203,7 @@ BEGIN
     n.geom,
     prev.geom,
     NULL::bigint[],
-    NULL::bigint[])::change
+    NULL::bigint[]
   FROM nodes n
   LEFT JOIN nodes prev ON (prev.id = n.id AND prev.version = n.version - 1)
   WHERE n.changeset_id = $1 AND (prev.version IS NOT NULL OR n.version = 1);
@@ -327,8 +212,7 @@ BEGIN
   RAISE NOTICE '% --   Changeset nodes selected (%)', clock_timestamp(), row_count;
 
   INSERT INTO _tmp_result
-  SELECT ROW(
-    $1,
+  SELECT
     w.tstamp,
     'W'::element_type,
     CASE
@@ -343,7 +227,7 @@ BEGIN
     NULL,
     NULL,
     w.nodes,
-    prev.nodes)::change
+    prev.nodes
   FROM ways w
   LEFT JOIN ways prev ON (prev.id = w.id AND prev.version = w.version - 1)
   WHERE w.changeset_id = $1 AND (prev.version IS NOT NULL OR w.version = 1);
@@ -351,12 +235,12 @@ BEGIN
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Changeset ways selected (%)', clock_timestamp(), row_count;
 
-  SELECT MAX((c).tstamp), MIN((c).tstamp)
+  SELECT MAX(tstamp), MIN(tstamp)
   INTO max_tstamp, min_tstamp
   FROM _tmp_result;
 
-  moved_nodes_ids := (SELECT array_agg((c).el_id) FROM _tmp_result
-    WHERE (c).el_type = 'N' AND (c).version > 1 AND NOT (c).geom = (c).prev_geom AND (c).action != 'DELETE');
+  moved_nodes_ids := (SELECT array_agg(el_id) FROM _tmp_result
+    WHERE el_type = 'N' AND version > 1 AND NOT geom = prev_geom AND action != 'DELETE');
 
   RAISE NOTICE '% --   Prepared data (min = %, max = %, moved nodes = %)', clock_timestamp(),
     min_tstamp, max_tstamp, array_length(moved_nodes_ids, 1);
@@ -364,19 +248,18 @@ BEGIN
   -- Affected ways
 
   INSERT INTO _tmp_result
-  SELECT ROW(
-    $1,
+  SELECT
     w.tstamp,
     'W'::element_type,
     'AFFECT'::action,
     w.id,
     version,
     w.tags,
-    NULL,
+    w.tags,
     NULL,
     NULL,
     w.nodes,
-    w.nodes)::change
+    w.nodes
       --OWL_MakeMinimalLine(w.nodes, max_tstamp, array_intersect(w.nodes, moved_nodes_ids)) AS geom,
       --OWL_MakeMinimalLine(w.nodes, min_tstamp, array_intersect(w.nodes, moved_nodes_ids)) AS prev_geom
       --OWL_MakeLine(w.nodes, max_tstamp) AS geom,
@@ -389,67 +272,78 @@ BEGIN
   RAISE NOTICE '% --   Affected ways done (%)', clock_timestamp(), row_count;
 
   DELETE FROM _tmp_result
-  WHERE (c).el_type = 'N' AND (c).el_id IN (SELECT unnest((c).nodes) FROM _tmp_result UNION SELECT unnest((c).prev_nodes) FROM _tmp_result)
-    AND NOT OWL_InterestingTags((c).tags) AND NOT OWL_InterestingTags((c).prev_tags);
+  WHERE el_type = 'N' AND el_id IN (SELECT unnest(nodes) FROM _tmp_result UNION SELECT unnest(prev_nodes) FROM _tmp_result)
+    AND NOT OWL_InterestingTags(tags) AND NOT OWL_InterestingTags(prev_tags);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Removed not interesting nodes (%)', clock_timestamp(), row_count;
 
   UPDATE _tmp_result w
-  SET c.action = 'CREATE', c.prev_geom = NULL
-  WHERE (c).el_type = 'W' AND EXISTS
-    (SELECT 1 FROM _tmp_result w2 WHERE (w2.c).el_type = 'W' AND (w2.c).el_id = (w.c).el_id AND (w2.c).action = 'CREATE');
+  SET action = 'CREATE', prev_geom = NULL
+  WHERE el_type = 'W' AND EXISTS
+    (SELECT 1 FROM _tmp_result w2 WHERE w2.el_type = 'W' AND w2.el_id = w.el_id AND w2.action = 'CREATE');
 
   DELETE FROM _tmp_result w
-  WHERE (c).el_type = 'W' AND (c).version < (SELECT MAX((w2.c).version) FROM _tmp_result w2 WHERE (w2.c).el_type = 'W' AND (w2.c).el_id = (w.c).el_id);
+  WHERE el_type = 'W' AND version < (SELECT MAX(w2.version) FROM _tmp_result w2 WHERE w2.el_type = 'W' AND w2.el_id = w.el_id);
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Removed old changes (%)', clock_timestamp(), row_count;
 
   UPDATE _tmp_result
   SET
-    c.geom =
+    geom =
       CASE
-        WHEN (c).action = 'DELETE' THEN NULL
-        ELSE OWL_MakeLine((c).nodes, max_tstamp)
+        WHEN action = 'DELETE' THEN NULL
+        ELSE OWL_MakeLine(nodes, max_tstamp)
       END,
-    c.prev_geom =
+    prev_geom =
       CASE
-        WHEN (c).action = 'CREATE' THEN NULL
-        ELSE OWL_MakeLine((c).prev_nodes, min_tstamp)
+        WHEN action = 'CREATE' THEN NULL
+        ELSE OWL_MakeLine(prev_nodes, min_tstamp - interval '1 second')
       END
-  WHERE (c).el_type = 'W';
+  WHERE el_type = 'W';
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Updated way geoms (%)', clock_timestamp(), row_count;
 
   DELETE FROM _tmp_result
-  WHERE (c).el_type = 'W' AND (c).geom IS NOT NULL AND (c).prev_geom IS NOT NULL
-    AND OWL_Equals((c).geom, (c).prev_geom) AND (c).tags = (c).prev_tags AND (c).nodes = (c).prev_nodes;
+  WHERE el_type = 'W' AND geom IS NOT NULL AND prev_geom IS NOT NULL
+    AND OWL_Equals(geom, prev_geom) AND tags = prev_tags AND nodes = prev_nodes;
 
   GET DIAGNOSTICS row_count = ROW_COUNT;
   RAISE NOTICE '% --   Removed not interesting ways (%)', clock_timestamp(), row_count;
 
   RAISE NOTICE '% -- Returning % change(s)', clock_timestamp(), (SELECT COUNT(*) FROM _tmp_result);
 
-  RETURN (SELECT array_agg(c ORDER BY (c).tstamp) FROM (
-      SELECT ROW(
-        (row_number() OVER ())::int,
-        (c).tstamp,
-        (c).el_type,
-        (c).action,
-        (c).el_id,
-        (c).version,
-        (c).tags,
-        (c).prev_tags,
-        (c).geom,
-        (c).prev_geom,
-        (c).nodes,
-        (c).prev_nodes)::change AS c
-      FROM
-      (SELECT OWL_Aggregate(c ORDER BY (c).el_type, (c).el_id, (c).tstamp, (c).version) AS c
-        FROM _tmp_result GROUP BY (c).el_type, (c).el_id) x
-      WHERE (x.c).id != -1) y);
+  WITH _tmp_changes AS (
+    SELECT *, ROW_NUMBER() OVER(PARTITION BY el_id ORDER BY version DESC, tstamp DESC) AS rownum
+    FROM _tmp_result
+  )
+  INSERT INTO changes (
+    tstamp,
+    el_type,
+    action,
+    el_id,
+    version,
+    changeset_id,
+    tags,
+    prev_tags,
+    geom,
+    prev_geom)
+  SELECT
+    tstamp,
+    el_type,
+    action,
+    el_id,
+    version,
+    $1,
+    tags,
+    prev_tags,
+    geom,
+    NULL--prev_geom
+  FROM
+    _tmp_changes
+  WHERE rownum = 1;
 END
 $$ LANGUAGE plpgsql;
 
@@ -525,16 +419,18 @@ BEGIN
 
   DELETE FROM changeset_tiles WHERE changeset_id = $1 AND zoom = $3;
 
-  INSERT INTO changeset_tiles (changeset_id, tstamp, x, y, zoom, changes)
+  INSERT INTO changeset_tiles (changeset_id, change_id, tstamp, x, y, zoom, geom, prev_geom)
   SELECT
     $1,
+    change_id,
     MAX(tstamp),
     x/subtiles_per_tile,
     y/subtiles_per_tile,
     $3,
-    OWL_MergeChanges(array_accum(changes))
+    ST_Union(geom),
+    ST_Union(prev_geom)
   FROM changeset_tiles
   WHERE changeset_id = $1 AND zoom = $2
-  GROUP BY x/subtiles_per_tile, y/subtiles_per_tile;
+  GROUP BY x/subtiles_per_tile, y/subtiles_per_tile, change_id;
 END;
 $$ LANGUAGE plpgsql;

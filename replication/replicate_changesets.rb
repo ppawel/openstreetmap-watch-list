@@ -47,7 +47,7 @@ def save_state(state)
   File.open('state.yaml', 'w') {|f| f.puts(state.to_yaml)}
 end
 
-$config = YAML.load_file('../rails/config/database.yml')['development']
+$config = YAML.load_file('../config/database.yml')['development']
 current_state = YAML.load_file('state.yaml')
 remote_state = YAML.load(open('http://planet.openstreetmap.org/replication/changesets/state.yaml').read)
 

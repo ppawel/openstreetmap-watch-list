@@ -33,19 +33,20 @@ private
     @x, @y, @zoom = get_xyz(params)
     changesets = ActiveRecord::Base.connection.raw_connection().exec("
       SELECT
-        changeset_id,
-        t.tstamp AS max_tstamp,
+        t.changeset_id,
+        MAX(c.tstamp) AS max_tstamp,
         cs.*,
         cs.bbox AS total_bbox,
-        t.changes::change[],
-        (SELECT array_agg(tags) FROM unnest(t.changes)) AS change_tags,
-        (SELECT array_agg(prev_tags) FROM unnest(t.changes)) AS change_prev_tags,
-        (SELECT array_agg(ST_AsGeoJSON(geom)) FROM unnest(t.changes)) AS geojson,
-        (SELECT array_agg(ST_AsGeoJSON(prev_geom)) FROM unnest(t.changes)) AS prev_geojson
+        array_agg(row(c.*)) AS changes,
+        array_agg(c.tags) AS change_tags,
+        array_agg(c.prev_tags) AS change_prev_tags,
+        array_agg(ST_AsGeoJSON(c.geom)) AS geojson,
+        array_agg(ST_AsGeoJSON(c.prev_geom)) AS prev_geojson
       FROM changeset_tiles t
       INNER JOIN changesets cs ON (cs.id = t.changeset_id)
+      INNER JOIN changes c ON (c.id = t.change_id)
       WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
-        AND changeset_id IN (
+        AND c.changeset_id IN (
           SELECT DISTINCT changeset_id
           FROM changeset_tiles
           WHERE x = #{@x} AND y = #{@y} AND zoom = #{@zoom}
@@ -53,7 +54,8 @@ private
           ORDER BY changeset_id DESC
           #{get_limit_sql(params)}
         )
-      ORDER BY created_at DESC").collect {|row| Changeset.new(row)}
+      GROUP BY t.changeset_id, cs.id
+      ORDER BY cs.created_at DESC").collect {|row| Changeset.new(row)}
     changesets
   end
 

@@ -1,5 +1,5 @@
-require 'logging'
-require 'utils'
+require 'tiler/logging'
+require 'tiler/utils'
 require 'ffi-geos'
 
 module Tiler
@@ -64,9 +64,12 @@ class ChangesetTiler
       return -1 if has_tiles(changeset_id)
     end
 
+    @conn.exec_prepared('generate_changes', [changeset_id])
+
     count = 0
 
     for change in @conn.exec_prepared('select_changes', [changeset_id]).to_a
+      #p change
       if change['geom']
         change['geom_obj'] = @wkb_reader.read_hex(change['geom'])
         change['geom_obj_prep'] = change['geom_obj'].to_prepared
@@ -230,11 +233,14 @@ class ChangesetTiler
   end
 
   def add_change_tile(x, y, zoom, change, geom, prev_geom)
-    @conn.exec_prepared('insert_tile', [x, y, change['id'], change['tstamp'], change['el_type'], change['action'],
-      change['el_id'], change['version'], change['tags'], change['prev_tags'],
+    @conn.exec_prepared('insert_tile', [
+      x,
+      y,
+      change['id'],
+      change['tstamp'],
       (geom ? @wkb_writer.write_hex(geom) : nil),
-      (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil),
-      change['nodes'], change['prev_nodes']])
+      (prev_geom ? @wkb_writer.write_hex(prev_geom) : nil)
+    ])
   end
 
   def reduce_tiles(tiles_to_check, geom, source_zoom, zoom)
@@ -270,30 +276,31 @@ class ChangesetTiler
 
   def setup_prepared_statements
     @conn.exec('DROP TABLE IF EXISTS _tiles')
-    @conn.exec('CREATE TEMPORARY TABLE _tiles (x int, y int, c change)')
+    @conn.exec('CREATE TEMPORARY TABLE _tiles (x int, y int, change_id bigint,
+      tstamp timestamp without time zone,
+      geom geometry(GEOMETRY, 4326), prev_geom geometry(GEOMETRY, 4326))')
 
-    @conn.prepare('select_changes',
-      "SELECT (c).id, (c).action, (c).el_id, (c).version, (c).el_type, (c).tstamp, (c).geom, (c).prev_geom,
-          (c).tags, (c).prev_tags,
-          CASE WHEN (c).el_type = 'N' THEN ST_X((c).prev_geom) ELSE NULL END AS prev_lon,
-          CASE WHEN (c).el_type = 'N' THEN ST_Y((c).prev_geom) ELSE NULL END AS prev_lat,
-          CASE WHEN (c).el_type = 'N' THEN ST_X((c).geom) ELSE NULL END AS lon,
-          CASE WHEN (c).el_type = 'N' THEN ST_Y((c).geom) ELSE NULL END AS lat,
-          Box2D((c).geom) AS geom_bbox,
-          Box2D((c).prev_geom) AS prev_geom_bbox,
-          Box2D(ST_Difference((c).geom, (c).prev_geom)) AS diff_bbox,
-          ST_Equals((c).geom, (c).prev_geom) AS equal
-        FROM unnest(OWL_GenerateChanges($1)) c")
+    @conn.prepare('generate_changes', "SELECT OWL_GenerateChanges($1)")
+    @conn.prepare('select_changes', "
+      SELECT *,
+        CASE WHEN el_type = 'N' THEN ST_X(prev_geom) ELSE NULL END AS prev_lon,
+        CASE WHEN el_type = 'N' THEN ST_Y(prev_geom) ELSE NULL END AS prev_lat,
+        CASE WHEN el_type = 'N' THEN ST_X(geom) ELSE NULL END AS lon,
+        CASE WHEN el_type = 'N' THEN ST_Y(geom) ELSE NULL END AS lat,
+        Box2D(geom) AS geom_bbox,
+        Box2D(prev_geom) AS prev_geom_bbox,
+        Box2D(ST_Difference(geom, prev_geom)) AS diff_bbox,
+        ST_Equals(geom, prev_geom) AS equal
+      FROM changes
+      WHERE changeset_id = $1")
 
     @conn.prepare('insert_tile',
-      "INSERT INTO _tiles (x, y, c) VALUES
-        ($1, $2, ROW($3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)::change)")
+      "INSERT INTO _tiles (x, y, change_id, tstamp, geom, prev_geom) VALUES ($1, $2, $3, $4, $5, $6)")
 
     @conn.prepare('generate_changeset_tiles',
-      "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, changes)
-      SELECT $1, MAX((c).tstamp), $2, x, y, array_agg(c)
-      FROM _tiles
-      GROUP BY x, y")
+      "INSERT INTO changeset_tiles (changeset_id, tstamp, zoom, x, y, change_id, geom)
+      SELECT $1, tstamp, $2, x, y, change_id, geom
+      FROM _tiles")
   end
 end
 

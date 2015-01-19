@@ -1,13 +1,13 @@
 $:.unshift File.absolute_path(File.dirname(__FILE__)) + '/../lib'
 
 require 'pg'
-require 'test/unit'
+require 'minitest/autorun'
 require 'yaml'
-require 'changeset_tiler'
+require 'tiler/changeset_tiler'
 
-require 'test/common'
+require 'tiler/test/common'
 
-class TilerUnitTest < Test::Unit::TestCase
+class TilerUnitTest < Minitest::Test
   include TestCommon
 
   def initialize(name = nil)

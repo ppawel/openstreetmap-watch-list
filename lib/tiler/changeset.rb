@@ -18,7 +18,7 @@ class Changeset
     @id = hash['id'].to_i
     @user_id = hash['user_id'].to_i
     @user_name = hash['user_name']
-    @created_at = Time.parse(hash['created_at'])
+    @created_at = hash['created_at'] ? Time.parse(hash['created_at']) : nil
     @closed_at = hash['closed_at'] ? Time.parse(hash['closed_at']) : nil
     @open = hash['open'] == 't'
     @tags = eval("{#{hash['tags']}}")
